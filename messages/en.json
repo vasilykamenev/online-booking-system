@@ -1,0 +1,145 @@
+{
+  "nav": {
+    "vessels": "Vessels",
+    "destinations": "Destinations",
+    "initiatives": "Initiatives",
+    "about": "About",
+    "signIn": "Sign in",
+    "listVessel": "List your vessel"
+  },
+  "hero": {
+    "eyebrow": "Yachts & expedition vessels",
+    "titleLine1": "The ocean awaits",
+    "titleLine2": "your crew",
+    "subtitle": "Book yachts, catamarans and expedition vessels worldwide — or find maritime research initiatives and join them.",
+    "cta": "Find a vessel",
+    "search": {
+      "destination": "Destination",
+      "destinationPlaceholder": "Where to?",
+      "dates": "Dates",
+      "datesPlaceholder": "Choose dates",
+      "guests": "Guests",
+      "guestsPlaceholder": "How many people?",
+      "submit": "Search"
+    }
+  },
+  "stats": {
+    "vessels": "vessels listed",
+    "countries": "countries and regions",
+    "guests": "happy guests",
+    "expeditions": "active initiatives"
+  },
+  "vessels": {
+    "eyebrow": "Fleet catalog",
+    "title": "Featured vessels",
+    "subtitle": "From family sailing yachts to ice-class expedition ships — curated by the platform team.",
+    "viewAll": "Browse the full fleet",
+    "viewDetails": "View details",
+    "perNight": "/ night",
+    "guests": "guests",
+    "cabins": "cabins",
+    "types": {
+      "yacht": "Motor yacht",
+      "catamaran": "Catamaran",
+      "expedition": "Expedition vessel",
+      "research": "Research vessel"
+    },
+    "items": {
+      "adriatic-breeze": {
+        "location": "Croatia, Split",
+        "imageAlt": "White motor yacht on turquoise water off the Croatian coast"
+      },
+      "aegean-horizon": {
+        "location": "Greece, Ikaria",
+        "imageAlt": "Sailing catamaran anchored off the coast of Ikaria island"
+      },
+      "polar-frontier": {
+        "location": "Expedition, Antarctica",
+        "imageAlt": "Ice-class expedition vessel with an orange hull in port"
+      },
+      "pacific-explorer": {
+        "location": "Japan, Yokohama",
+        "imageAlt": "White research vessel at sea, aerial view"
+      }
+    }
+  },
+  "features": {
+    "eyebrow": "Why us",
+    "title": "A platform you can trust",
+    "subtitle": "We automate what used to take dozens of calls and emails.",
+    "items": [
+      {
+        "title": "Verified fleet",
+        "description": "Every vessel and every owner is verified before being listed."
+      },
+      {
+        "title": "Transparent pricing",
+        "description": "Dynamic pricing by season and region — no last-minute hidden fees."
+      },
+      {
+        "title": "Live availability",
+        "description": "Calendars update in real time and every booking locks in its price."
+      },
+      {
+        "title": "24/7 support",
+        "description": "Our team is reachable in any time zone throughout your route."
+      }
+    ]
+  },
+  "initiatives": {
+    "eyebrow": "Maritime community",
+    "title": "Expeditions & research initiatives",
+    "subtitle": "Publish projects, find like-minded people, and build a crew for your next voyage. The platform only provides the technical environment — we don't moderate initiative content.",
+    "cta": "Browse initiatives",
+    "respond": "Respond",
+    "items": [
+      {
+        "tag": "Research",
+        "title": "Svalbard polar expedition",
+        "region": "Arctic",
+        "description": "A team of glaciologists is looking for partners and an ice-class vessel for a July 2027 glacier expedition."
+      },
+      {
+        "tag": "Science",
+        "title": "Coral reef monitoring",
+        "region": "Indian Ocean",
+        "description": "Collecting reef health data near the Maldives, certified volunteer divers needed."
+      },
+      {
+        "tag": "Sailing",
+        "title": "Transatlantic crossing",
+        "region": "Gibraltar — Caribbean",
+        "description": "Crew wanted for an Atlantic crossing aboard an 18-metre sailing yacht, departing in November."
+      }
+    ]
+  },
+  "cta": {
+    "title": "Ready to set sail?",
+    "subtitle": "Find the perfect vessel or list your own — booking takes less than five minutes.",
+    "primary": "Find a vessel",
+    "secondary": "Become an owner"
+  },
+  "footer": {
+    "description": "An international platform for booking yachts and expedition vessels, and for discovering maritime research initiatives.",
+    "columns": {
+      "platform": {
+        "title": "Platform",
+        "links": ["Vessels", "Destinations", "Initiatives", "How it works"]
+      },
+      "company": {
+        "title": "Company",
+        "links": ["About", "Contact", "Blog"]
+      },
+      "support": {
+        "title": "Support",
+        "links": ["Help", "Cancellation policy", "Terms of use", "Privacy"]
+      }
+    },
+    "rights": "All rights reserved."
+  },
+  "theme": {
+    "light": "Light theme",
+    "dark": "Dark theme",
+    "toggle": "Toggle theme"
+  }
+}
