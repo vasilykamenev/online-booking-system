@@ -85,6 +85,25 @@
       "guestsCapacity": "Up to {count} guests"
     }
   },
+  "search": {
+    "eyebrow": "Fleet catalog",
+    "title": "Find your vessel",
+    "subtitle": "Filter by destination, vessel type, guest count, and budget.",
+    "empty": "No vessels match these filters — try adjusting your criteria.",
+    "loading": "Loading...",
+    "loadMore": "Show more",
+    "filters": {
+      "location": "Destination",
+      "anyLocation": "Any destination",
+      "type": "Vessel type",
+      "anyType": "Any type",
+      "guests": "Guests, at least",
+      "guestsPlaceholder": "e.g. 4",
+      "priceMax": "Price per night, up to",
+      "priceMaxPlaceholder": "e.g. 1000",
+      "apply": "Apply"
+    }
+  },
   "features": {
     "eyebrow": "Why us",
     "title": "A platform you can trust",

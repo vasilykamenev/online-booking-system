@@ -20,40 +20,130 @@ export interface FeaturedVessel {
   image: { url: string; alt: LocalizedText } | null;
 }
 
+const CARD_COLUMNS = `id, slug, type, name, rating_avg, guests_capacity, cabins, base_price_minor, currency,
+       locations ( country, city ),
+       vessel_images ( url, alt_text, sort_order )`;
+
+interface CardRow {
+  id: string;
+  slug: string;
+  type: Database["public"]["Enums"]["vessel_type"];
+  name: string;
+  rating_avg: number;
+  guests_capacity: number;
+  cabins: number;
+  base_price_minor: number;
+  currency: string;
+  locations: { country: unknown; city: unknown } | null;
+  vessel_images: { url: string; alt_text: unknown; sort_order: number }[];
+}
+
+function mapCardRow(vessel: CardRow): FeaturedVessel {
+  const image = [...vessel.vessel_images].sort((a, b) => a.sort_order - b.sort_order)[0];
+
+  return {
+    id: vessel.id,
+    slug: vessel.slug,
+    type: vessel.type,
+    name: vessel.name,
+    ratingAvg: vessel.rating_avg,
+    guestsCapacity: vessel.guests_capacity,
+    cabins: vessel.cabins,
+    basePriceMinor: vessel.base_price_minor,
+    currency: vessel.currency,
+    country: (vessel.locations?.country ?? {}) as LocalizedText,
+    city: (vessel.locations?.city ?? {}) as LocalizedText,
+    image: image ? { url: image.url, alt: (image.alt_text ?? {}) as LocalizedText } : null,
+  };
+}
+
 export async function getFeaturedVessels(limit = 4): Promise<FeaturedVessel[]> {
   const supabase = await createClient();
 
   const { data, error } = await supabase
     .from("vessels")
-    .select(
-      `id, slug, type, name, rating_avg, guests_capacity, cabins, base_price_minor, currency,
-       locations ( country, city ),
-       vessel_images ( url, alt_text, sort_order )`,
-    )
+    .select(CARD_COLUMNS)
     .eq("status", "published")
     .order("rating_avg", { ascending: false })
     .limit(limit);
 
   if (error) throw error;
 
-  return (data ?? []).map((vessel) => {
-    const image = [...vessel.vessel_images].sort((a, b) => a.sort_order - b.sort_order)[0];
+  return (data ?? []).map(mapCardRow);
+}
 
-    return {
-      id: vessel.id,
-      slug: vessel.slug,
-      type: vessel.type,
-      name: vessel.name,
-      ratingAvg: vessel.rating_avg,
-      guestsCapacity: vessel.guests_capacity,
-      cabins: vessel.cabins,
-      basePriceMinor: vessel.base_price_minor,
-      currency: vessel.currency,
-      country: (vessel.locations?.country ?? {}) as LocalizedText,
-      city: (vessel.locations?.city ?? {}) as LocalizedText,
-      image: image ? { url: image.url, alt: (image.alt_text ?? {}) as LocalizedText } : null,
-    };
-  });
+export interface SearchFilters {
+  type?: Database["public"]["Enums"]["vessel_type"];
+  locationId?: string;
+  guests?: number;
+  priceMaxMinor?: number;
+  cursor?: string;
+}
+
+export interface SearchResult {
+  vessels: FeaturedVessel[];
+  nextCursor: string | null;
+}
+
+const SEARCH_PAGE_SIZE = 8;
+
+export async function searchVessels(filters: SearchFilters): Promise<SearchResult> {
+  const supabase = await createClient();
+
+  let query = supabase.from("vessels").select(CARD_COLUMNS).eq("status", "published");
+
+  if (filters.type) query = query.eq("type", filters.type);
+  if (filters.locationId) query = query.eq("location_id", filters.locationId);
+  if (filters.guests) query = query.gte("guests_capacity", filters.guests);
+  if (filters.priceMaxMinor) query = query.lte("base_price_minor", filters.priceMaxMinor);
+
+  if (filters.cursor) {
+    const [ratingRaw, id] = filters.cursor.split(":");
+    const rating = Number(ratingRaw);
+    if (Number.isFinite(rating) && id) {
+      query = query.or(`rating_avg.lt.${rating},and(rating_avg.eq.${rating},id.lt.${id})`);
+    }
+  }
+
+  const { data, error } = await query
+    .order("rating_avg", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(SEARCH_PAGE_SIZE + 1);
+
+  if (error) throw error;
+
+  const rows = data ?? [];
+  const hasMore = rows.length > SEARCH_PAGE_SIZE;
+  const page = hasMore ? rows.slice(0, SEARCH_PAGE_SIZE) : rows;
+  const last = page[page.length - 1];
+
+  return {
+    vessels: page.map(mapCardRow),
+    nextCursor: hasMore && last ? `${last.rating_avg}:${last.id}` : null,
+  };
+}
+
+export interface SearchLocation {
+  id: string;
+  country: LocalizedText;
+  city: LocalizedText;
+}
+
+export async function getSearchLocations(): Promise<SearchLocation[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("locations")
+    .select("id, country, city")
+    .order("country");
+
+  if (error) throw error;
+
+  return (data ?? []).map((location) => ({
+    id: location.id,
+    country: (location.country ?? {}) as LocalizedText,
+    city: (location.city ?? {}) as LocalizedText,
+  }));
 }
 
 export interface VesselImage {

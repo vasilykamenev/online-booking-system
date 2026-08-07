@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "motion/react";
 import { ArrowRight, MapPin, CalendarRange, Users, Search } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { heroSlides } from "@/data/hero-slides";
+import { Link } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
@@ -134,9 +135,11 @@ export function Hero() {
             placeholder={t("search.guestsPlaceholder")}
           />
           <div className="flex items-center p-3">
-            <Button size="lg" className="w-full gap-2 rounded-xl sm:w-auto">
-              <Search className="size-4" strokeWidth={1.5} />
-              <span className="sm:hidden">{t("search.submit")}</span>
+            <Button asChild size="lg" className="w-full gap-2 rounded-xl sm:w-auto">
+              <Link href="/search">
+                <Search className="size-4" strokeWidth={1.5} />
+                <span className="sm:hidden">{t("search.submit")}</span>
+              </Link>
             </Button>
           </div>
         </motion.div>
