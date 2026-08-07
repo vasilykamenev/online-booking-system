@@ -8,6 +8,7 @@ import type { Locale } from "@/i18n/routing";
 import type { FeaturedVessel } from "@/server/queries/vessels";
 import { pickLocalized } from "@/lib/supabase/localized";
 import { formatPrice } from "@/lib/pricing/format";
+import { Link } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -46,7 +47,10 @@ export function Vessels({ vessels }: { vessels: FeaturedVessel[] }) {
               className="group overflow-hidden rounded-2xl border border-border bg-card shadow-soft transition-[box-shadow,border-color] duration-300 hover:border-primary/25 hover:shadow-glow"
               style={{ transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)" }}
             >
-              <div className="relative h-52 overflow-hidden bg-muted">
+              <Link
+                href={`/vessels/${vessel.slug}`}
+                className="relative block h-52 overflow-hidden bg-muted"
+              >
                 {vessel.image && (
                   <Image
                     src={vessel.image.url}
@@ -67,11 +71,13 @@ export function Vessels({ vessels }: { vessels: FeaturedVessel[] }) {
                   <Star className="size-3 fill-primary text-primary" />
                   <span className="text-xs font-medium">{vessel.ratingAvg.toFixed(1)}</span>
                 </div>
-              </div>
+              </Link>
 
               <div className="p-5">
                 <h3 className="text-base font-medium tracking-tight text-card-foreground">
-                  {vessel.name}
+                  <Link href={`/vessels/${vessel.slug}`} className="hover:text-primary">
+                    {vessel.name}
+                  </Link>
                 </h3>
                 <div className="mt-1 flex items-center gap-1 text-xs font-light text-muted-foreground">
                   <MapPin className="size-3" strokeWidth={1.5} />
@@ -102,12 +108,15 @@ export function Vessels({ vessels }: { vessels: FeaturedVessel[] }) {
                     </span>
                   </div>
                   <Button
+                    asChild
                     variant="ghost"
                     size="sm"
                     className="gap-1 text-xs text-primary hover:text-primary"
                   >
-                    {t("viewDetails")}
-                    <ArrowRight className="size-3.5" />
+                    <Link href={`/vessels/${vessel.slug}`}>
+                      {t("viewDetails")}
+                      <ArrowRight className="size-3.5" />
+                    </Link>
                   </Button>
                 </div>
               </div>

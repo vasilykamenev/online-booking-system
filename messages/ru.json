@@ -45,6 +45,44 @@
       "expedition": "Экспедиционное судно",
       "research": "Исследовательское судно",
       "hybrid": "Гибридное судно"
+    },
+    "amenities": {
+      "wifi": "Wi-Fi",
+      "air_conditioning": "Кондиционер",
+      "chef": "Шеф-повар",
+      "crew": "Экипаж",
+      "snorkeling_gear": "Снаряжение для снорклинга",
+      "ice_class_hull": "Корпус ледового класса",
+      "research_lab": "Научная лаборатория",
+      "satellite_comms": "Спутниковая связь"
+    }
+  },
+  "vesselPage": {
+    "back": "Назад к каталогу",
+    "notFound": {
+      "title": "Судно не найдено",
+      "description": "Возможно, оно снято с публикации или ссылка устарела.",
+      "cta": "К каталогу судов"
+    },
+    "specs": {
+      "eyebrow": "Характеристики",
+      "length": "Длина",
+      "lengthUnit": "м",
+      "cabins": "Каюты",
+      "guests": "Гостей",
+      "yearBuilt": "Год постройки"
+    },
+    "descriptionTitle": "Описание",
+    "amenitiesTitle": "Удобства",
+    "reviews": {
+      "eyebrow": "Отзывы",
+      "title": "Отзывы гостей",
+      "empty": "Пока нет отзывов — станьте первым, кто поделится впечатлениями.",
+      "count": "{count, plural, one {# отзыв} few {# отзыва} many {# отзывов} other {# отзывов}}"
+    },
+    "priceCard": {
+      "perNight": "/ сутки",
+      "guestsCapacity": "До {count} гостей"
     }
   },
   "features": {

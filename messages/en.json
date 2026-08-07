@@ -45,6 +45,44 @@
       "expedition": "Expedition vessel",
       "research": "Research vessel",
       "hybrid": "Hybrid vessel"
+    },
+    "amenities": {
+      "wifi": "Wi-Fi",
+      "air_conditioning": "Air conditioning",
+      "chef": "Private chef",
+      "crew": "Crew included",
+      "snorkeling_gear": "Snorkeling gear",
+      "ice_class_hull": "Ice-class hull",
+      "research_lab": "Research lab",
+      "satellite_comms": "Satellite communications"
+    }
+  },
+  "vesselPage": {
+    "back": "Back to catalog",
+    "notFound": {
+      "title": "Vessel not found",
+      "description": "It may have been unpublished, or the link is outdated.",
+      "cta": "Browse the fleet"
+    },
+    "specs": {
+      "eyebrow": "Specifications",
+      "length": "Length",
+      "lengthUnit": "m",
+      "cabins": "Cabins",
+      "guests": "Guests",
+      "yearBuilt": "Year built"
+    },
+    "descriptionTitle": "About this vessel",
+    "amenitiesTitle": "Amenities",
+    "reviews": {
+      "eyebrow": "Reviews",
+      "title": "Guest reviews",
+      "empty": "No reviews yet — be the first to share your experience.",
+      "count": "{count, plural, one {# review} other {# reviews}}"
+    },
+    "priceCard": {
+      "perNight": "/ night",
+      "guestsCapacity": "Up to {count} guests"
     }
   },
   "features": {
