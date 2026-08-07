@@ -28,14 +28,19 @@ export function Footer() {
                 {t(`columns.${key}.title`)}
               </h3>
               <ul className="space-y-3">
-                {t.raw(`columns.${key}.links`).map((link: string) => (
-                  <li key={link}>
-                    <a
-                      href="#"
+                {(
+                  t.raw(`columns.${key}.links`) as {
+                    label: string;
+                    href: string;
+                  }[]
+                ).map((link) => (
+                  <li key={link.label}>
+                    <Link
+                      href={link.href}
                       className="text-sm font-light text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      {link}
-                    </a>
+                      {link.label}
+                    </Link>
                   </li>
                 ))}
               </ul>

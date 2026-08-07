@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { motion } from "motion/react";
 import { Menu, Compass } from "lucide-react";
 import { useTranslations } from "next-intl";
-import { Link } from "@/i18n/navigation";
+import { Link, usePathname } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import {
   Sheet,
@@ -17,9 +17,13 @@ import {
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { LocaleSwitcher } from "@/components/layout/locale-switcher";
 
+const TRANSPARENT_HERO_PATHS = new Set(["/", "/about"]);
+
 export function Header() {
   const [isScrolled, setIsScrolled] = useState(false);
   const t = useTranslations("nav");
+  const pathname = usePathname();
+  const hasDarkHero = TRANSPARENT_HERO_PATHS.has(pathname);
 
   useEffect(() => {
     const onScroll = () => setIsScrolled(window.scrollY > 40);
@@ -29,13 +33,13 @@ export function Header() {
   }, []);
 
   const navItems = [
-    { label: t("vessels"), href: "#vessels" },
-    { label: t("destinations"), href: "#vessels" },
-    { label: t("initiatives"), href: "#initiatives" },
-    { label: t("about"), href: "#about" },
+    { label: t("vessels"), href: "/#vessels" },
+    { label: t("destinations"), href: "/#vessels" },
+    { label: t("initiatives"), href: "/#initiatives" },
+    { label: t("about"), href: "/about" },
   ];
 
-  const solid = isScrolled;
+  const solid = isScrolled || !hasDarkHero;
 
   return (
     <motion.header
@@ -58,13 +62,13 @@ export function Header() {
 
         <nav className="hidden items-center gap-9 md:flex">
           {navItems.map((item) => (
-            <a
+            <Link
               key={item.label}
               href={item.href}
               className="text-[11px] uppercase tracking-wider hover:opacity-70 transition-opacity"
             >
               {item.label}
-            </a>
+            </Link>
           ))}
         </nav>
 
@@ -113,12 +117,12 @@ export function Header() {
               <nav className="flex flex-col gap-1 px-4">
                 {navItems.map((item) => (
                   <SheetClose asChild key={item.label}>
-                    <a
+                    <Link
                       href={item.href}
                       className="py-3 text-sm uppercase tracking-wider text-foreground/90 hover:text-foreground border-b border-border last:border-0"
                     >
                       {item.label}
-                    </a>
+                    </Link>
                   </SheetClose>
                 ))}
               </nav>

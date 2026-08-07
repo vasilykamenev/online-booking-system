@@ -125,15 +125,29 @@
     "columns": {
       "platform": {
         "title": "Platform",
-        "links": ["Vessels", "Destinations", "Initiatives", "How it works"]
+        "links": [
+          { "label": "Vessels", "href": "/#vessels" },
+          { "label": "Destinations", "href": "/#vessels" },
+          { "label": "Initiatives", "href": "/#initiatives" },
+          { "label": "How it works", "href": "/#why-us" }
+        ]
       },
       "company": {
         "title": "Company",
-        "links": ["About", "Contact", "Blog"]
+        "links": [
+          { "label": "About", "href": "/about" },
+          { "label": "Contact", "href": "/contact" },
+          { "label": "Blog", "href": "#" }
+        ]
       },
       "support": {
         "title": "Support",
-        "links": ["Help", "Cancellation policy", "Terms of use", "Privacy"]
+        "links": [
+          { "label": "Help", "href": "/contact" },
+          { "label": "Cancellation policy", "href": "#" },
+          { "label": "Terms of use", "href": "#" },
+          { "label": "Privacy", "href": "#" }
+        ]
       }
     },
     "rights": "All rights reserved."
@@ -142,5 +156,76 @@
     "light": "Light theme",
     "dark": "Dark theme",
     "toggle": "Toggle theme"
+  },
+  "error": {
+    "title": "Something went wrong",
+    "description": "We couldn't load this page. Try again — if the problem persists, come back a little later.",
+    "retry": "Try again"
+  },
+  "about": {
+    "eyebrow": "About",
+    "title": "A maritime platform for people who choose the water",
+    "subtitle": "Meridian connects owners of yachts and expedition vessels with people looking for a voyage or a scientific expedition — no middlemen, no endless calls.",
+    "mission": {
+      "eyebrow": "Mission",
+      "title": "Technology instead of paperwork",
+      "description": "Booking a vessel used to mean weeks of correspondence and dozens of calls. We built an environment where search, comparison, and booking take minutes — with pricing and availability always up to date."
+    },
+    "values": {
+      "eyebrow": "Principles",
+      "title": "What we stand for",
+      "items": [
+        {
+          "title": "Transparency",
+          "description": "Price is locked in at the moment of booking and never changes retroactively — for the guest or the owner."
+        },
+        {
+          "title": "Verified fleet",
+          "description": "Every vessel and owner is verified before appearing in the catalog."
+        },
+        {
+          "title": "Freedom for initiatives",
+          "description": "The platform provides the technical environment for expedition projects but doesn't moderate their content — that stays with the authors."
+        }
+      ]
+    },
+    "cta": {
+      "title": "Join the community",
+      "subtitle": "Book a vessel, publish an expedition, or list your fleet on the platform.",
+      "primary": "Find a vessel",
+      "secondary": "Get in touch"
+    }
+  },
+  "contact": {
+    "eyebrow": "Contact",
+    "title": "Get in touch",
+    "subtitle": "Questions about booking, listing a vessel, or partnerships — write to us and we'll reply within one business day.",
+    "form": {
+      "name": "Name",
+      "namePlaceholder": "How should we address you?",
+      "email": "Email",
+      "emailPlaceholder": "you@example.com",
+      "topic": "Topic",
+      "topicPlaceholder": "Booking, partnership, press...",
+      "message": "Message",
+      "messagePlaceholder": "Tell us how we can help",
+      "submit": "Send message",
+      "success": "Message sent. We'll get back to you within one business day."
+    },
+    "channels": {
+      "eyebrow": "Other ways to reach us",
+      "email": {
+        "title": "Email",
+        "value": "hello@meridian.travel"
+      },
+      "support": {
+        "title": "24/7 support",
+        "value": "Available in your account after booking"
+      },
+      "office": {
+        "title": "Office",
+        "value": "Valletta, Malta"
+      }
+    }
   }
 }

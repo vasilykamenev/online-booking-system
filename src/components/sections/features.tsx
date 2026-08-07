@@ -13,7 +13,7 @@ export function Features() {
   const LeadIcon = icons[0];
 
   return (
-    <section id="about" className="bg-secondary/30 py-24 lg:py-32">
+    <section id="why-us" className="bg-secondary/30 py-24 lg:py-32">
       <div className="container-page">
         <motion.div
           initial={{ opacity: 0, y: 24 }}
