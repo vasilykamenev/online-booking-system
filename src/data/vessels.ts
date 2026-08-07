@@ -22,8 +22,7 @@ export const vessels: Vessel[] = [
     guests: 8,
     cabins: 4,
     lengthMeters: 32,
-    image:
-      "https://images.unsplash.com/photo-1567899378494-47b22a2ae96a?w=1200&q=80&auto=format&fit=crop",
+    image: "/images/vessels/adriatic-breeze.jpg",
   },
   {
     id: "aegean-horizon",
@@ -34,8 +33,7 @@ export const vessels: Vessel[] = [
     guests: 6,
     cabins: 3,
     lengthMeters: 15,
-    image:
-      "https://upload.wikimedia.org/wikipedia/commons/thumb/5/55/Sailing_catamaran_anchored_off_the_Seichelles_Beach%2C_Ikaria%2C_Greece_julesvernex2.jpg/1280px-Sailing_catamaran_anchored_off_the_Seichelles_Beach%2C_Ikaria%2C_Greece_julesvernex2.jpg",
+    image: "/images/vessels/aegean-horizon.jpg",
   },
   {
     id: "polar-frontier",
@@ -46,8 +44,7 @@ export const vessels: Vessel[] = [
     guests: 24,
     cabins: 12,
     lengthMeters: 82,
-    image:
-      "https://upload.wikimedia.org/wikipedia/commons/thumb/7/72/2019-03-10_01_ESPS_BIO_HESPIRIDES_A33_-_IMO_8803563.jpg/1280px-2019-03-10_01_ESPS_BIO_HESPIRIDES_A33_-_IMO_8803563.jpg",
+    image: "/images/vessels/polar-frontier.jpg",
   },
   {
     id: "pacific-explorer",
@@ -58,7 +55,6 @@ export const vessels: Vessel[] = [
     guests: 20,
     cabins: 10,
     lengthMeters: 65,
-    image:
-      "https://upload.wikimedia.org/wikipedia/commons/thumb/e/e3/Oceanography_Meteorological_Research_Vessel_RYOFU_MARU_in_Jan_2025.jpg/1280px-Oceanography_Meteorological_Research_Vessel_RYOFU_MARU_in_Jan_2025.jpg",
+    image: "/images/vessels/pacific-explorer.jpg",
   },
 ];

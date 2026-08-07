@@ -97,7 +97,7 @@ export function Header() {
               <Button
                 variant="ghost"
                 size="icon"
-                aria-label={t("vessels")}
+                aria-label={t("openMenu")}
                 className="hover:bg-white/10"
               >
                 <Menu className="size-5" strokeWidth={1.5} />
