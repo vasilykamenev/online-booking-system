@@ -43,25 +43,8 @@
       "yacht": "Motor yacht",
       "catamaran": "Catamaran",
       "expedition": "Expedition vessel",
-      "research": "Research vessel"
-    },
-    "items": {
-      "adriatic-breeze": {
-        "location": "Croatia, Split",
-        "imageAlt": "White motor yacht on turquoise water off the Croatian coast"
-      },
-      "aegean-horizon": {
-        "location": "Greece, Ikaria",
-        "imageAlt": "Sailing catamaran anchored off the coast of Ikaria island"
-      },
-      "polar-frontier": {
-        "location": "Expedition, Antarctica",
-        "imageAlt": "Ice-class expedition vessel with an orange hull in port"
-      },
-      "pacific-explorer": {
-        "location": "Japan, Yokohama",
-        "imageAlt": "White research vessel at sea, aerial view"
-      }
+      "research": "Research vessel",
+      "hybrid": "Hybrid vessel"
     }
   },
   "features": {

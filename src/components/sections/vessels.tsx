@@ -4,13 +4,16 @@ import Image from "next/image";
 import { motion } from "motion/react";
 import { ArrowRight, MapPin, Star, Users2, DoorClosed } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
-import { vessels } from "@/data/vessels";
+import type { Locale } from "@/i18n/routing";
+import type { FeaturedVessel } from "@/server/queries/vessels";
+import { pickLocalized } from "@/lib/supabase/localized";
+import { formatPrice } from "@/lib/pricing/format";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
-export function Vessels() {
+export function Vessels({ vessels }: { vessels: FeaturedVessel[] }) {
   const t = useTranslations("vessels");
-  const locale = useLocale();
+  const locale = useLocale() as Locale;
 
   return (
     <section id="vessels" className="bg-background py-24 lg:py-32">
@@ -43,14 +46,16 @@ export function Vessels() {
               className="group overflow-hidden rounded-2xl border border-border bg-card shadow-soft transition-[box-shadow,border-color] duration-300 hover:border-primary/25 hover:shadow-glow"
               style={{ transitionTimingFunction: "cubic-bezier(0.16, 1, 0.3, 1)" }}
             >
-              <div className="relative h-52 overflow-hidden">
-                <Image
-                  src={vessel.image}
-                  alt={t(`items.${vessel.id}.imageAlt`)}
-                  fill
-                  sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
-                  className="object-cover transition-transform duration-500 ease-out group-hover:scale-110"
-                />
+              <div className="relative h-52 overflow-hidden bg-muted">
+                {vessel.image && (
+                  <Image
+                    src={vessel.image.url}
+                    alt={pickLocalized(vessel.image.alt, locale)}
+                    fill
+                    sizes="(min-width: 1024px) 25vw, (min-width: 640px) 50vw, 100vw"
+                    className="object-cover transition-transform duration-500 ease-out group-hover:scale-110"
+                  />
+                )}
                 <div className="absolute inset-x-0 bottom-0 h-20 bg-gradient-to-t from-black/35 to-transparent" />
                 <Badge
                   variant="secondary"
@@ -60,7 +65,7 @@ export function Vessels() {
                 </Badge>
                 <div className="absolute right-3 top-3 flex items-center gap-1 rounded-md bg-card/95 px-2 py-1 backdrop-blur-sm">
                   <Star className="size-3 fill-primary text-primary" />
-                  <span className="text-xs font-medium">{vessel.rating}</span>
+                  <span className="text-xs font-medium">{vessel.ratingAvg.toFixed(1)}</span>
                 </div>
               </div>
 
@@ -70,13 +75,15 @@ export function Vessels() {
                 </h3>
                 <div className="mt-1 flex items-center gap-1 text-xs font-light text-muted-foreground">
                   <MapPin className="size-3" strokeWidth={1.5} />
-                  <span>{t(`items.${vessel.id}.location`)}</span>
+                  <span>
+                    {pickLocalized(vessel.country, locale)}, {pickLocalized(vessel.city, locale)}
+                  </span>
                 </div>
 
                 <div className="mt-4 flex items-center gap-3 text-xs font-light text-muted-foreground">
                   <span className="flex items-center gap-1">
                     <Users2 className="size-3.5" strokeWidth={1.5} />
-                    {vessel.guests} {t("guests")}
+                    {vessel.guestsCapacity} {t("guests")}
                   </span>
                   <span className="flex items-center gap-1">
                     <DoorClosed className="size-3.5" strokeWidth={1.5} />
@@ -87,7 +94,7 @@ export function Vessels() {
                 <div className="mt-5 flex items-center justify-between border-t border-border pt-4">
                   <div>
                     <span className="text-lg font-light text-foreground">
-                      ${vessel.pricePerNight.toLocaleString(locale)}
+                      {formatPrice(vessel.basePriceMinor, vessel.currency, locale)}
                     </span>
                     <span className="text-xs font-light text-muted-foreground">
                       {" "}
