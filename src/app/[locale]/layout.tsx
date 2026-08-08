@@ -33,9 +33,10 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "hero" });
+  const tMeta = await getTranslations({ locale, namespace: "meta" });
 
   return {
-    title: `${t("titleLine1")} ${t("titleLine2")} — Морская платформа бронирования`,
+    title: `${t("titleLine1")} ${t("titleLine2")} — ${tMeta("titleSuffix")}`,
     description: t("subtitle"),
   };
 }

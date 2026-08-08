@@ -1,4 +1,7 @@
 {
+  "meta": {
+    "titleSuffix": "Maritime Booking Platform"
+  },
   "nav": {
     "vessels": "Vessels",
     "destinations": "Destinations",
@@ -404,6 +407,21 @@
       "paid": "Paid",
       "cancelled": "Cancelled",
       "completed": "Completed"
+    },
+    "payment": {
+      "choosePrompt": "Choose a payment method",
+      "payByCard": "Pay by card",
+      "payByBankTransfer": "Bank transfer",
+      "paid": "Booking paid",
+      "bankTransferPending": "Bank transfer request sent — awaiting confirmation from the owner.",
+      "bankTransferInstructions": "Transfer details will be sent to your email. The owner will confirm payment once funds are received.",
+      "errors": {
+        "invalid": "Couldn't start the payment — refresh the page",
+        "unauthenticated": "Sign in to pay for this booking",
+        "forbidden": "This booking belongs to another user",
+        "invalidStatus": "This booking can no longer be paid",
+        "generic": "Couldn't start the payment. Please try again"
+      }
     }
   },
   "owner": {
@@ -528,12 +546,26 @@
         "guests": "Guests",
         "price": "Price",
         "status": "Status",
+        "payment": "Payment",
         "actions": "Actions"
+      },
+      "paymentProvider": {
+        "stripe": "Card",
+        "bank_transfer": "Transfer"
+      },
+      "paymentStatus": {
+        "pending": "pending",
+        "succeeded": "received",
+        "failed": "failed",
+        "refunded": "refunded"
       },
       "confirm": "Confirm",
       "cancel": "Cancel",
+      "confirmTransfer": "Confirm transfer",
       "confirmed": "Booking confirmed",
       "cancelled": "Booking cancelled",
+      "transferConfirmed": "Payment confirmed",
+      "transferConfirmError": "Couldn't confirm the payment",
       "updateError": "Couldn't update the booking status"
     },
     "finance": {

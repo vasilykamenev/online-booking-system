@@ -66,6 +66,7 @@ export default async function OwnerBookingsPage({
                 <TableHead>{t("columns.guests")}</TableHead>
                 <TableHead>{t("columns.price")}</TableHead>
                 <TableHead>{t("columns.status")}</TableHead>
+                <TableHead>{t("columns.payment")}</TableHead>
                 <TableHead className="text-right">{t("columns.actions")}</TableHead>
               </TableRow>
             </TableHeader>
@@ -96,8 +97,22 @@ export default async function OwnerBookingsPage({
                       {tStatus(booking.status)}
                     </Badge>
                   </TableCell>
+                  <TableCell>
+                    {booking.latestPayment ? (
+                      <span className="text-sm font-light text-muted-foreground">
+                        {t(`paymentProvider.${booking.latestPayment.provider}`)} ·{" "}
+                        {t(`paymentStatus.${booking.latestPayment.status}`)}
+                      </span>
+                    ) : (
+                      <span className="text-sm font-light text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-right">
-                    <BookingActions bookingId={booking.id} status={booking.status} />
+                    <BookingActions
+                      bookingId={booking.id}
+                      status={booking.status}
+                      latestPayment={booking.latestPayment}
+                    />
                   </TableCell>
                 </TableRow>
               ))}

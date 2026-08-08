@@ -9,6 +9,7 @@ import { getBookingById } from "@/server/queries/bookings";
 import { formatPrice } from "@/lib/pricing/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { PaymentSection } from "./payment-section";
 
 export async function generateMetadata({
   params,
@@ -35,7 +36,7 @@ export default async function BookingConfirmationPage({
 }) {
   const { locale, id } = (await params) as { locale: Locale; id: string };
   setRequestLocale(locale);
-  await requireProfile(locale);
+  const profile = await requireProfile(locale);
 
   const booking = await getBookingById(id);
   if (!booking) notFound();
@@ -96,9 +97,17 @@ export default async function BookingConfirmationPage({
           </span>
         </div>
 
-        <p className="mt-6 rounded-xl bg-muted px-4 py-3 text-sm font-light text-muted-foreground">
-          {t("pending")}
-        </p>
+        {booking.clientId === profile.id ? (
+          <PaymentSection
+            bookingId={booking.id}
+            bookingStatus={booking.status}
+            latestPayment={booking.latestPayment}
+          />
+        ) : (
+          <p className="mt-6 rounded-xl bg-muted px-4 py-3 text-sm font-light text-muted-foreground">
+            {t("pending")}
+          </p>
+        )}
 
         <div className="mt-6 flex flex-col gap-2 sm:flex-row">
           <Button asChild variant="outline" className="flex-1 rounded-full">

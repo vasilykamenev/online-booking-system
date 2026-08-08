@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 import { parseDateRangeLiteral } from "@/lib/supabase/date-range";
 import type { LocalizedText } from "./vessels";
+import type { BookingPaymentInfo } from "./bookings";
 
 export interface OwnerVesselListItem {
   id: string;
@@ -186,6 +187,7 @@ export interface OwnerBookingItem {
   priceMinor: number;
   currency: string;
   createdAt: string;
+  latestPayment: BookingPaymentInfo | null;
 }
 
 export async function getOwnerBookings(ownerId: string): Promise<OwnerBookingItem[]> {
@@ -195,25 +197,35 @@ export async function getOwnerBookings(ownerId: string): Promise<OwnerBookingIte
     .from("bookings")
     .select(
       `id, date_range, guests_count, status, price_minor, currency, created_at,
-       vessels!inner ( id, slug, name, owner_id )`,
+       vessels!inner ( id, slug, name, owner_id ),
+       payments ( id, provider, status, created_at )`,
     )
     .eq("vessels.owner_id", ownerId)
     .order("created_at", { ascending: false });
 
   if (error) throw error;
 
-  return (data ?? []).map((booking) => ({
-    id: booking.id,
-    vesselId: booking.vessels.id,
-    vesselSlug: booking.vessels.slug,
-    vesselName: booking.vessels.name,
-    dateRange: parseDateRangeLiteral(booking.date_range as string),
-    guestsCount: booking.guests_count,
-    status: booking.status,
-    priceMinor: booking.price_minor,
-    currency: booking.currency,
-    createdAt: booking.created_at,
-  }));
+  return (data ?? []).map((booking) => {
+    const latestPayment = [...booking.payments].sort(
+      (a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime(),
+    )[0];
+
+    return {
+      id: booking.id,
+      vesselId: booking.vessels.id,
+      vesselSlug: booking.vessels.slug,
+      vesselName: booking.vessels.name,
+      dateRange: parseDateRangeLiteral(booking.date_range as string),
+      guestsCount: booking.guests_count,
+      status: booking.status,
+      priceMinor: booking.price_minor,
+      currency: booking.currency,
+      createdAt: booking.created_at,
+      latestPayment: latestPayment
+        ? { id: latestPayment.id, provider: latestPayment.provider, status: latestPayment.status }
+        : null,
+    };
+  });
 }
 
 export interface OwnerFinanceSummary {
