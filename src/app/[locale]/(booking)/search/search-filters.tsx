@@ -59,7 +59,7 @@ export function SearchFiltersForm({
       onSubmit={form.handleSubmit(onSubmit)}
       className="grid grid-cols-1 gap-4 rounded-2xl border border-border bg-card p-5 shadow-soft sm:grid-cols-2 lg:grid-cols-5 lg:items-end"
     >
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2">
         <Label>{t("filters.location")}</Label>
         <Select
           value={locationValue ?? ANY}
@@ -81,7 +81,7 @@ export function SearchFiltersForm({
         </Select>
       </div>
 
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2">
         <Label>{t("filters.type")}</Label>
         <Select
           value={typeValue ?? ANY}
@@ -106,7 +106,7 @@ export function SearchFiltersForm({
         </Select>
       </div>
 
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2">
         <Label htmlFor="guests">{t("filters.guests")}</Label>
         <Input
           id="guests"
@@ -117,7 +117,7 @@ export function SearchFiltersForm({
         />
       </div>
 
-      <div className="space-y-2">
+      <div className="flex flex-col gap-2">
         <Label htmlFor="priceMax">{t("filters.priceMax")}</Label>
         <Input
           id="priceMax"

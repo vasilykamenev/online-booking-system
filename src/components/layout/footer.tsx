@@ -1,6 +1,6 @@
-import { Compass } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
+import { Logo } from "@/components/layout/logo";
 
 export function Footer() {
   const t = useTranslations("footer");
@@ -11,11 +11,8 @@ export function Footer() {
       <div className="container-page py-16 lg:py-20">
         <div className="grid grid-cols-2 gap-10 md:grid-cols-5">
           <div className="col-span-2 md:col-span-2">
-            <Link href="/" className="flex items-center gap-2">
-              <Compass className="size-5" strokeWidth={1.5} />
-              <span className="text-base font-medium tracking-tight">
-                Meridian
-              </span>
+            <Link href="/" className="flex items-center">
+              <Logo variant="full" className="h-14 w-auto" />
             </Link>
             <p className="mt-4 max-w-xs text-sm font-light leading-relaxed text-muted-foreground">
               {t("description")}

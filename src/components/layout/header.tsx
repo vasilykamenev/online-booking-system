@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { Menu, Compass } from "lucide-react";
+import { Menu } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { Link, usePathname } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/sheet";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { LocaleSwitcher } from "@/components/layout/locale-switcher";
+import { Logo } from "@/components/layout/logo";
 
 const TRANSPARENT_HERO_PATHS = new Set(["/", "/about"]);
 
@@ -53,8 +54,8 @@ export function Header() {
       }`}
     >
       <div className="container-page flex h-18 items-center justify-between py-4">
-        <Link href="/" className="flex items-center gap-2 shrink-0">
-          <Compass className="size-5" strokeWidth={1.5} />
+        <Link href="/" className="flex items-center shrink-0">
+          <Logo variant="mark" forceMono={!solid} className="h-8 w-auto" priority />
           <span className="text-base font-medium tracking-tight">
             Meridian
           </span>
@@ -109,9 +110,8 @@ export function Header() {
             </SheetTrigger>
             <SheetContent side="right" className="w-72">
               <SheetHeader>
-                <SheetTitle className="flex items-center gap-2">
-                  <Compass className="size-4" strokeWidth={1.5} />
-                  Meridian
+                <SheetTitle className="flex items-center">
+                  <Logo variant="mark" className="h-7 w-auto" />
                 </SheetTitle>
               </SheetHeader>
               <nav className="flex flex-col gap-1 px-4">
