@@ -4,6 +4,7 @@ import { setRequestLocale } from "next-intl/server";
 import { getVesselBySlug } from "@/server/queries/vessels";
 import { getCurrentProfile } from "@/server/queries/profile";
 import { isVesselFavorited } from "@/server/queries/account";
+import { getVesselBookingContext } from "@/server/queries/availability";
 import { VesselDetailContent } from "./vessel-detail-content";
 
 export async function generateMetadata({
@@ -35,6 +36,14 @@ export default async function VesselPage({
 
   const profile = await getCurrentProfile();
   const isFavorited = profile ? await isVesselFavorited(profile.id, vessel.id) : false;
+  const bookingContext = await getVesselBookingContext(vessel.id);
 
-  return <VesselDetailContent vessel={vessel} isFavorited={isFavorited} />;
+  return (
+    <VesselDetailContent
+      vessel={vessel}
+      isFavorited={isFavorited}
+      pricingRules={bookingContext.pricingRules}
+      unavailableRanges={bookingContext.unavailableRanges}
+    />
+  );
 }

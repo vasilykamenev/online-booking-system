@@ -1,6 +1,7 @@
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
+import { parseDateRangeLiteral } from "@/lib/supabase/date-range";
 import { CARD_COLUMNS, mapCardRow, type CardRow, type FeaturedVessel } from "./vessels";
 
 export async function getFavoriteVessels(profileId: string): Promise<FeaturedVessel[]> {
@@ -59,12 +60,6 @@ export interface BookingHistoryItem {
   createdAt: string;
 }
 
-/** Postgres daterange text form is "[2026-08-01,2026-08-07)" — bounds are always present for our bookings. */
-function parseDateRange(raw: string): { start: string; end: string } {
-  const [start, end] = raw.replace(/[[\])]/g, "").split(",");
-  return { start, end };
-}
-
 export async function getBookingHistory(clientId: string): Promise<BookingHistoryItem[]> {
   const supabase = await createClient();
 
@@ -89,7 +84,7 @@ export async function getBookingHistory(clientId: string): Promise<BookingHistor
       vesselSlug: booking.vessels?.slug ?? "",
       vesselName: booking.vessels?.name ?? "",
       vesselImageUrl: images[0]?.url ?? null,
-      dateRange: parseDateRange(booking.date_range as string),
+      dateRange: parseDateRangeLiteral(booking.date_range as string),
       guestsCount: booking.guests_count,
       status: booking.status,
       priceMinor: booking.price_minor,

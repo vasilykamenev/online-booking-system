@@ -14,7 +14,9 @@ const emptyToUndefined = (value: unknown) => (value === "" ? undefined : value);
 
 export const searchParamsSchema = z.object({
   type: z.enum(vesselTypeValues).optional(),
-  location: z.uuid().optional(),
+  // `.guid()` rather than the stricter `.uuid()`: seed data uses placeholder ids
+  // like "20000000-0000-0000-0000-000000000001" without a valid RFC 4122 version/variant nibble.
+  location: z.guid().optional(),
   guests: z.preprocess(emptyToUndefined, z.coerce.number().int().positive().max(200).optional()),
   priceMax: z.preprocess(emptyToUndefined, z.coerce.number().int().positive().optional()),
   cursor: z.string().optional(),

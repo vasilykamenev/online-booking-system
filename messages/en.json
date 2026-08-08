@@ -86,7 +86,19 @@
     },
     "priceCard": {
       "perNight": "/ night",
-      "guestsCapacity": "Up to {count} guests"
+      "guestsCapacity": "Up to {count} guests",
+      "guests": "Guests",
+      "selectDates": "Select check-in and check-out dates",
+      "nightsCount": "{count, plural, one {# night} other {# nights}}",
+      "total": "Total",
+      "submit": "Book now",
+      "signInRequired": "Sign in to book this vessel",
+      "errors": {
+        "invalid": "Check the selected dates and guest count",
+        "unavailable": "Those dates are no longer available — pick another range",
+        "guestsExceeded": "Too many guests for this vessel",
+        "generic": "Couldn't create the booking. Please try again"
+      }
     }
   },
   "search": {
@@ -369,5 +381,28 @@
     "add": "Add to favorites",
     "remove": "Remove from favorites",
     "signInRequired": "Sign in to add to favorites"
+  },
+  "booking": {
+    "notFound": {
+      "title": "Booking not found",
+      "description": "The link may be outdated, or you don't have access to this booking.",
+      "cta": "Browse vessels"
+    },
+    "confirmation": {
+      "eyebrow": "Booking request",
+      "pending": "Request sent and awaiting confirmation",
+      "guests": "guests",
+      "createdOn": "Created",
+      "total": "Total",
+      "backToVessel": "Back to vessel",
+      "toBookings": "All my bookings"
+    },
+    "status": {
+      "pending": "Awaiting confirmation",
+      "confirmed": "Confirmed",
+      "paid": "Paid",
+      "cancelled": "Cancelled",
+      "completed": "Completed"
+    }
   }
 }

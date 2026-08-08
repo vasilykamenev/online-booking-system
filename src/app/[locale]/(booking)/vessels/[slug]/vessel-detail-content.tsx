@@ -17,17 +17,23 @@ import { useLocale, useTranslations } from "next-intl";
 import type { Locale } from "@/i18n/routing";
 import type { VesselDetail } from "@/server/queries/vessels";
 import { pickLocalized } from "@/lib/supabase/localized";
-import { formatPrice } from "@/lib/pricing/format";
 import { Link } from "@/i18n/navigation";
 import { Badge } from "@/components/ui/badge";
 import { FavoriteButton } from "@/components/vessels/favorite-button";
+import { BookingWidget } from "@/components/booking/booking-widget";
+import type { PricingRule } from "@/lib/pricing/calculate";
+import type { DateInterval } from "@/lib/availability/ranges";
 
 export function VesselDetailContent({
   vessel,
   isFavorited = false,
+  pricingRules,
+  unavailableRanges,
 }: {
   vessel: VesselDetail;
   isFavorited?: boolean;
+  pricingRules: PricingRule[];
+  unavailableRanges: DateInterval[];
 }) {
   const t = useTranslations("vesselPage");
   const tVessels = useTranslations("vessels");
@@ -225,17 +231,14 @@ export function VesselDetailContent({
             transition={{ duration: 0.5, delay: 0.1 }}
             className="h-fit rounded-2xl border border-border bg-card p-6 shadow-soft lg:sticky lg:top-28"
           >
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-light text-foreground">
-                {formatPrice(vessel.basePriceMinor, vessel.currency, locale)}
-              </span>
-              <span className="text-sm font-light text-muted-foreground">
-                {t("priceCard.perNight")}
-              </span>
-            </div>
-            <p className="mt-2 text-xs font-light text-muted-foreground">
-              {t("priceCard.guestsCapacity", { count: vessel.guestsCapacity })}
-            </p>
+            <BookingWidget
+              vesselId={vessel.id}
+              basePriceMinor={vessel.basePriceMinor}
+              currency={vessel.currency}
+              guestsCapacity={vessel.guestsCapacity}
+              pricingRules={pricingRules}
+              unavailableRanges={unavailableRanges}
+            />
           </motion.div>
         </div>
       </section>

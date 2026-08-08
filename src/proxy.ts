@@ -6,7 +6,7 @@ import type { Database } from "@/lib/supabase/database.types";
 
 const handleI18nRouting = createMiddleware(routing);
 
-const PROTECTED_SEGMENTS = ["account", "owner", "admin"];
+const PROTECTED_SEGMENTS = ["account", "owner", "admin", "booking"];
 // "auth/reset-password" is reached with an active (recovery) session, so it's excluded
 // from the guest-only redirect below — everything else under /auth requires being signed out.
 const GUEST_ONLY_EXCEPTIONS = ["/auth/reset-password"];

@@ -787,6 +787,10 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["user_role"]
       }
+      get_vessel_booked_ranges: {
+        Args: { p_vessel_id: string }
+        Returns: string[]
+      }
       is_admin: { Args: never; Returns: boolean }
     }
     Enums: {
