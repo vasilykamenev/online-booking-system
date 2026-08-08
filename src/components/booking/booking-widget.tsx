@@ -1,15 +1,16 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
-import { addDays, format, parseISO, startOfDay } from "date-fns";
+import { useMemo, useState, useTransition, type ComponentProps } from "react";
+import { addDays, format, isSameDay, parseISO, startOfDay } from "date-fns";
 import { ru, enUS } from "date-fns/locale";
 import type { DateRange, Matcher } from "react-day-picker";
 import { useLocale, useTranslations } from "next-intl";
 import { toast } from "sonner";
 import type { Locale } from "@/i18n/routing";
 import { useRouter } from "@/i18n/navigation";
-import { Calendar } from "@/components/ui/calendar";
+import { Calendar, CalendarDayButton } from "@/components/ui/calendar";
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import {
   Select,
   SelectContent,
@@ -23,6 +24,22 @@ import { createBooking } from "@/server/actions/bookings";
 import type { DateInterval } from "@/lib/availability/ranges";
 
 const DATE_FNS_LOCALES = { ru, en: enUS } satisfies Record<Locale, typeof ru>;
+
+/** Tints the whole selected range in the brand color instead of the barely-visible default muted gray. */
+function RangeDayButton({
+  className,
+  ...props
+}: ComponentProps<typeof CalendarDayButton>) {
+  return (
+    <CalendarDayButton
+      {...props}
+      className={cn(
+        className,
+        "data-[range-middle=true]:bg-primary/15 data-[range-middle=true]:text-foreground data-[selected-single=true]:bg-primary",
+      )}
+    />
+  );
+}
 
 export function BookingWidget({
   vesselId,
@@ -43,10 +60,31 @@ export function BookingWidget({
   const locale = useLocale() as Locale;
   const router = useRouter();
 
-  const [range, setRange] = useState<DateRange | undefined>();
+  // `anchor` is the first clicked day; `explicitEnd` is only set once a second, distinct
+  // day is clicked. A single click is a complete 1-night booking (checkout = anchor + 1 day) —
+  // the guest doesn't need to click twice just to book one day.
+  const [anchor, setAnchor] = useState<Date | undefined>();
+  const [explicitEnd, setExplicitEnd] = useState<Date | undefined>();
   const [guests, setGuests] = useState("1");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
+
+  const range = useMemo<DateRange | undefined>(() => {
+    if (!anchor) return undefined;
+    if (!explicitEnd) return { from: anchor, to: addDays(anchor, 1) };
+    const [from, to] = anchor <= explicitEnd ? [anchor, explicitEnd] : [explicitEnd, anchor];
+    return { from, to };
+  }, [anchor, explicitEnd]);
+
+  function handleCalendarSelect(_range: DateRange | undefined, clickedDay: Date) {
+    if (!anchor || explicitEnd) {
+      setAnchor(clickedDay);
+      setExplicitEnd(undefined);
+      return;
+    }
+    if (isSameDay(clickedDay, anchor)) return;
+    setExplicitEnd(clickedDay);
+  }
 
   const disabledMatchers = useMemo<Matcher[]>(
     () => [
@@ -115,11 +153,20 @@ export function BookingWidget({
         <Calendar
           mode="range"
           selected={range}
-          onSelect={setRange}
+          onSelect={handleCalendarSelect}
           disabled={disabledMatchers}
           locale={DATE_FNS_LOCALES[locale]}
           numberOfMonths={1}
           className="mx-auto"
+          classNames={{
+            range_start: "bg-primary/15 after:bg-primary/15",
+            range_end: "bg-primary/15 after:bg-primary/15",
+          }}
+          components={{
+            DayButton: (dayButtonProps) => (
+              <RangeDayButton {...dayButtonProps} locale={DATE_FNS_LOCALES[locale]} />
+            ),
+          }}
         />
       </div>
 
