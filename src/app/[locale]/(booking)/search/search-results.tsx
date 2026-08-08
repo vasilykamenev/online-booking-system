@@ -11,10 +11,12 @@ export function SearchResults({
   initialVessels,
   initialCursor,
   filters,
+  favoritedVesselIds,
 }: {
   initialVessels: FeaturedVessel[];
   initialCursor: string | null;
   filters: Omit<SearchFilters, "cursor">;
+  favoritedVesselIds: Set<string>;
 }) {
   const t = useTranslations("search");
   const [vessels, setVessels] = useState(initialVessels);
@@ -41,7 +43,12 @@ export function SearchResults({
     <div>
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {vessels.map((vessel, index) => (
-          <VesselCard key={vessel.id} vessel={vessel} index={index % 4} />
+          <VesselCard
+            key={vessel.id}
+            vessel={vessel}
+            index={index % 4}
+            isFavorited={favoritedVesselIds.has(vessel.id)}
+          />
         ))}
       </div>
 

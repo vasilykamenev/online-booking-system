@@ -9,6 +9,7 @@ import { routing } from "@/i18n/routing";
 import { ThemeProvider } from "@/components/providers/theme-provider";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
+import { getCurrentProfile } from "@/server/queries/profile";
 import "../globals.css";
 
 const manrope = Manrope({
@@ -53,6 +54,7 @@ export default async function LocaleLayout({
   }
 
   setRequestLocale(locale);
+  const profile = await getCurrentProfile();
 
   return (
     <html
@@ -68,7 +70,7 @@ export default async function LocaleLayout({
             enableSystem
             disableTransitionOnChange
           >
-            <Header />
+            <Header profile={profile} />
             <main className="flex-1">{children}</main>
             <Footer />
             <Toaster position="bottom-right" richColors closeButton />

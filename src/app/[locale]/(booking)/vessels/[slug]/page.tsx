@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { setRequestLocale } from "next-intl/server";
 import { getVesselBySlug } from "@/server/queries/vessels";
+import { getCurrentProfile } from "@/server/queries/profile";
+import { isVesselFavorited } from "@/server/queries/account";
 import { VesselDetailContent } from "./vessel-detail-content";
 
 export async function generateMetadata({
@@ -31,5 +33,8 @@ export default async function VesselPage({
   const vessel = await getVesselBySlug(slug);
   if (!vessel) notFound();
 
-  return <VesselDetailContent vessel={vessel} />;
+  const profile = await getCurrentProfile();
+  const isFavorited = profile ? await isVesselFavorited(profile.id, vessel.id) : false;
+
+  return <VesselDetailContent vessel={vessel} isFavorited={isFavorited} />;
 }

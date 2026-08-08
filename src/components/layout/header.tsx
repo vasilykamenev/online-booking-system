@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { Menu } from "lucide-react";
-import { useTranslations } from "next-intl";
+import { Heart, LogOut, Menu, Ship, User } from "lucide-react";
+import { useLocale, useTranslations } from "next-intl";
+import type { Locale } from "@/i18n/routing";
 import { Link, usePathname } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,16 +15,26 @@ import {
   SheetTrigger,
   SheetClose,
 } from "@/components/ui/sheet";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { LocaleSwitcher } from "@/components/layout/locale-switcher";
 import { Logo } from "@/components/layout/logo";
+import { signOut } from "@/server/actions/auth";
+import type { Profile } from "@/server/queries/profile";
 
 const TRANSPARENT_HERO_PATHS = new Set(["/", "/about"]);
 
-export function Header() {
+export function Header({ profile }: { profile: Profile | null }) {
   const [isScrolled, setIsScrolled] = useState(false);
   const t = useTranslations("nav");
   const pathname = usePathname();
+  const locale = useLocale() as Locale;
   const hasDarkHero = TRANSPARENT_HERO_PATHS.has(pathname);
 
   useEffect(() => {
@@ -76,13 +87,18 @@ export function Header() {
         <div className="hidden items-center gap-1 md:flex">
           <ThemeToggle />
           <LocaleSwitcher />
-          <Button
-            variant="ghost"
-            size="sm"
-            className="ml-1 text-[11px] uppercase tracking-wider hover:bg-white/10"
-          >
-            {t("signIn")}
-          </Button>
+          {profile ? (
+            <UserMenu profile={profile} locale={locale} className="ml-1" />
+          ) : (
+            <Button
+              asChild
+              variant="ghost"
+              size="sm"
+              className="ml-1 text-[11px] uppercase tracking-wider hover:bg-white/10"
+            >
+              <Link href="/auth/login">{t("signIn")}</Link>
+            </Button>
+          )}
           <Button
             size="sm"
             className={`rounded-full text-[11px] uppercase tracking-wider ${
@@ -127,7 +143,26 @@ export function Header() {
                 ))}
               </nav>
               <div className="mt-4 flex flex-col gap-2 px-4">
-                <Button variant="outline">{t("signIn")}</Button>
+                {profile ? (
+                  <>
+                    <SheetClose asChild>
+                      <Button asChild variant="outline">
+                        <Link href="/account">{t("account")}</Link>
+                      </Button>
+                    </SheetClose>
+                    <form action={signOut.bind(null, locale)}>
+                      <Button type="submit" variant="ghost" className="w-full">
+                        {t("signOut")}
+                      </Button>
+                    </form>
+                  </>
+                ) : (
+                  <SheetClose asChild>
+                    <Button asChild variant="outline">
+                      <Link href="/auth/login">{t("signIn")}</Link>
+                    </Button>
+                  </SheetClose>
+                )}
                 <Button>{t("listVessel")}</Button>
                 <div className="pt-2">
                   <LocaleSwitcher />
@@ -138,5 +173,56 @@ export function Header() {
         </div>
       </div>
     </motion.header>
+  );
+}
+
+function UserMenu({
+  profile,
+  locale,
+  className,
+}: {
+  profile: Profile;
+  locale: Locale;
+  className?: string;
+}) {
+  const t = useTranslations("nav");
+  const initials = (profile.fullName || profile.email).slice(0, 1).toUpperCase();
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <button
+          aria-label={t("account")}
+          className={`flex size-8 items-center justify-center rounded-full bg-primary/15 text-xs font-medium text-primary transition-opacity hover:opacity-80 ${className ?? ""}`}
+        >
+          {initials}
+        </button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-52">
+        <DropdownMenuItem asChild>
+          <Link href="/account">
+            <User className="size-4" strokeWidth={1.5} />
+            {t("account")}
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/account/favorites">
+            <Heart className="size-4" strokeWidth={1.5} />
+            {t("myFavorites")}
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/account/bookings">
+            <Ship className="size-4" strokeWidth={1.5} />
+            {t("myBookings")}
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" onSelect={() => signOut(locale)}>
+          <LogOut className="size-4" strokeWidth={1.5} />
+          {t("signOut")}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

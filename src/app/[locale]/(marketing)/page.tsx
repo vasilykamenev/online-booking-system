@@ -6,6 +6,8 @@ import { Features } from "@/components/sections/features";
 import { Initiatives } from "@/components/sections/initiatives";
 import { CtaBanner } from "@/components/sections/cta-banner";
 import { getFeaturedVessels } from "@/server/queries/vessels";
+import { getCurrentProfile } from "@/server/queries/profile";
+import { getFavoriteVesselIds } from "@/server/queries/account";
 
 export default async function Home({
   params,
@@ -15,13 +17,14 @@ export default async function Home({
   const { locale } = await params;
   setRequestLocale(locale);
 
-  const vessels = await getFeaturedVessels();
+  const [vessels, profile] = await Promise.all([getFeaturedVessels(), getCurrentProfile()]);
+  const favoritedVesselIds = profile ? await getFavoriteVesselIds(profile.id) : new Set<string>();
 
   return (
     <>
       <Hero />
       <Stats />
-      <Vessels vessels={vessels} />
+      <Vessels vessels={vessels} favoritedVesselIds={favoritedVesselIds} />
       <Features />
       <Initiatives />
       <CtaBanner />

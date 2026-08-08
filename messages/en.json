@@ -6,7 +6,11 @@
     "about": "About",
     "signIn": "Sign in",
     "listVessel": "List your vessel",
-    "openMenu": "Open menu"
+    "openMenu": "Open menu",
+    "account": "Account",
+    "myBookings": "My bookings",
+    "myFavorites": "Favorites",
+    "signOut": "Sign out"
   },
   "hero": {
     "eyebrow": "Yachts & expedition vessels",
@@ -267,5 +271,103 @@
         "value": "Valletta, Malta"
       }
     }
+  },
+  "auth": {
+    "login": {
+      "title": "Welcome back",
+      "subtitle": "Sign in to manage your bookings and favorites.",
+      "email": "Email",
+      "emailPlaceholder": "you@example.com",
+      "password": "Password",
+      "passwordPlaceholder": "Enter your password",
+      "forgotPassword": "Forgot password?",
+      "submit": "Sign in",
+      "noAccount": "Don't have an account?",
+      "registerLink": "Sign up"
+    },
+    "register": {
+      "title": "Create an account",
+      "subtitle": "Book vessels and save favorites in your personal account.",
+      "fullName": "Full name",
+      "fullNamePlaceholder": "How should we address you?",
+      "email": "Email",
+      "emailPlaceholder": "you@example.com",
+      "password": "Password",
+      "passwordPlaceholder": "At least 8 characters",
+      "passwordHint": "At least 8 characters, with letters and numbers",
+      "submit": "Sign up",
+      "hasAccount": "Already have an account?",
+      "loginLink": "Sign in",
+      "successTitle": "Check your inbox",
+      "successDescription": "We've sent a confirmation link to the email you provided."
+    },
+    "forgotPassword": {
+      "title": "Reset your password",
+      "subtitle": "Enter your email and we'll send you a reset link.",
+      "email": "Email",
+      "emailPlaceholder": "you@example.com",
+      "submit": "Send reset link",
+      "successTitle": "Link sent",
+      "successDescription": "Check your inbox and follow the link to set a new password.",
+      "backToLogin": "Back to sign in"
+    },
+    "resetPassword": {
+      "title": "New password",
+      "subtitle": "Set a new password for your account.",
+      "password": "New password",
+      "passwordPlaceholder": "At least 8 characters",
+      "submit": "Save password"
+    },
+    "errors": {
+      "invalidCredentials": "Incorrect email or password.",
+      "emailTaken": "This email is already registered.",
+      "weakPassword": "Password is too weak — at least 8 characters, with letters and numbers.",
+      "rateLimited": "Too many attempts. Please try again later.",
+      "invalid": "Please check the fields and try again.",
+      "unauthenticated": "Please sign in to continue.",
+      "link": "This link is invalid or has expired.",
+      "generic": "Something went wrong. Please try again."
+    }
+  },
+  "account": {
+    "nav": {
+      "profile": "Profile",
+      "favorites": "Favorites",
+      "bookings": "Booking history"
+    },
+    "profile": {
+      "title": "Profile",
+      "subtitle": "Personal details and account settings.",
+      "fullName": "Full name",
+      "email": "Email",
+      "locale": "Language",
+      "currency": "Currency",
+      "save": "Save",
+      "saved": "Changes saved."
+    },
+    "favorites": {
+      "title": "Favorites",
+      "subtitle": "Vessels you've saved for comparison.",
+      "empty": "No saved vessels yet — add them from the catalog by tapping the heart icon."
+    },
+    "bookings": {
+      "title": "Booking history",
+      "subtitle": "All your bookings and their statuses.",
+      "empty": "You haven't booked any vessels yet.",
+      "guests": "guests",
+      "bookedOn": "Booked on",
+      "status": {
+        "pending": "Pending confirmation",
+        "confirmed": "Confirmed",
+        "paid": "Paid",
+        "cancelled": "Cancelled",
+        "completed": "Completed"
+      }
+    }
+  },
+  "favorite": {
+    "add": "Add to favorites",
+    "remove": "Remove from favorites",
+    "signInRequired": "Sign in to add to favorites"
   }
 }

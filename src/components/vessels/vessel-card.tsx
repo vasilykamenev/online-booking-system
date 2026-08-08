@@ -11,13 +11,16 @@ import { formatPrice } from "@/lib/pricing/format";
 import { Link } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { FavoriteButton } from "@/components/vessels/favorite-button";
 
 export function VesselCard({
   vessel,
   index = 0,
+  isFavorited = false,
 }: {
   vessel: FeaturedVessel;
   index?: number;
+  isFavorited?: boolean;
 }) {
   const t = useTranslations("vessels");
   const locale = useLocale() as Locale;
@@ -52,9 +55,12 @@ export function VesselCard({
         >
           {t(`types.${vessel.type}`)}
         </Badge>
-        <div className="absolute right-3 top-3 flex items-center gap-1 rounded-md bg-card/95 px-2 py-1 backdrop-blur-sm">
-          <Star className="size-3 fill-primary text-primary" />
-          <span className="text-xs font-medium">{vessel.ratingAvg.toFixed(1)}</span>
+        <div className="absolute right-3 top-3 flex items-center gap-1.5">
+          <div className="flex items-center gap-1 rounded-md bg-card/95 px-2 py-1 backdrop-blur-sm">
+            <Star className="size-3 fill-primary text-primary" />
+            <span className="text-xs font-medium">{vessel.ratingAvg.toFixed(1)}</span>
+          </div>
+          <FavoriteButton vesselId={vessel.id} initialFavorited={isFavorited} />
         </div>
       </Link>
 

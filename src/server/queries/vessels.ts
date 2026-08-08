@@ -20,11 +20,11 @@ export interface FeaturedVessel {
   image: { url: string; alt: LocalizedText } | null;
 }
 
-const CARD_COLUMNS = `id, slug, type, name, rating_avg, guests_capacity, cabins, base_price_minor, currency,
+export const CARD_COLUMNS = `id, slug, type, name, rating_avg, guests_capacity, cabins, base_price_minor, currency,
        locations ( country, city ),
        vessel_images ( url, alt_text, sort_order )`;
 
-interface CardRow {
+export interface CardRow {
   id: string;
   slug: string;
   type: Database["public"]["Enums"]["vessel_type"];
@@ -38,7 +38,7 @@ interface CardRow {
   vessel_images: { url: string; alt_text: unknown; sort_order: number }[];
 }
 
-function mapCardRow(vessel: CardRow): FeaturedVessel {
+export function mapCardRow(vessel: CardRow): FeaturedVessel {
   const image = [...vessel.vessel_images].sort((a, b) => a.sort_order - b.sort_order)[0];
 
   return {

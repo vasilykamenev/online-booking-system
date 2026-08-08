@@ -20,8 +20,15 @@ import { pickLocalized } from "@/lib/supabase/localized";
 import { formatPrice } from "@/lib/pricing/format";
 import { Link } from "@/i18n/navigation";
 import { Badge } from "@/components/ui/badge";
+import { FavoriteButton } from "@/components/vessels/favorite-button";
 
-export function VesselDetailContent({ vessel }: { vessel: VesselDetail }) {
+export function VesselDetailContent({
+  vessel,
+  isFavorited = false,
+}: {
+  vessel: VesselDetail;
+  isFavorited?: boolean;
+}) {
   const t = useTranslations("vesselPage");
   const tVessels = useTranslations("vessels");
   const locale = useLocale() as Locale;
@@ -58,6 +65,12 @@ export function VesselDetailContent({ vessel }: { vessel: VesselDetail }) {
               className="object-cover"
             />
           )}
+          <FavoriteButton
+            vesselId={vessel.id}
+            initialFavorited={isFavorited}
+            className="absolute right-4 top-4 size-10"
+            iconClassName="size-5"
+          />
         </motion.div>
 
         {thumbnails.length > 0 && (

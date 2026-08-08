@@ -6,7 +6,11 @@
     "about": "О проекте",
     "signIn": "Войти",
     "listVessel": "Разместить судно",
-    "openMenu": "Открыть меню"
+    "openMenu": "Открыть меню",
+    "account": "Личный кабинет",
+    "myBookings": "Мои брони",
+    "myFavorites": "Избранное",
+    "signOut": "Выйти"
   },
   "hero": {
     "eyebrow": "Яхты и экспедиционные суда",
@@ -267,5 +271,103 @@
         "value": "Валлетта, Мальта"
       }
     }
+  },
+  "auth": {
+    "login": {
+      "title": "С возвращением",
+      "subtitle": "Войдите, чтобы управлять бронями и избранным.",
+      "email": "Email",
+      "emailPlaceholder": "you@example.com",
+      "password": "Пароль",
+      "passwordPlaceholder": "Введите пароль",
+      "forgotPassword": "Забыли пароль?",
+      "submit": "Войти",
+      "noAccount": "Ещё нет аккаунта?",
+      "registerLink": "Зарегистрироваться"
+    },
+    "register": {
+      "title": "Создать аккаунт",
+      "subtitle": "Бронируйте суда и сохраняйте избранное в личном кабинете.",
+      "fullName": "Имя и фамилия",
+      "fullNamePlaceholder": "Как к вам обращаться?",
+      "email": "Email",
+      "emailPlaceholder": "you@example.com",
+      "password": "Пароль",
+      "passwordPlaceholder": "Минимум 8 символов",
+      "passwordHint": "Минимум 8 символов, буквы и цифры",
+      "submit": "Зарегистрироваться",
+      "hasAccount": "Уже есть аккаунт?",
+      "loginLink": "Войти",
+      "successTitle": "Проверьте почту",
+      "successDescription": "Мы отправили ссылку для подтверждения на указанный email."
+    },
+    "forgotPassword": {
+      "title": "Восстановление пароля",
+      "subtitle": "Укажите email — пришлём ссылку для сброса пароля.",
+      "email": "Email",
+      "emailPlaceholder": "you@example.com",
+      "submit": "Отправить ссылку",
+      "successTitle": "Ссылка отправлена",
+      "successDescription": "Проверьте почту и перейдите по ссылке, чтобы задать новый пароль.",
+      "backToLogin": "Вернуться ко входу"
+    },
+    "resetPassword": {
+      "title": "Новый пароль",
+      "subtitle": "Задайте новый пароль для входа в аккаунт.",
+      "password": "Новый пароль",
+      "passwordPlaceholder": "Минимум 8 символов",
+      "submit": "Сохранить пароль"
+    },
+    "errors": {
+      "invalidCredentials": "Неверный email или пароль.",
+      "emailTaken": "Этот email уже зарегистрирован.",
+      "weakPassword": "Пароль слишком простой — минимум 8 символов, буквы и цифры.",
+      "rateLimited": "Слишком много попыток. Попробуйте позже.",
+      "invalid": "Проверьте правильность заполнения полей.",
+      "unauthenticated": "Войдите, чтобы продолжить.",
+      "link": "Ссылка недействительна или устарела.",
+      "generic": "Что-то пошло не так. Попробуйте ещё раз."
+    }
+  },
+  "account": {
+    "nav": {
+      "profile": "Профиль",
+      "favorites": "Избранное",
+      "bookings": "История броней"
+    },
+    "profile": {
+      "title": "Профиль",
+      "subtitle": "Личные данные и настройки аккаунта.",
+      "fullName": "Имя и фамилия",
+      "email": "Email",
+      "locale": "Язык",
+      "currency": "Валюта",
+      "save": "Сохранить",
+      "saved": "Изменения сохранены."
+    },
+    "favorites": {
+      "title": "Избранное",
+      "subtitle": "Суда, которые вы сохранили для сравнения.",
+      "empty": "Пока нет сохранённых судов — добавляйте их из каталога, нажимая на сердечко."
+    },
+    "bookings": {
+      "title": "История броней",
+      "subtitle": "Все ваши бронирования и их статусы.",
+      "empty": "Вы ещё не бронировали суда.",
+      "guests": "гостей",
+      "bookedOn": "Забронировано",
+      "status": {
+        "pending": "Ожидает подтверждения",
+        "confirmed": "Подтверждено",
+        "paid": "Оплачено",
+        "cancelled": "Отменено",
+        "completed": "Завершено"
+      }
+    }
+  },
+  "favorite": {
+    "add": "Добавить в избранное",
+    "remove": "Убрать из избранного",
+    "signInRequired": "Войдите, чтобы добавить в избранное"
   }
 }

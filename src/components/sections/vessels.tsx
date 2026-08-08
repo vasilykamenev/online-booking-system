@@ -8,7 +8,13 @@ import { Link } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { VesselCard } from "@/components/vessels/vessel-card";
 
-export function Vessels({ vessels }: { vessels: FeaturedVessel[] }) {
+export function Vessels({
+  vessels,
+  favoritedVesselIds = new Set(),
+}: {
+  vessels: FeaturedVessel[];
+  favoritedVesselIds?: Set<string>;
+}) {
   const t = useTranslations("vessels");
 
   return (
@@ -32,7 +38,12 @@ export function Vessels({ vessels }: { vessels: FeaturedVessel[] }) {
 
         <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
           {vessels.map((vessel, index) => (
-            <VesselCard key={vessel.id} vessel={vessel} index={index} />
+            <VesselCard
+              key={vessel.id}
+              vessel={vessel}
+              index={index}
+              isFavorited={favoritedVesselIds.has(vessel.id)}
+            />
           ))}
         </div>
 

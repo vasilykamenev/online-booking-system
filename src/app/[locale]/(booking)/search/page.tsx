@@ -2,6 +2,8 @@ import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { parseSearchParams } from "@/lib/validation/search";
 import { getSearchLocations, searchVessels } from "@/server/queries/vessels";
+import { getCurrentProfile } from "@/server/queries/profile";
+import { getFavoriteVesselIds } from "@/server/queries/account";
 import { SearchFiltersForm } from "./search-filters";
 import { SearchResults } from "./search-results";
 
@@ -38,10 +40,12 @@ export default async function SearchPage({
     priceMaxMinor: filters.priceMax ? filters.priceMax * 100 : undefined,
   };
 
-  const [locations, result] = await Promise.all([
+  const [locations, result, profile] = await Promise.all([
     getSearchLocations(),
     searchVessels(queryFilters),
+    getCurrentProfile(),
   ]);
+  const favoritedVesselIds = profile ? await getFavoriteVesselIds(profile.id) : new Set<string>();
 
   return (
     <div className="pt-24 lg:pt-28">
@@ -65,6 +69,7 @@ export default async function SearchPage({
           initialVessels={result.vessels}
           initialCursor={result.nextCursor}
           filters={queryFilters}
+          favoritedVesselIds={favoritedVesselIds}
         />
       </section>
     </div>
