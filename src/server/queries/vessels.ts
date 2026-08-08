@@ -123,6 +123,20 @@ export async function searchVessels(filters: SearchFilters): Promise<SearchResul
   };
 }
 
+export interface Amenity {
+  id: string;
+  key: string;
+}
+
+export async function getAllAmenities(): Promise<Amenity[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase.from("amenities").select("id, key").order("key");
+
+  if (error) throw error;
+  return data ?? [];
+}
+
 export interface SearchLocation {
   id: string;
   country: LocalizedText;

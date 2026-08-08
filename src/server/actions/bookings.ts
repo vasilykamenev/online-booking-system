@@ -2,11 +2,12 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { createBookingSchema } from "@/lib/validation/booking";
+import { createBookingSchema, ownerBookingStatusSchema } from "@/lib/validation/booking";
 import { calculateBookingPrice } from "@/lib/pricing/calculate";
 import { isRangeAvailable } from "@/lib/availability/ranges";
 import { toDateRangeLiteral } from "@/lib/supabase/date-range";
 import { getVesselBookingContext } from "@/server/queries/availability";
+import type { Locale } from "@/i18n/routing";
 
 export interface CreateBookingInput {
   vesselId: string;
@@ -78,4 +79,33 @@ export async function createBooking(input: CreateBookingInput): Promise<CreateBo
 
   revalidatePath("/", "layout");
   return { bookingId: booking.id };
+}
+
+export interface UpdateBookingStatusResult {
+  error?: "unauthenticated" | "invalid" | "generic";
+}
+
+/** Owner-facing: RLS's bookings_update policy (client, vessel owner, or admin) is the actual gate. */
+export async function updateBookingStatus(
+  locale: Locale,
+  bookingId: string,
+  status: "confirmed" | "cancelled",
+): Promise<UpdateBookingStatusResult> {
+  const parsed = ownerBookingStatusSchema.safeParse({ bookingId, status });
+  if (!parsed.success) return { error: "invalid" };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "unauthenticated" };
+
+  const { error } = await supabase
+    .from("bookings")
+    .update({ status: parsed.data.status })
+    .eq("id", parsed.data.bookingId);
+  if (error) return { error: "generic" };
+
+  revalidatePath(`/${locale}/owner/bookings`);
+  return {};
 }

@@ -16,3 +16,11 @@ export const createBookingSchema = z
     path: ["checkOut"],
   });
 export type CreateBookingInput = z.infer<typeof createBookingSchema>;
+
+// Owners can only move a booking forward to "confirmed" or cut it short with "cancelled" —
+// "paid"/"completed" are driven by the payment flow (not implemented yet), not a manual owner action.
+export const ownerBookingStatusSchema = z.object({
+  bookingId: z.guid(),
+  status: z.enum(["confirmed", "cancelled"]),
+});
+export type OwnerBookingStatusInput = z.infer<typeof ownerBookingStatusSchema>;

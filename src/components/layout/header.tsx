@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { Heart, LogOut, Menu, Ship, User } from "lucide-react";
+import { Heart, LogOut, Menu, Ship, User, LayoutGrid } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import type { Locale } from "@/i18n/routing";
 import { Link, usePathname } from "@/i18n/navigation";
@@ -36,6 +36,7 @@ export function Header({ profile }: { profile: Profile | null }) {
   const pathname = usePathname();
   const locale = useLocale() as Locale;
   const hasDarkHero = TRANSPARENT_HERO_PATHS.has(pathname);
+  const canManageVessels = profile?.role === "owner" || profile?.role === "admin";
 
   useEffect(() => {
     const onScroll = () => setIsScrolled(window.scrollY > 40);
@@ -99,16 +100,19 @@ export function Header({ profile }: { profile: Profile | null }) {
               <Link href="/auth/login">{t("signIn")}</Link>
             </Button>
           )}
-          <Button
-            size="sm"
-            className={`rounded-full text-[11px] uppercase tracking-wider ${
-              solid
-                ? ""
-                : "bg-white/15 text-white border border-white/30 backdrop-blur-md hover:bg-white/25"
-            }`}
-          >
-            {t("listVessel")}
-          </Button>
+          {canManageVessels && (
+            <Button
+              asChild
+              size="sm"
+              className={`rounded-full text-[11px] uppercase tracking-wider ${
+                solid
+                  ? ""
+                  : "bg-white/15 text-white border border-white/30 backdrop-blur-md hover:bg-white/25"
+              }`}
+            >
+              <Link href="/owner/vessels/new">{t("listVessel")}</Link>
+            </Button>
+          )}
         </div>
 
         <div className="flex items-center gap-1 md:hidden">
@@ -163,7 +167,13 @@ export function Header({ profile }: { profile: Profile | null }) {
                     </Button>
                   </SheetClose>
                 )}
-                <Button>{t("listVessel")}</Button>
+                {canManageVessels && (
+                  <SheetClose asChild>
+                    <Button asChild>
+                      <Link href="/owner/vessels/new">{t("listVessel")}</Link>
+                    </Button>
+                  </SheetClose>
+                )}
                 <div className="pt-2">
                   <LocaleSwitcher />
                 </div>
@@ -187,6 +197,7 @@ function UserMenu({
 }) {
   const t = useTranslations("nav");
   const initials = (profile.fullName || profile.email).slice(0, 1).toUpperCase();
+  const canManageVessels = profile.role === "owner" || profile.role === "admin";
 
   return (
     <DropdownMenu>
@@ -217,6 +228,17 @@ function UserMenu({
             {t("myBookings")}
           </Link>
         </DropdownMenuItem>
+        {canManageVessels && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/owner/vessels">
+                <LayoutGrid className="size-4" strokeWidth={1.5} />
+                {t("ownerPanel")}
+              </Link>
+            </DropdownMenuItem>
+          </>
+        )}
         <DropdownMenuSeparator />
         <DropdownMenuItem variant="destructive" onSelect={() => signOut(locale)}>
           <LogOut className="size-4" strokeWidth={1.5} />

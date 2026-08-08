@@ -10,7 +10,8 @@
     "account": "Account",
     "myBookings": "My bookings",
     "myFavorites": "Favorites",
-    "signOut": "Sign out"
+    "signOut": "Sign out",
+    "ownerPanel": "Owner panel"
   },
   "hero": {
     "eyebrow": "Yachts & expedition vessels",
@@ -403,6 +404,150 @@
       "paid": "Paid",
       "cancelled": "Cancelled",
       "completed": "Completed"
+    }
+  },
+  "owner": {
+    "nav": {
+      "vessels": "Vessels",
+      "bookings": "Requests",
+      "finance": "Finance"
+    },
+    "vessels": {
+      "title": "Vessels",
+      "subtitle": "Manage your fleet, publication status, and specifications.",
+      "add": "Add vessel",
+      "empty": "You don't have any vessels yet — add one to start taking bookings.",
+      "columns": {
+        "vessel": "Vessel",
+        "price": "Price",
+        "guests": "Guests",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "actions": {
+        "pricing": "Pricing",
+        "calendar": "Calendar",
+        "edit": "Edit"
+      },
+      "status": {
+        "draft": "Draft",
+        "published": "Published",
+        "archived": "Archived",
+        "updated": "Status updated",
+        "updateError": "Couldn't update the status"
+      },
+      "form": {
+        "name": "Name",
+        "slug": "Slug (for the URL)",
+        "type": "Vessel type",
+        "location": "Location",
+        "description": "Description",
+        "lengthMeters": "Length, m",
+        "yearBuilt": "Year built",
+        "cabins": "Cabins",
+        "guestsCapacity": "Guest capacity",
+        "basePrice": "Base price / night",
+        "currency": "Currency",
+        "status": "Status",
+        "create": "Create vessel",
+        "save": "Save changes",
+        "createTitle": "New vessel",
+        "createSubtitle": "Fill in the specifications — you can publish it later.",
+        "editTitle": "Edit vessel",
+        "editSubtitle": "Core specifications, images, and amenities.",
+        "imagesTitle": "Images",
+        "imageUrl": "Image URL",
+        "altTextRu": "Description (ru)",
+        "altTextEn": "Description (en)",
+        "addImage": "Add image",
+        "removeImage": "Remove image",
+        "amenitiesTitle": "Amenities",
+        "saveAmenities": "Save amenities",
+        "amenitiesSaved": "Amenities saved",
+        "errors": {
+          "invalid": "Check the fields you filled in",
+          "unauthenticated": "Sign in to continue",
+          "generic": "Couldn't save. Please try again",
+          "slugTaken": "That slug is already taken — choose another"
+        }
+      },
+      "notFound": {
+        "title": "Vessel not found",
+        "description": "It may have been removed, or you don't have access to it.",
+        "cta": "Back to vessels"
+      },
+      "calendar": {
+        "title": "Calendar",
+        "subtitle": "Booked and blocked dates for this vessel.",
+        "legendBooked": "Booked",
+        "legendBlocked": "Blocked by you",
+        "blocksTitle": "Date blocks",
+        "startDate": "From",
+        "endDate": "To",
+        "reason": "Reason",
+        "addBlock": "Add block",
+        "remove": "Remove",
+        "errors": {
+          "invalid": "Check the selected dates",
+          "unauthenticated": "Sign in to continue",
+          "overlap": "These dates overlap an already booked or blocked period",
+          "generic": "Couldn't save. Please try again"
+        }
+      },
+      "pricing": {
+        "title": "Pricing",
+        "subtitle": "Base price: {basePrice}. Seasonal rules override it for their date range.",
+        "label": "Rule name",
+        "startDate": "From",
+        "endDate": "To",
+        "price": "Price / night",
+        "priority": "Priority",
+        "addRule": "Add rule",
+        "remove": "Remove",
+        "columns": {
+          "label": "Name",
+          "dates": "Dates",
+          "price": "Price",
+          "priority": "Priority",
+          "actions": "Actions"
+        },
+        "errors": {
+          "invalid": "Check the fields you filled in",
+          "unauthenticated": "Sign in to continue",
+          "generic": "Couldn't save. Please try again"
+        }
+      }
+    },
+    "bookings": {
+      "title": "Requests",
+      "subtitle": "Bookings across all of your vessels.",
+      "empty": "No booking requests yet.",
+      "columns": {
+        "vessel": "Vessel",
+        "dates": "Dates",
+        "guests": "Guests",
+        "price": "Price",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "confirm": "Confirm",
+      "cancel": "Cancel",
+      "confirmed": "Booking confirmed",
+      "cancelled": "Booking cancelled",
+      "updateError": "Couldn't update the booking status"
+    },
+    "finance": {
+      "title": "Finance",
+      "subtitle": "Income from completed and upcoming bookings.",
+      "empty": "No data yet — income will appear after your first bookings.",
+      "earned": "Earned",
+      "pending": "Pending",
+      "columns": {
+        "vessel": "Vessel",
+        "date": "Date",
+        "status": "Status",
+        "amount": "Amount"
+      }
     }
   }
 }
