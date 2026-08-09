@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripeClient } from "@/lib/stripe";
 import { calculatePlatformFee } from "@/lib/pricing/commission";
+import { getPlatformCommissionRate } from "@/server/queries/admin";
 import { paymentBookingSchema, confirmBankTransferSchema } from "@/lib/validation/payment";
 import type { Locale } from "@/i18n/routing";
 
@@ -161,7 +162,8 @@ export async function confirmBankTransferPayment(
   if (!isOwner && !isAdmin) return { error: "forbidden" };
 
   const admin = createAdminClient();
-  const feeMinor = calculatePlatformFee(payment.amount_minor);
+  const commissionRate = await getPlatformCommissionRate(admin);
+  const feeMinor = calculatePlatformFee(payment.amount_minor, commissionRate);
 
   const { error: paymentUpdateError } = await admin
     .from("payments")

@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { Heart, LogOut, Menu, MessageSquare, Ship, User, LayoutGrid } from "lucide-react";
+import { Heart, LogOut, Menu, MessageSquare, Ship, ShieldCheck, User, LayoutGrid } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import type { Locale } from "@/i18n/routing";
 import { Link, usePathname } from "@/i18n/navigation";
@@ -241,6 +241,17 @@ function UserMenu({
               <Link href="/owner/vessels">
                 <LayoutGrid className="size-4" strokeWidth={1.5} />
                 {t("ownerPanel")}
+              </Link>
+            </DropdownMenuItem>
+          </>
+        )}
+        {profile.role === "admin" && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem asChild>
+              <Link href="/admin">
+                <ShieldCheck className="size-4" strokeWidth={1.5} />
+                {t("adminPanel")}
               </Link>
             </DropdownMenuItem>
           </>

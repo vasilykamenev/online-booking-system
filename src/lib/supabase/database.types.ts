@@ -516,6 +516,24 @@ export type Database = {
           },
         ]
       }
+      platform_settings: {
+        Row: {
+          commission_rate: number
+          id: boolean
+          updated_at: string
+        }
+        Insert: {
+          commission_rate?: number
+          id?: boolean
+          updated_at?: string
+        }
+        Update: {
+          commission_rate?: number
+          id?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       pricing_rules: {
         Row: {
           created_at: string

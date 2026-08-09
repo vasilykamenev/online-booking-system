@@ -15,7 +15,8 @@
     "myFavorites": "Favorites",
     "myMessages": "Messages",
     "signOut": "Sign out",
-    "ownerPanel": "Owner panel"
+    "ownerPanel": "Owner panel",
+    "adminPanel": "Admin panel"
   },
   "hero": {
     "eyebrow": "Yachts & expedition vessels",
@@ -705,6 +706,156 @@
         "date": "Date",
         "status": "Status",
         "amount": "Amount"
+      }
+    }
+  },
+  "admin": {
+    "nav": {
+      "overview": "Overview",
+      "users": "Users",
+      "locations": "Locations",
+      "amenities": "Amenities",
+      "commissions": "Commission",
+      "auditLog": "Audit log"
+    },
+    "overview": {
+      "title": "Overview & reports",
+      "subtitle": "Key platform metrics: bookings, revenue, destinations, vessels, cancellations, average price.",
+      "totalBookings": "Total bookings",
+      "cancellationRate": "Cancellation rate",
+      "revenue": "Revenue",
+      "averagePrice": "Average booking price",
+      "bookingsByStatus": "Bookings by status",
+      "topDestinations": "Top destinations",
+      "topVessels": "Top vessels",
+      "noData": "No data yet.",
+      "columns": {
+        "destination": "Destination",
+        "vessel": "Vessel",
+        "bookings": "Bookings"
+      }
+    },
+    "users": {
+      "title": "Users",
+      "subtitle": "Platform users and their roles.",
+      "unnamed": "Unnamed",
+      "updated": "Role updated",
+      "columns": {
+        "user": "User",
+        "joined": "Joined",
+        "role": "Role"
+      },
+      "roles": {
+        "client": "Client",
+        "owner": "Owner",
+        "admin": "Admin"
+      },
+      "errors": {
+        "unauthenticated": "Sign in to change roles",
+        "forbidden": "Not enough permissions",
+        "invalid": "Invalid data",
+        "cannotChangeOwnRole": "You can't demote your own admin role",
+        "generic": "Couldn't update the role"
+      }
+    },
+    "locations": {
+      "title": "Locations",
+      "subtitle": "Reference list of countries, cities, and marinas for the vessel catalog.",
+      "add": "Add location",
+      "empty": "No locations yet.",
+      "edit": "Edit",
+      "delete": "Delete",
+      "confirmDelete": "Delete this location? This cannot be undone.",
+      "deleted": "Location deleted",
+      "deleteErrors": {
+        "unauthenticated": "Sign in to delete this location",
+        "forbidden": "Not enough permissions",
+        "inUse": "Can't delete — this location is used by one or more vessels",
+        "generic": "Couldn't delete the location"
+      },
+      "columns": {
+        "country": "Country",
+        "city": "City",
+        "marina": "Marina",
+        "actions": "Actions"
+      },
+      "notFound": {
+        "title": "Location not found",
+        "description": "The link may be outdated, or the location was removed.",
+        "cta": "Back to locations"
+      },
+      "form": {
+        "createTitle": "New location",
+        "createSubtitle": "Country, city, and (optionally) marina, in both languages.",
+        "editTitle": "Edit location",
+        "editSubtitle": "Update the location's details.",
+        "countryRu": "Country (ru)",
+        "countryEn": "Country (en)",
+        "cityRu": "City (ru)",
+        "cityEn": "City (en)",
+        "marinaRu": "Marina (ru)",
+        "marinaEn": "Marina (en)",
+        "latitude": "Latitude",
+        "longitude": "Longitude",
+        "create": "Create",
+        "save": "Save",
+        "errors": {
+          "invalid": "Check the fields you filled in",
+          "unauthenticated": "Sign in to save this location",
+          "forbidden": "Not enough permissions",
+          "generic": "Couldn't save the location"
+        }
+      }
+    },
+    "amenities": {
+      "title": "Amenities",
+      "subtitle": "Reference list of vessel amenities.",
+      "i18nHint": "After adding a key, remember to add its translation to messages/*.json under vessels.amenities.<key>.",
+      "empty": "No amenities yet.",
+      "delete": "Delete",
+      "confirmDelete": "Delete this amenity? It will be removed from every vessel.",
+      "deleted": "Amenity deleted",
+      "deleteError": "Couldn't delete the amenity",
+      "columns": {
+        "key": "Key",
+        "actions": "Actions"
+      },
+      "form": {
+        "key": "Amenity key",
+        "keyPlaceholder": "e.g. wifi",
+        "add": "Add",
+        "errors": {
+          "invalid": "The key may only contain lowercase letters, digits, and underscores",
+          "unauthenticated": "Sign in to add an amenity",
+          "forbidden": "Not enough permissions",
+          "keyTaken": "That key already exists",
+          "generic": "Couldn't add the amenity"
+        }
+      }
+    },
+    "commissions": {
+      "title": "Platform commission",
+      "subtitle": "The percentage the platform keeps from each booking once it's paid.",
+      "rateLabel": "Commission rate",
+      "save": "Save",
+      "saved": "Commission rate updated",
+      "errors": {
+        "unauthenticated": "Sign in to change the rate",
+        "forbidden": "Not enough permissions",
+        "invalid": "Enter a value between 0 and 100",
+        "generic": "Couldn't save the rate"
+      }
+    },
+    "auditLog": {
+      "title": "Audit log",
+      "subtitle": "Recent actions taken by platform administrators.",
+      "empty": "No entries yet.",
+      "unknownAdmin": "Unknown admin",
+      "columns": {
+        "date": "Date",
+        "admin": "Admin",
+        "action": "Action",
+        "target": "Target"
       }
     }
   }

@@ -3,6 +3,7 @@ import type Stripe from "stripe";
 import { getStripeClient } from "@/lib/stripe";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { calculatePlatformFee } from "@/lib/pricing/commission";
+import { getPlatformCommissionRate } from "@/server/queries/admin";
 
 /** Booking confirmation happens only here, never on the user's checkout redirect (CLAUDE.md §8). */
 export async function POST(request: Request): Promise<NextResponse> {
@@ -45,13 +46,14 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session): Promis
 
   const externalReference =
     typeof session.payment_intent === "string" ? session.payment_intent : session.id;
+  const commissionRate = await getPlatformCommissionRate(admin);
 
   await admin
     .from("payments")
     .update({
       status: "succeeded",
       external_reference: externalReference,
-      platform_fee_minor: calculatePlatformFee(payment.amount_minor),
+      platform_fee_minor: calculatePlatformFee(payment.amount_minor, commissionRate),
     })
     .eq("id", paymentId);
 
