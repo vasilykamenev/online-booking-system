@@ -1,6 +1,6 @@
 "use client";
 
-import { Heart, LogOut, Ship, User } from "lucide-react";
+import { Compass, Heart, LogOut, MessageSquare, Ship, User } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import type { Locale } from "@/i18n/routing";
 import { Link, usePathname } from "@/i18n/navigation";
@@ -10,6 +10,8 @@ const items = [
   { href: "/account", key: "profile", icon: User },
   { href: "/account/favorites", key: "favorites", icon: Heart },
   { href: "/account/bookings", key: "bookings", icon: Ship },
+  { href: "/account/initiatives", key: "initiatives", icon: Compass },
+  { href: "/account/messages", key: "messages", icon: MessageSquare },
 ] as const;
 
 export function AccountNav({

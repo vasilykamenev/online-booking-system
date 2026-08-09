@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { motion } from "motion/react";
-import { Heart, LogOut, Menu, Ship, User, LayoutGrid } from "lucide-react";
+import { Heart, LogOut, Menu, MessageSquare, Ship, User, LayoutGrid } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import type { Locale } from "@/i18n/routing";
 import { Link, usePathname } from "@/i18n/navigation";
@@ -48,7 +48,7 @@ export function Header({ profile }: { profile: Profile | null }) {
   const navItems = [
     { label: t("vessels"), href: "/#vessels" },
     { label: t("destinations"), href: "/#vessels" },
-    { label: t("initiatives"), href: "/#initiatives" },
+    { label: t("initiatives"), href: "/initiatives" },
     { label: t("about"), href: "/about" },
   ];
 
@@ -226,6 +226,12 @@ function UserMenu({
           <Link href="/account/bookings">
             <Ship className="size-4" strokeWidth={1.5} />
             {t("myBookings")}
+          </Link>
+        </DropdownMenuItem>
+        <DropdownMenuItem asChild>
+          <Link href="/account/messages">
+            <MessageSquare className="size-4" strokeWidth={1.5} />
+            {t("myMessages")}
           </Link>
         </DropdownMenuItem>
         {canManageVessels && (

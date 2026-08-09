@@ -38,3 +38,36 @@ export async function toggleFavorite(vesselId: string): Promise<ToggleFavoriteRe
   revalidatePath("/", "layout");
   return { favorited: true };
 }
+
+export async function toggleInitiativeFavorite(
+  initiativeId: string,
+): Promise<ToggleFavoriteResult> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { favorited: false, error: "unauthenticated" };
+
+  const { data: existing, error: selectError } = await supabase
+    .from("favorites")
+    .select("id")
+    .eq("profile_id", user.id)
+    .eq("initiative_id", initiativeId)
+    .maybeSingle();
+  if (selectError) return { favorited: false, error: "generic" };
+
+  if (existing) {
+    const { error } = await supabase.from("favorites").delete().eq("id", existing.id);
+    if (error) return { favorited: true, error: "generic" };
+    revalidatePath("/", "layout");
+    return { favorited: false };
+  }
+
+  const { error } = await supabase
+    .from("favorites")
+    .insert({ profile_id: user.id, initiative_id: initiativeId });
+  if (error) return { favorited: false, error: "generic" };
+
+  revalidatePath("/", "layout");
+  return { favorited: true };
+}

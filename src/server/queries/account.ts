@@ -3,6 +3,12 @@ import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 import { parseDateRangeLiteral } from "@/lib/supabase/date-range";
 import { CARD_COLUMNS, mapCardRow, type CardRow, type FeaturedVessel } from "./vessels";
+import {
+  INITIATIVE_CARD_COLUMNS,
+  mapInitiativeCardRow,
+  type InitiativeCard,
+  type InitiativeCardRow,
+} from "./initiatives";
 
 export async function getFavoriteVessels(profileId: string): Promise<FeaturedVessel[]> {
   const supabase = await createClient();
@@ -11,6 +17,7 @@ export async function getFavoriteVessels(profileId: string): Promise<FeaturedVes
     .from("favorites")
     .select(`vessel_id, vessels ( ${CARD_COLUMNS} )`)
     .eq("profile_id", profileId)
+    .not("vessel_id", "is", null)
     .order("created_at", { ascending: false });
 
   if (error) throw error;
@@ -27,10 +34,11 @@ export async function getFavoriteVesselIds(profileId: string): Promise<Set<strin
   const { data, error } = await supabase
     .from("favorites")
     .select("vessel_id")
-    .eq("profile_id", profileId);
+    .eq("profile_id", profileId)
+    .not("vessel_id", "is", null);
 
   if (error) throw error;
-  return new Set((data ?? []).map((row) => row.vessel_id));
+  return new Set((data ?? []).map((row) => row.vessel_id as string));
 }
 
 export async function isVesselFavorited(profileId: string, vesselId: string): Promise<boolean> {
@@ -45,6 +53,54 @@ export async function isVesselFavorited(profileId: string, vesselId: string): Pr
 
   if (error) throw error;
   return data !== null;
+}
+
+export async function getFavoriteInitiatives(profileId: string): Promise<InitiativeCard[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("favorites")
+    .select(`initiative_id, initiatives ( ${INITIATIVE_CARD_COLUMNS} )`)
+    .eq("profile_id", profileId)
+    .not("initiative_id", "is", null)
+    .order("created_at", { ascending: false });
+
+  if (error) throw error;
+
+  return (data ?? [])
+    .map((row) => row.initiatives as InitiativeCardRow | null)
+    .filter((initiative): initiative is InitiativeCardRow => initiative !== null)
+    .map(mapInitiativeCardRow);
+}
+
+export async function isInitiativeFavorited(
+  profileId: string,
+  initiativeId: string,
+): Promise<boolean> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("favorites")
+    .select("id")
+    .eq("profile_id", profileId)
+    .eq("initiative_id", initiativeId)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data !== null;
+}
+
+export async function getFavoriteInitiativeIds(profileId: string): Promise<Set<string>> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("favorites")
+    .select("initiative_id")
+    .eq("profile_id", profileId)
+    .not("initiative_id", "is", null);
+
+  if (error) throw error;
+  return new Set((data ?? []).map((row) => row.initiative_id as string));
 }
 
 export interface BookingHistoryItem {

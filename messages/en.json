@@ -13,6 +13,7 @@
     "account": "Account",
     "myBookings": "My bookings",
     "myFavorites": "Favorites",
+    "myMessages": "Messages",
     "signOut": "Sign out",
     "ownerPanel": "Owner panel"
   },
@@ -173,6 +174,89 @@
         "description": "Crew wanted for an Atlantic crossing aboard an 18-metre sailing yacht, departing in November."
       }
     ]
+  },
+  "initiativesPage": {
+    "eyebrow": "Maritime community",
+    "title": "Expeditions & initiatives",
+    "subtitle": "Publish projects, find like-minded people, and build a crew for your next voyage.",
+    "publish": "Publish an initiative",
+    "empty": "No initiatives match these filters — try adjusting your criteria.",
+    "loading": "Loading...",
+    "loadMore": "Load more",
+    "filters": {
+      "topic": "Topic",
+      "anyTopic": "Any topic",
+      "region": "Region",
+      "anyRegion": "Any region",
+      "activityType": "Activity type",
+      "anyActivityType": "Any type",
+      "status": "Status",
+      "anyStatus": "Any status",
+      "apply": "Apply"
+    },
+    "status": {
+      "open": "Open",
+      "closed": "Closed"
+    },
+    "card": {
+      "viewDetails": "View details",
+      "unknownAuthor": "Hidden author"
+    },
+    "form": {
+      "createTitle": "Publish an initiative",
+      "createSubtitle": "Tell the community about your project, expedition or event — the platform doesn't moderate content, it only provides the technical environment.",
+      "titleField": "Title",
+      "topic": "Topic",
+      "topicPlaceholder": "e.g. research",
+      "region": "Region",
+      "regionPlaceholder": "e.g. Arctic",
+      "activityType": "Activity type",
+      "activityTypePlaceholder": "e.g. expedition",
+      "description": "Description",
+      "submit": "Publish",
+      "errors": {
+        "invalid": "Check the fields you filled in",
+        "unauthenticated": "Sign in to publish an initiative",
+        "generic": "Couldn't publish it — please try again"
+      }
+    },
+    "detail": {
+      "back": "All initiatives",
+      "publishedBy": "Published by"
+    },
+    "responses": {
+      "eyebrow": "Responses",
+      "empty": "No responses yet."
+    },
+    "respond": {
+      "eyebrow": "Respond",
+      "type": "Response type",
+      "types": {
+        "participation": "Participation",
+        "collaboration": "Collaboration",
+        "info_request": "Information request"
+      },
+      "message": "Message",
+      "messagePlaceholder": "Tell the author how you can help",
+      "submit": "Send response",
+      "sent": "Response sent",
+      "signInRequired": "Sign in to respond to this initiative",
+      "signIn": "Sign in",
+      "alreadyResponded": "You already responded",
+      "openConversation": "Open conversation",
+      "closed": "This initiative is closed to new responses.",
+      "errors": {
+        "unauthenticated": "Sign in to respond",
+        "invalid": "Check the fields you filled in",
+        "ownInitiative": "You can't respond to your own initiative",
+        "generic": "Couldn't send the response — please try again"
+      }
+    },
+    "notFound": {
+      "title": "Initiative not found",
+      "description": "The link may be outdated, or the initiative was removed.",
+      "cta": "Back to initiatives"
+    }
   },
   "cta": {
     "title": "Ready to set sail?",
@@ -349,7 +433,9 @@
     "nav": {
       "profile": "Profile",
       "favorites": "Favorites",
-      "bookings": "Booking history"
+      "bookings": "Booking history",
+      "initiatives": "My initiatives",
+      "messages": "Messages"
     },
     "profile": {
       "title": "Profile",
@@ -363,8 +449,11 @@
     },
     "favorites": {
       "title": "Favorites",
-      "subtitle": "Vessels you've saved for comparison.",
-      "empty": "No saved vessels yet — add them from the catalog by tapping the heart icon."
+      "subtitle": "Vessels and initiatives you've saved.",
+      "vesselsEyebrow": "Vessels",
+      "empty": "No saved vessels yet — add them from the catalog by tapping the heart icon.",
+      "initiativesEyebrow": "Initiatives",
+      "emptyInitiatives": "No saved initiatives yet — add them from the feed by tapping the heart icon."
     },
     "bookings": {
       "title": "Booking history",
@@ -378,6 +467,43 @@
         "paid": "Paid",
         "cancelled": "Cancelled",
         "completed": "Completed"
+      }
+    },
+    "initiatives": {
+      "title": "My initiatives",
+      "subtitle": "Manage your published initiatives and see responses.",
+      "add": "Publish",
+      "empty": "You haven't published any initiatives yet.",
+      "columns": {
+        "title": "Initiative",
+        "responses": "Responses",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "delete": "Delete",
+      "confirmDelete": "Delete this initiative? This cannot be undone.",
+      "deleted": "Initiative deleted",
+      "deleteError": "Couldn't delete the initiative",
+      "updated": "Status updated",
+      "updateError": "Couldn't update the status"
+    },
+    "messages": {
+      "title": "Messages",
+      "subtitle": "Conversations with other platform members.",
+      "empty": "You don't have any messages yet.",
+      "unknownParticipant": "Contact",
+      "emptyThread": "No messages yet — start the conversation.",
+      "replyPlaceholder": "Write a message...",
+      "send": "Send",
+      "errors": {
+        "unauthenticated": "Sign in to send a message",
+        "invalid": "Message can't be empty",
+        "generic": "Couldn't send the message — please try again"
+      },
+      "notFound": {
+        "title": "Conversation not found",
+        "description": "The link may be outdated, or you don't have access to this conversation.",
+        "cta": "Back to messages"
       }
     }
   },

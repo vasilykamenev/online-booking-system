@@ -231,20 +231,23 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          initiative_id: string | null
           profile_id: string
-          vessel_id: string
+          vessel_id: string | null
         }
         Insert: {
           created_at?: string
           id?: string
+          initiative_id?: string | null
           profile_id: string
-          vessel_id: string
+          vessel_id?: string | null
         }
         Update: {
           created_at?: string
           id?: string
+          initiative_id?: string | null
           profile_id?: string
-          vessel_id?: string
+          vessel_id?: string | null
         }
         Relationships: [
           {
@@ -252,6 +255,13 @@ export type Database = {
             columns: ["profile_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "favorites_initiative_id_fkey"
+            columns: ["initiative_id"]
+            isOneToOne: false
+            referencedRelation: "initiatives"
             referencedColumns: ["id"]
           },
           {

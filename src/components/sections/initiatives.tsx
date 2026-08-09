@@ -4,6 +4,7 @@ import { motion } from "motion/react";
 import { ArrowUpRight, MapPin } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { initiativeIcons } from "@/data/initiatives";
+import { Link } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 
@@ -75,12 +76,15 @@ export function Initiatives() {
                 </p>
 
                 <Button
+                  asChild
                   variant="ghost"
                   size="sm"
                   className="mt-5 w-fit gap-1 self-start px-0 text-xs text-primary hover:bg-transparent hover:text-primary/80"
                 >
-                  {t("respond")}
-                  <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                  <Link href="/initiatives">
+                    {t("respond")}
+                    <ArrowUpRight className="size-3.5 transition-transform group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                  </Link>
                 </Button>
               </motion.article>
             );
@@ -94,9 +98,11 @@ export function Initiatives() {
           transition={{ duration: 0.6, delay: 0.3 }}
           className="mt-12 flex justify-center"
         >
-          <Button variant="outline" size="lg" className="gap-2 rounded-full">
-            {t("cta")}
-            <ArrowUpRight className="size-4" />
+          <Button asChild variant="outline" size="lg" className="gap-2 rounded-full">
+            <Link href="/initiatives">
+              {t("cta")}
+              <ArrowUpRight className="size-4" />
+            </Link>
           </Button>
         </motion.div>
       </div>
