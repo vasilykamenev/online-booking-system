@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import { AboutContent } from "./about-content";
+import { buildTitle } from "@/lib/site";
 
 export async function generateMetadata({
   params,
@@ -11,7 +12,7 @@ export async function generateMetadata({
   const t = await getTranslations({ locale, namespace: "about" });
 
   return {
-    title: `${t("title")} — Meridian`,
+    title: buildTitle(t("title")),
     description: t("subtitle"),
   };
 }

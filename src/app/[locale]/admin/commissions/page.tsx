@@ -3,6 +3,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Locale } from "@/i18n/routing";
 import { getPlatformCommissionRate } from "@/server/queries/admin";
 import { CommissionForm } from "./commission-form";
+import { buildTitle } from "@/lib/site";
 
 export async function generateMetadata({
   params,
@@ -11,7 +12,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "admin.commissions" });
-  return { title: `${t("title")} — Meridian` };
+  return { title: buildTitle(t("title")) };
 }
 
 export default async function AdminCommissionsPage({

@@ -25,6 +25,7 @@ import {
 import { ThemeToggle } from "@/components/layout/theme-toggle";
 import { LocaleSwitcher } from "@/components/layout/locale-switcher";
 import { Logo } from "@/components/layout/logo";
+import { SITE_NAME } from "@/lib/site";
 import { signOut } from "@/server/actions/auth";
 import type { Profile } from "@/server/queries/profile";
 
@@ -69,7 +70,7 @@ export function Header({ profile }: { profile: Profile | null }) {
         <Link href="/" className="flex items-center shrink-0">
           <Logo variant="mark" forceMono={!solid} className="h-8 w-auto" priority />
           <span className="text-base font-medium tracking-tight">
-            Meridian
+            {SITE_NAME}
           </span>
         </Link>
 

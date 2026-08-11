@@ -8,6 +8,7 @@ import { getSearchLocations, getAllAmenities } from "@/server/queries/vessels";
 import { VesselForm } from "../../vessel-form";
 import { VesselImagesManager } from "../../vessel-images-manager";
 import { VesselAmenitiesManager } from "../../vessel-amenities-manager";
+import { buildTitle } from "@/lib/site";
 
 export async function generateMetadata({
   params,
@@ -16,7 +17,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "owner.vessels.form" });
-  return { title: `${t("editTitle")} — Meridian` };
+  return { title: buildTitle(t("editTitle")) };
 }
 
 export default async function EditVesselPage({

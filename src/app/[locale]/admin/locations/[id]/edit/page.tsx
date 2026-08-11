@@ -4,6 +4,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Locale } from "@/i18n/routing";
 import { getLocationById } from "@/server/queries/admin";
 import { LocationForm } from "../../location-form";
+import { buildTitle } from "@/lib/site";
 
 export async function generateMetadata({
   params,
@@ -12,7 +13,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "admin.locations.form" });
-  return { title: `${t("editTitle")} — Meridian` };
+  return { title: buildTitle(t("editTitle")) };
 }
 
 export default async function EditLocationPage({

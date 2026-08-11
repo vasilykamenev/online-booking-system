@@ -6,6 +6,7 @@ import { requireProfile } from "@/server/queries/profile";
 import { getOwnerVesselDetail, getVesselPricingRules } from "@/server/queries/owner";
 import { formatPrice } from "@/lib/pricing/format";
 import { PricingRulesManager } from "./pricing-rules-manager";
+import { buildTitle } from "@/lib/site";
 
 export async function generateMetadata({
   params,
@@ -14,7 +15,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "owner.vessels.pricing" });
-  return { title: `${t("title")} — Meridian` };
+  return { title: buildTitle(t("title")) };
 }
 
 export default async function VesselPricingPage({

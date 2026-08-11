@@ -5,6 +5,7 @@ import type { Locale } from "@/i18n/routing";
 import { requireProfile } from "@/server/queries/profile";
 import { getConversationById } from "@/server/queries/messages";
 import { MessageThread } from "./message-thread";
+import { buildTitle } from "@/lib/site";
 
 export async function generateMetadata({
   params,
@@ -13,7 +14,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "account.messages" });
-  return { title: `${t("title")} — Meridian` };
+  return { title: buildTitle(t("title")) };
 }
 
 export default async function ConversationPage({

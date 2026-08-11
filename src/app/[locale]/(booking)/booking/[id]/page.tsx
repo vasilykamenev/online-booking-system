@@ -10,6 +10,7 @@ import { formatPrice } from "@/lib/pricing/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { PaymentSection } from "./payment-section";
+import { buildTitle } from "@/lib/site";
 
 export async function generateMetadata({
   params,
@@ -18,7 +19,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "booking.confirmation" });
-  return { title: `${t("eyebrow")} — Meridian` };
+  return { title: buildTitle(t("eyebrow")) };
 }
 
 const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive"> = {

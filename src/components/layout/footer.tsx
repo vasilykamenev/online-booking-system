@@ -1,6 +1,7 @@
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
 import { Logo } from "@/components/layout/logo";
+import { SITE_NAME } from "@/lib/site";
 
 export function Footer() {
   const t = useTranslations("footer");
@@ -46,7 +47,7 @@ export function Footer() {
         </div>
 
         <div className="mt-14 flex flex-col gap-3 border-t border-border pt-6 text-xs font-light text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-          <span>© {new Date().getFullYear()} Meridian. {t("rights")}</span>
+          <span>© {new Date().getFullYear()} {SITE_NAME}. {t("rights")}</span>
         </div>
       </div>
     </footer>

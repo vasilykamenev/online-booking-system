@@ -17,6 +17,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { VesselStatusSelect } from "./vessel-status-select";
+import { buildTitle } from "@/lib/site";
 
 export async function generateMetadata({
   params,
@@ -25,7 +26,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "owner.vessels" });
-  return { title: `${t("title")} — Meridian` };
+  return { title: buildTitle(t("title")) };
 }
 
 export default async function OwnerVesselsPage({

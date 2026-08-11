@@ -1,8 +1,9 @@
 import Image from "next/image";
+import { SITE_NAME } from "@/lib/site";
 
 const VARIANTS = {
-  mark: { width: 44, height: 32, srcColor: "/logo-mark.png", srcMono: "/logo-mark-dark.png" },
-  full: { width: 64, height: 56, srcColor: "/logo-full.png", srcMono: "/logo-full-dark.png" },
+  mark: { width: 43, height: 32, srcColor: "/logo-mark.png", srcMono: "/logo-mark-dark.png" },
+  full: { width: 58, height: 56, srcColor: "/logo-full.png", srcMono: "/logo-full-dark.png" },
 } as const;
 
 export function Logo({
@@ -24,7 +25,7 @@ export function Logo({
     return (
       <Image
         src={srcMono}
-        alt="Meridian"
+        alt={SITE_NAME}
         width={width}
         height={height}
         priority={priority}
@@ -37,7 +38,7 @@ export function Logo({
     <>
       <Image
         src={srcColor}
-        alt="Meridian"
+        alt={SITE_NAME}
         width={width}
         height={height}
         priority={priority}
@@ -45,7 +46,7 @@ export function Logo({
       />
       <Image
         src={srcMono}
-        alt="Meridian"
+        alt={SITE_NAME}
         width={width}
         height={height}
         priority={priority}

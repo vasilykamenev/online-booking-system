@@ -5,6 +5,7 @@ import { requireProfile } from "@/server/queries/profile";
 import { getFavoriteVessels, getFavoriteInitiatives } from "@/server/queries/account";
 import { VesselCard } from "@/components/vessels/vessel-card";
 import { InitiativeCard } from "@/components/initiatives/initiative-card";
+import { buildTitle } from "@/lib/site";
 
 export async function generateMetadata({
   params,
@@ -13,7 +14,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "account.favorites" });
-  return { title: `${t("title")} — Meridian` };
+  return { title: buildTitle(t("title")) };
 }
 
 export default async function AccountFavoritesPage({

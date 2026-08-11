@@ -13,6 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { buildTitle } from "@/lib/site";
 
 export async function generateMetadata({
   params,
@@ -21,7 +22,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "owner.finance" });
-  return { title: `${t("title")} — Meridian` };
+  return { title: buildTitle(t("title")) };
 }
 
 const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive"> = {

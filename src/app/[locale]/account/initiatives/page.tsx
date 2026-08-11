@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/table";
 import { InitiativeStatusSelect } from "./initiative-status-select";
 import { InitiativeDeleteButton } from "./initiative-delete-button";
+import { buildTitle } from "@/lib/site";
 
 export async function generateMetadata({
   params,
@@ -24,7 +25,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "account.initiatives" });
-  return { title: `${t("title")} — Meridian` };
+  return { title: buildTitle(t("title")) };
 }
 
 export default async function AccountInitiativesPage({

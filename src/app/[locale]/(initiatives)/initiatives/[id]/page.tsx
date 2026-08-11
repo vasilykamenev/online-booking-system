@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { InitiativeFavoriteButton } from "@/components/initiatives/initiative-favorite-button";
 import { RespondForm } from "./respond-form";
 import { ResponsesList } from "./responses-list";
+import { buildTitle } from "@/lib/site";
 
 export async function generateMetadata({
   params,
@@ -23,7 +24,7 @@ export async function generateMetadata({
   if (!initiative) return {};
 
   return {
-    title: `${initiative.title} — Meridian`,
+    title: buildTitle(initiative.title),
     description: initiative.description,
   };
 }

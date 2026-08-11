@@ -6,6 +6,7 @@ import { getCurrentProfile } from "@/server/queries/profile";
 import { isVesselFavorited } from "@/server/queries/account";
 import { getVesselBookingContext } from "@/server/queries/availability";
 import { VesselDetailContent } from "./vessel-detail-content";
+import { buildTitle } from "@/lib/site";
 
 export async function generateMetadata({
   params,
@@ -18,7 +19,7 @@ export async function generateMetadata({
   if (!vessel) return {};
 
   return {
-    title: `${vessel.name} — Meridian`,
+    title: buildTitle(vessel.name),
     description: vessel.description,
   };
 }

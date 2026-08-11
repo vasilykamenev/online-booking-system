@@ -6,6 +6,7 @@ import { getCurrentProfile } from "@/server/queries/profile";
 import { getFavoriteVesselIds } from "@/server/queries/account";
 import { SearchFiltersForm } from "./search-filters";
 import { SearchResults } from "./search-results";
+import { buildTitle } from "@/lib/site";
 
 export async function generateMetadata({
   params,
@@ -16,7 +17,7 @@ export async function generateMetadata({
   const t = await getTranslations({ locale, namespace: "search" });
 
   return {
-    title: `${t("title")} — Meridian`,
+    title: buildTitle(t("title")),
     description: t("subtitle"),
   };
 }

@@ -9,6 +9,7 @@ import { getStripeClient } from "@/lib/stripe";
 import { calculatePlatformFee } from "@/lib/pricing/commission";
 import { getPlatformCommissionRate } from "@/server/queries/admin";
 import { paymentBookingSchema, confirmBankTransferSchema } from "@/lib/validation/payment";
+import { SITE_NAME } from "@/lib/site";
 import type { Locale } from "@/i18n/routing";
 
 export interface PaymentActionState {
@@ -80,7 +81,7 @@ export async function startCardPayment(
         price_data: {
           currency: booking.currency.toLowerCase(),
           unit_amount: booking.price_minor,
-          product_data: { name: `Meridian — ${booking.vessels?.name ?? "бронирование"}` },
+          product_data: { name: `${SITE_NAME} — ${booking.vessels?.name ?? "бронирование"}` },
         },
         quantity: 1,
       },

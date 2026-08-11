@@ -3,6 +3,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Locale } from "@/i18n/routing";
 import { requireProfile } from "@/server/queries/profile";
 import { InitiativeForm } from "./initiative-form";
+import { buildTitle } from "@/lib/site";
 
 export async function generateMetadata({
   params,
@@ -11,7 +12,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "initiativesPage.form" });
-  return { title: `${t("createTitle")} — Meridian` };
+  return { title: buildTitle(t("createTitle")) };
 }
 
 export default async function NewInitiativePage({

@@ -7,6 +7,7 @@ import { getBookingHistory } from "@/server/queries/account";
 import { formatPrice } from "@/lib/pricing/format";
 import { Link } from "@/i18n/navigation";
 import { Badge } from "@/components/ui/badge";
+import { buildTitle } from "@/lib/site";
 
 export async function generateMetadata({
   params,
@@ -15,7 +16,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "account.bookings" });
-  return { title: `${t("title")} — Meridian` };
+  return { title: buildTitle(t("title")) };
 }
 
 const STATUS_VARIANT: Record<string, "default" | "secondary" | "destructive"> = {

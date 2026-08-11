@@ -9,6 +9,7 @@ import { Link } from "@/i18n/navigation";
 import { Button } from "@/components/ui/button";
 import { InitiativeFiltersForm } from "./initiative-filters";
 import { InitiativeResults } from "./initiative-results";
+import { buildTitle } from "@/lib/site";
 
 export async function generateMetadata({
   params,
@@ -19,7 +20,7 @@ export async function generateMetadata({
   const t = await getTranslations({ locale, namespace: "initiativesPage" });
 
   return {
-    title: `${t("title")} — Meridian`,
+    title: buildTitle(t("title")),
     description: t("subtitle"),
   };
 }

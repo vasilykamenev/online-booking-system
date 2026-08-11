@@ -6,6 +6,7 @@ import { requireProfile } from "@/server/queries/profile";
 import { getOwnerVesselDetail, getVesselAvailability, getVesselBookedRanges } from "@/server/queries/owner";
 import { VesselCalendarView } from "./vessel-calendar-view";
 import { AvailabilityManager } from "./availability-manager";
+import { buildTitle } from "@/lib/site";
 
 export async function generateMetadata({
   params,
@@ -14,7 +15,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "owner.vessels.calendar" });
-  return { title: `${t("title")} — Meridian` };
+  return { title: buildTitle(t("title")) };
 }
 
 export default async function VesselCalendarPage({

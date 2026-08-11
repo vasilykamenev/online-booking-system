@@ -3,6 +3,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Locale } from "@/i18n/routing";
 import { getSearchLocations } from "@/server/queries/vessels";
 import { VesselForm } from "../vessel-form";
+import { buildTitle } from "@/lib/site";
 
 export async function generateMetadata({
   params,
@@ -11,7 +12,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { locale } = await params;
   const t = await getTranslations({ locale, namespace: "owner.vessels.form" });
-  return { title: `${t("create")} — Meridian` };
+  return { title: buildTitle(t("create")) };
 }
 
 export default async function NewVesselPage({
