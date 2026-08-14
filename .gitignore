@@ -37,6 +37,9 @@ yarn-error.log*
 # env files (can opt-in for committing if needed)
 .env*
 
+# supabase secrets export (contains live service_role / secret keys)
+server-role.json
+
 # vercel
 .vercel
 

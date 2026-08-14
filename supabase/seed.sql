@@ -13,16 +13,16 @@ insert into auth.users (
   is_super_admin, confirmation_token, recovery_token, email_change_token_new, email_change
 ) values
   ('00000000-0000-0000-0000-000000000000', '10000000-0000-0000-0000-000000000001', 'authenticated', 'authenticated',
-   'admin@meridian.travel', crypt('password123', gen_salt('bf')), now(), now(), now(),
+   'admin@meridian.travel', extensions.crypt('password123', extensions.gen_salt('bf')), now(), now(), now(),
    '{"provider":"email","providers":["email"]}', '{"full_name":"Meridian Beyond Admin"}', false, '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000', '10000000-0000-0000-0000-000000000002', 'authenticated', 'authenticated',
-   'owner1@meridian.travel', crypt('password123', gen_salt('bf')), now(), now(), now(),
+   'owner1@meridian.travel', extensions.crypt('password123', extensions.gen_salt('bf')), now(), now(), now(),
    '{"provider":"email","providers":["email"]}', '{"full_name":"Ana Kovač"}', false, '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000', '10000000-0000-0000-0000-000000000003', 'authenticated', 'authenticated',
-   'owner2@meridian.travel', crypt('password123', gen_salt('bf')), now(), now(), now(),
+   'owner2@meridian.travel', extensions.crypt('password123', extensions.gen_salt('bf')), now(), now(), now(),
    '{"provider":"email","providers":["email"]}', '{"full_name":"Kenji Watanabe"}', false, '', '', '', ''),
   ('00000000-0000-0000-0000-000000000000', '10000000-0000-0000-0000-000000000004', 'authenticated', 'authenticated',
-   'client1@meridian.travel', crypt('password123', gen_salt('bf')), now(), now(), now(),
+   'client1@meridian.travel', extensions.crypt('password123', extensions.gen_salt('bf')), now(), now(), now(),
    '{"provider":"email","providers":["email"]}', '{"full_name":"Vasily Kamenev"}', false, '', '', '', '');
 
 update public.profiles set role = 'admin', full_name = 'Meridian Beyond Admin' where id = '10000000-0000-0000-0000-000000000001';
