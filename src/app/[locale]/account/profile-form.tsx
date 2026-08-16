@@ -5,6 +5,7 @@ import { useTranslations } from "next-intl";
 import type { Locale } from "@/i18n/routing";
 import type { Profile } from "@/server/queries/profile";
 import { updateProfile, type ProfileActionState } from "@/server/actions/profile";
+import { currencyCodes } from "@/lib/currencies";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,6 +25,7 @@ export function ProfileForm({ profile, locale }: { profile: Profile; locale: Loc
     updateProfile.bind(null, locale),
     initialState,
   );
+  const currencyNames = new Intl.DisplayNames([locale], { type: "currency" });
 
   return (
     <div className="rounded-2xl border border-border bg-card p-6 shadow-soft md:p-8">
@@ -56,14 +58,18 @@ export function ProfileForm({ profile, locale }: { profile: Profile; locale: Loc
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="currency">{t("currency")}</Label>
-          <Input
-            id="currency"
-            name="currency"
-            defaultValue={profile.currency}
-            maxLength={3}
-            className="uppercase"
-            required
-          />
+          <Select name="currency" defaultValue={profile.currency}>
+            <SelectTrigger id="currency" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {currencyCodes.map((code) => (
+                <SelectItem key={code} value={code}>
+                  {code} — {currencyNames.of(code)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         {state.error && (
