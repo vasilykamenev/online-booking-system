@@ -103,6 +103,15 @@ export default async function OwnerBookingsPage({
                       <span className="text-sm font-light text-muted-foreground">
                         {t(`paymentProvider.${booking.latestPayment.provider}`)} ·{" "}
                         {t(`paymentStatus.${booking.latestPayment.status}`)}
+                        {booking.latestPayment.failureReason && (
+                          <span className="block text-xs text-destructive">
+                            {booking.latestPayment.failureReason}
+                          </span>
+                        )}
+                      </span>
+                    ) : booking.paymentMethod ? (
+                      <span className="text-sm font-light text-muted-foreground">
+                        {t(`paymentProvider.${booking.paymentMethod}`)}
                       </span>
                     ) : (
                       <span className="text-sm font-light text-muted-foreground">—</span>
@@ -112,6 +121,7 @@ export default async function OwnerBookingsPage({
                     <BookingActions
                       bookingId={booking.id}
                       status={booking.status}
+                      paymentMethod={booking.paymentMethod}
                       latestPayment={booking.latestPayment}
                     />
                   </TableCell>

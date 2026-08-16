@@ -8,7 +8,12 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripeClient } from "@/lib/stripe";
 import { calculatePlatformFee } from "@/lib/pricing/commission";
 import { getPlatformCommissionRate } from "@/server/queries/admin";
-import { paymentBookingSchema, confirmBankTransferSchema } from "@/lib/validation/payment";
+import {
+  paymentBookingSchema,
+  confirmBankTransferSchema,
+  cancelPendingPaymentSchema,
+} from "@/lib/validation/payment";
+import { canStartPayment } from "@/lib/booking/payment-flow";
 import { SITE_NAME } from "@/lib/site";
 import type { Locale } from "@/i18n/routing";
 
@@ -24,8 +29,9 @@ async function getOrigin(): Promise<string> {
   return `${protocol}://${host}`;
 }
 
-/** Loads the booking and checks the caller is its client and it's still payable. */
-async function loadPayableBooking(bookingId: string) {
+/** Loads the booking and checks the caller is its client, the owner has confirmed it,
+ * and the requested provider matches the payment method the owner actually confirmed. */
+async function loadPayableBooking(bookingId: string, requestedProvider: "stripe" | "bank_transfer") {
   const supabase = await createClient();
   const {
     data: { user },
@@ -34,16 +40,17 @@ async function loadPayableBooking(bookingId: string) {
 
   const { data: booking, error } = await supabase
     .from("bookings")
-    .select("id, status, price_minor, currency, client_id, vessels ( name )")
+    .select("id, status, payment_method, price_minor, currency, client_id, vessels ( name, owner_id )")
     .eq("id", bookingId)
     .maybeSingle();
   if (error || !booking) return { error: "generic" as const };
   if (booking.client_id !== user.id) return { error: "forbidden" as const };
-  if (booking.status !== "pending" && booking.status !== "confirmed") {
+  if (!booking.vessels?.owner_id) return { error: "generic" as const };
+  if (!canStartPayment(booking.status, booking.payment_method, requestedProvider)) {
     return { error: "invalidStatus" as const };
   }
 
-  return { booking };
+  return { booking: { ...booking, vessels: booking.vessels } };
 }
 
 /** Card payments — confirmed only by the Stripe webhook, never by this redirect (CLAUDE.md §8). */
@@ -54,7 +61,7 @@ export async function startCardPayment(
   const parsed = paymentBookingSchema.safeParse({ bookingId });
   if (!parsed.success) return { error: "invalid" };
 
-  const loaded = await loadPayableBooking(parsed.data.bookingId);
+  const loaded = await loadPayableBooking(parsed.data.bookingId, "stripe");
   if ("error" in loaded) return { error: loaded.error };
   const { booking } = loaded;
 
@@ -67,6 +74,8 @@ export async function startCardPayment(
       status: "pending",
       amount_minor: booking.price_minor,
       currency: booking.currency,
+      payer_id: booking.client_id,
+      payee_id: booking.vessels.owner_id,
     })
     .select("id")
     .single();
@@ -87,6 +96,7 @@ export async function startCardPayment(
       },
     ],
     metadata: { booking_id: booking.id, payment_id: payment.id },
+    payment_intent_data: { metadata: { booking_id: booking.id, payment_id: payment.id } },
     success_url: `${origin}/${locale}/booking/${booking.id}`,
     cancel_url: `${origin}/${locale}/booking/${booking.id}`,
   });
@@ -103,7 +113,7 @@ export async function startBankTransfer(
   const parsed = paymentBookingSchema.safeParse({ bookingId });
   if (!parsed.success) return { error: "invalid" };
 
-  const loaded = await loadPayableBooking(parsed.data.bookingId);
+  const loaded = await loadPayableBooking(parsed.data.bookingId, "bank_transfer");
   if ("error" in loaded) return { error: loaded.error };
   const { booking } = loaded;
 
@@ -114,10 +124,52 @@ export async function startBankTransfer(
     status: "pending",
     amount_minor: booking.price_minor,
     currency: booking.currency,
+    payer_id: booking.client_id,
+    payee_id: booking.vessels.owner_id,
   });
   if (error) return { error: "generic" };
 
   revalidatePath(`/${locale}/booking/${booking.id}`);
+  return {};
+}
+
+export interface CancelPendingPaymentResult {
+  error?: "unauthenticated" | "forbidden" | "invalidStatus" | "generic";
+}
+
+/** Client-initiated cancellation of an in-flight payment attempt (card checkout not yet
+ * completed, or a bank-transfer claim not yet confirmed) — distinct from a gateway-driven
+ * `failed` so both states stay individually visible. */
+export async function cancelPendingPayment(
+  locale: Locale,
+  paymentId: string,
+): Promise<CancelPendingPaymentResult> {
+  const parsed = cancelPendingPaymentSchema.safeParse({ paymentId });
+  if (!parsed.success) return { error: "generic" };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "unauthenticated" };
+
+  const { data: payment, error: readError } = await supabase
+    .from("payments")
+    .select("id, booking_id, status, bookings ( client_id )")
+    .eq("id", parsed.data.paymentId)
+    .maybeSingle();
+  if (readError || !payment) return { error: "generic" };
+  if (payment.bookings?.client_id !== user.id) return { error: "forbidden" };
+  if (payment.status !== "pending") return { error: "invalidStatus" };
+
+  const admin = createAdminClient();
+  const { error: updateError } = await admin
+    .from("payments")
+    .update({ status: "cancelled" })
+    .eq("id", payment.id);
+  if (updateError) return { error: "generic" };
+
+  revalidatePath(`/${locale}/booking/${payment.booking_id}`);
   return {};
 }
 

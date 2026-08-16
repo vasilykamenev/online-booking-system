@@ -542,6 +542,35 @@
       "paid": "Booking paid",
       "bankTransferPending": "Bank transfer request sent — awaiting confirmation from the owner.",
       "bankTransferInstructions": "Transfer details will be sent to your email. The owner will confirm payment once funds are received.",
+      "cardPaymentPending": "Card payment started — open the checkout page to complete it.",
+      "waitingOwnerConfirmation": "Payment method \"{method}\" was sent to the owner and is awaiting confirmation.",
+      "changeMethod": "Change payment method",
+      "cancelChangeMethod": "Cancel change",
+      "cancelPayment": "Cancel payment",
+      "paymentCancelled": "Payment cancelled. You can try again.",
+      "paymentFailed": "Payment failed: {reason}. Try again or choose a different payment method.",
+      "unknownReason": "the payment provider didn't report a reason",
+      "agree": "I agree to the payment terms",
+      "payNow": "Pay now",
+      "method": {
+        "stripe": "Card",
+        "bank_transfer": "Bank transfer"
+      },
+      "disclosure": {
+        "fee": "The platform keeps a {percent}% fee ({amount}) for facilitating the deal between you and the vessel owner.",
+        "liability": "The platform only provides the technical means for the transaction and isn't responsible for the quality or actual delivery of the service by the owner.",
+        "cancellation": "If the deal can't go through for reasons outside either party's control, the platform's cancellation and refund rules apply."
+      },
+      "history": {
+        "title": "Payment history",
+        "status": {
+          "pending": "pending",
+          "succeeded": "succeeded",
+          "failed": "failed",
+          "cancelled": "cancelled",
+          "refunded": "refunded"
+        }
+      },
       "errors": {
         "invalid": "Couldn't start the payment — refresh the page",
         "unauthenticated": "Sign in to pay for this booking",
@@ -549,6 +578,15 @@
         "invalidStatus": "This booking can no longer be paid",
         "generic": "Couldn't start the payment. Please try again"
       }
+    },
+    "systemMessages": {
+      "method": {
+        "stripe": "by card",
+        "bank_transfer": "by bank transfer"
+      },
+      "paymentMethodProposed": "The client chose to pay {method} for the booking \"{vesselName}\" ({checkIn} – {checkOut}). Please confirm the booking and the payment method.",
+      "paymentMethodChanged": "The client changed the payment method to {method} for the booking \"{vesselName}\" ({checkIn} – {checkOut}). Confirmation is needed again.",
+      "ownerConfirmed": "The owner confirmed the booking \"{vesselName}\" ({checkIn} – {checkOut}) and the payment method {method}. You can proceed to payment."
     }
   },
   "owner": {
@@ -684,6 +722,7 @@
         "pending": "pending",
         "succeeded": "received",
         "failed": "failed",
+        "cancelled": "cancelled",
         "refunded": "refunded"
       },
       "confirm": "Confirm",
@@ -693,7 +732,9 @@
       "cancelled": "Booking cancelled",
       "transferConfirmed": "Payment confirmed",
       "transferConfirmError": "Couldn't confirm the payment",
-      "updateError": "Couldn't update the booking status"
+      "updateError": "Couldn't update the booking status",
+      "awaitingPaymentMethod": "awaiting the client's payment method",
+      "paymentMethodMissing": "Can't confirm — the client hasn't chosen a payment method yet"
     },
     "finance": {
       "title": "Finance",
@@ -716,6 +757,7 @@
       "locations": "Locations",
       "amenities": "Amenities",
       "commissions": "Commission",
+      "payments": "Payments",
       "auditLog": "Audit log"
     },
     "overview": {
@@ -844,6 +886,33 @@
         "forbidden": "Not enough permissions",
         "invalid": "Enter a value between 0 and 100",
         "generic": "Couldn't save the rate"
+      }
+    },
+    "payments": {
+      "title": "Payments",
+      "subtitle": "Every payment attempt across every booking — successful and failed.",
+      "empty": "No payments yet.",
+      "unknown": "—",
+      "columns": {
+        "date": "Date",
+        "booking": "Booking",
+        "payer": "Payer",
+        "payee": "Payee",
+        "provider": "Method",
+        "amount": "Amount",
+        "fee": "Fee",
+        "status": "Status"
+      },
+      "provider": {
+        "stripe": "Card",
+        "bank_transfer": "Transfer"
+      },
+      "status": {
+        "pending": "pending",
+        "succeeded": "succeeded",
+        "failed": "failed",
+        "cancelled": "cancelled",
+        "refunded": "refunded"
       }
     },
     "auditLog": {

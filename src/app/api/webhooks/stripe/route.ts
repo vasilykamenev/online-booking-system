@@ -22,8 +22,16 @@ export async function POST(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "invalid signature" }, { status: 400 });
   }
 
-  if (event.type === "checkout.session.completed") {
-    await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
+  switch (event.type) {
+    case "checkout.session.completed":
+      await handleCheckoutCompleted(event.data.object as Stripe.Checkout.Session);
+      break;
+    case "checkout.session.expired":
+      await handleCheckoutExpired(event.data.object as Stripe.Checkout.Session);
+      break;
+    case "payment_intent.payment_failed":
+      await handlePaymentIntentFailed(event.data.object as Stripe.PaymentIntent);
+      break;
   }
 
   return NextResponse.json({ received: true });
@@ -58,4 +66,52 @@ async function handleCheckoutCompleted(session: Stripe.Checkout.Session): Promis
     .eq("id", paymentId);
 
   await admin.from("bookings").update({ status: "paid" }).eq("id", bookingId);
+}
+
+/** The client never returned to complete the Stripe Checkout page in time — a gateway-driven
+ * failure, distinct from the client explicitly cancelling (see `cancelPendingPayment`). */
+async function handleCheckoutExpired(session: Stripe.Checkout.Session): Promise<void> {
+  const paymentId = session.metadata?.payment_id;
+  if (!paymentId) return;
+
+  const admin = createAdminClient();
+  const { data: payment } = await admin
+    .from("payments")
+    .select("status")
+    .eq("id", paymentId)
+    .maybeSingle();
+  if (!payment || payment.status !== "pending") return;
+
+  await admin
+    .from("payments")
+    .update({
+      status: "failed",
+      failure_code: "session_expired",
+      failure_reason: "Оплата не была завершена вовремя — сессия оплаты истекла.",
+    })
+    .eq("id", paymentId);
+}
+
+/** The card was declined or otherwise rejected by the issuer/gateway — surfaced to both the
+ * payer and the payee, with the reason Stripe gave, via `payments.failure_reason`. */
+async function handlePaymentIntentFailed(paymentIntent: Stripe.PaymentIntent): Promise<void> {
+  const paymentId = paymentIntent.metadata?.payment_id;
+  if (!paymentId) return;
+
+  const admin = createAdminClient();
+  const { data: payment } = await admin
+    .from("payments")
+    .select("status")
+    .eq("id", paymentId)
+    .maybeSingle();
+  if (!payment || payment.status !== "pending") return;
+
+  await admin
+    .from("payments")
+    .update({
+      status: "failed",
+      failure_code: paymentIntent.last_payment_error?.code ?? null,
+      failure_reason: paymentIntent.last_payment_error?.message ?? "Платёж отклонён платёжной системой.",
+    })
+    .eq("id", paymentId);
 }

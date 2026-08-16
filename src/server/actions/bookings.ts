@@ -1,12 +1,20 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { getTranslations } from "next-intl/server";
 import { createClient } from "@/lib/supabase/server";
-import { createBookingSchema, ownerBookingStatusSchema } from "@/lib/validation/booking";
+import { createAdminClient } from "@/lib/supabase/admin";
+import {
+  createBookingSchema,
+  ownerBookingStatusSchema,
+  selectBookingPaymentMethodSchema,
+} from "@/lib/validation/booking";
 import { calculateBookingPrice } from "@/lib/pricing/calculate";
 import { isRangeAvailable } from "@/lib/availability/ranges";
-import { toDateRangeLiteral } from "@/lib/supabase/date-range";
+import { toDateRangeLiteral, parseDateRangeLiteral } from "@/lib/supabase/date-range";
 import { getVesselBookingContext } from "@/server/queries/availability";
+import { canOwnerConfirm, canSelectPaymentMethod } from "@/lib/booking/payment-flow";
+import { sendBookingMessage } from "@/server/actions/bookings-messages";
 import type { Locale } from "@/i18n/routing";
 
 export interface CreateBookingInput {
@@ -82,10 +90,12 @@ export async function createBooking(input: CreateBookingInput): Promise<CreateBo
 }
 
 export interface UpdateBookingStatusResult {
-  error?: "unauthenticated" | "invalid" | "generic";
+  error?: "unauthenticated" | "invalid" | "paymentMethodMissing" | "generic";
 }
 
-/** Owner-facing: RLS's bookings_update policy (client, vessel owner, or admin) is the actual gate. */
+/** Owner-facing: RLS's bookings_update policy (client, vessel owner, or admin) is the actual gate,
+ * plus the `protect_booking_mutation` trigger (pending -> confirmed requires a declared payment
+ * method). The checks here just turn that into a typed error instead of a raw SQL exception. */
 export async function updateBookingStatus(
   locale: Locale,
   bookingId: string,
@@ -100,12 +110,101 @@ export async function updateBookingStatus(
   } = await supabase.auth.getUser();
   if (!user) return { error: "unauthenticated" };
 
+  const { data: booking, error: readError } = await supabase
+    .from("bookings")
+    .select("status, payment_method, client_id, date_range, vessels ( name )")
+    .eq("id", parsed.data.bookingId)
+    .maybeSingle();
+  if (readError || !booking) return { error: "generic" };
+
+  if (parsed.data.status === "confirmed" && !canOwnerConfirm(booking.status, booking.payment_method)) {
+    return { error: "paymentMethodMissing" };
+  }
+
   const { error } = await supabase
     .from("bookings")
     .update({ status: parsed.data.status })
     .eq("id", parsed.data.bookingId);
   if (error) return { error: "generic" };
 
+  if (parsed.data.status === "confirmed" && booking.payment_method) {
+    const t = await getTranslations({ locale, namespace: "booking.systemMessages" });
+    const { start, end } = parseDateRangeLiteral(booking.date_range as string);
+    await sendBookingMessage(supabase, {
+      fromId: user.id,
+      toId: booking.client_id,
+      body: t("ownerConfirmed", {
+        vesselName: booking.vessels?.name ?? "",
+        method: t(`method.${booking.payment_method}`),
+        checkIn: start,
+        checkOut: end,
+      }),
+    });
+  }
+
+  revalidatePath(`/${locale}/owner/bookings`);
+  revalidatePath(`/${locale}/booking/${parsed.data.bookingId}`);
+  return {};
+}
+
+export interface SelectBookingPaymentMethodResult {
+  error?: "unauthenticated" | "invalid" | "forbidden" | "invalidStatus" | "generic";
+}
+
+/** Client declares (or changes) the payment method for a booking. First declaration sends
+ * the owner a request to confirm; changing it after the owner already confirmed reverts the
+ * booking to `pending` and restarts the confirmation handshake. */
+export async function selectBookingPaymentMethod(
+  locale: Locale,
+  bookingId: string,
+  method: "stripe" | "bank_transfer",
+): Promise<SelectBookingPaymentMethodResult> {
+  const parsed = selectBookingPaymentMethodSchema.safeParse({ bookingId, method });
+  if (!parsed.success) return { error: "invalid" };
+
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) return { error: "unauthenticated" };
+
+  const { data: booking, error: readError } = await supabase
+    .from("bookings")
+    .select("status, client_id, payment_method, date_range, vessels ( name, owner_id )")
+    .eq("id", parsed.data.bookingId)
+    .maybeSingle();
+  if (readError || !booking) return { error: "generic" };
+  if (booking.client_id !== user.id) return { error: "forbidden" };
+  if (!canSelectPaymentMethod(booking.status)) return { error: "invalidStatus" };
+  if (!booking.vessels?.owner_id) return { error: "generic" };
+
+  const wasConfirmed = booking.status === "confirmed";
+  if (booking.payment_method === parsed.data.method && !wasConfirmed) return {};
+
+  // Reverting a confirmed booking back to `pending` isn't a transition the client's own
+  // session is allowed (protect_booking_mutation), so the system-triggered revert goes
+  // through the service-role client, same as the payment-write paths in payments.ts.
+  const admin = createAdminClient();
+  const { error: updateError } = await admin
+    .from("bookings")
+    .update({ payment_method: parsed.data.method, ...(wasConfirmed ? { status: "pending" } : {}) })
+    .eq("id", parsed.data.bookingId);
+  if (updateError) return { error: "generic" };
+
+  const t = await getTranslations({ locale, namespace: "booking.systemMessages" });
+  const { start, end } = parseDateRangeLiteral(booking.date_range as string);
+  await sendBookingMessage(supabase, {
+    fromId: user.id,
+    toId: booking.vessels.owner_id,
+    body: t(wasConfirmed ? "paymentMethodChanged" : "paymentMethodProposed", {
+      vesselName: booking.vessels.name,
+      method: t(`method.${parsed.data.method}`),
+      checkIn: start,
+      checkOut: end,
+    }),
+  });
+
+  revalidatePath(`/${locale}/booking/${parsed.data.bookingId}`);
   revalidatePath(`/${locale}/owner/bookings`);
   return {};
 }
