@@ -131,6 +131,7 @@ export type Database = {
           date_range: unknown
           guests_count: number
           id: string
+          payment_method: Database["public"]["Enums"]["payment_provider"] | null
           price_minor: number
           status: Database["public"]["Enums"]["booking_status"]
           updated_at: string
@@ -144,6 +145,9 @@ export type Database = {
           date_range: unknown
           guests_count: number
           id?: string
+          payment_method?:
+            | Database["public"]["Enums"]["payment_provider"]
+            | null
           price_minor: number
           status?: Database["public"]["Enums"]["booking_status"]
           updated_at?: string
@@ -157,6 +161,9 @@ export type Database = {
           date_range?: unknown
           guests_count?: number
           id?: string
+          payment_method?:
+            | Database["public"]["Enums"]["payment_provider"]
+            | null
           price_minor?: number
           status?: Database["public"]["Enums"]["booking_status"]
           updated_at?: string
@@ -251,17 +258,17 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "favorites_profile_id_fkey"
-            columns: ["profile_id"]
-            isOneToOne: false
-            referencedRelation: "profiles"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "favorites_initiative_id_fkey"
             columns: ["initiative_id"]
             isOneToOne: false
             referencedRelation: "initiatives"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "favorites_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
           {
@@ -476,7 +483,11 @@ export type Database = {
           created_at: string
           currency: string
           external_reference: string | null
+          failure_code: string | null
+          failure_reason: string | null
           id: string
+          payee_id: string
+          payer_id: string
           platform_fee_minor: number
           provider: Database["public"]["Enums"]["payment_provider"]
           status: Database["public"]["Enums"]["payment_status"]
@@ -488,7 +499,11 @@ export type Database = {
           created_at?: string
           currency?: string
           external_reference?: string | null
+          failure_code?: string | null
+          failure_reason?: string | null
           id?: string
+          payee_id: string
+          payer_id: string
           platform_fee_minor?: number
           provider: Database["public"]["Enums"]["payment_provider"]
           status?: Database["public"]["Enums"]["payment_status"]
@@ -500,7 +515,11 @@ export type Database = {
           created_at?: string
           currency?: string
           external_reference?: string | null
+          failure_code?: string | null
+          failure_reason?: string | null
           id?: string
+          payee_id?: string
+          payer_id?: string
           platform_fee_minor?: number
           provider?: Database["public"]["Enums"]["payment_provider"]
           status?: Database["public"]["Enums"]["payment_status"]
@@ -512,6 +531,20 @@ export type Database = {
             columns: ["booking_id"]
             isOneToOne: false
             referencedRelation: "bookings"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_payee_id_fkey"
+            columns: ["payee_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "payments_payer_id_fkey"
+            columns: ["payer_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
             referencedColumns: ["id"]
           },
         ]
@@ -817,9 +850,13 @@ export type Database = {
       }
       get_vessel_booked_ranges: {
         Args: { p_vessel_id: string }
-        Returns: string[]
+        Returns: unknown[]
       }
       is_admin: { Args: never; Returns: boolean }
+      is_conversation_participant: {
+        Args: { p_conversation_id: string }
+        Returns: boolean
+      }
     }
     Enums: {
       booking_status:
@@ -834,7 +871,12 @@ export type Database = {
         | "info_request"
       initiative_status: "open" | "closed"
       payment_provider: "stripe" | "bank_transfer"
-      payment_status: "pending" | "succeeded" | "failed" | "refunded"
+      payment_status:
+        | "pending"
+        | "succeeded"
+        | "failed"
+        | "refunded"
+        | "cancelled"
       user_role: "client" | "owner" | "admin"
       vessel_status: "draft" | "published" | "archived"
       vessel_type: "yacht" | "catamaran" | "expedition" | "research" | "hybrid"
@@ -982,7 +1024,13 @@ export const Constants = {
       ],
       initiative_status: ["open", "closed"],
       payment_provider: ["stripe", "bank_transfer"],
-      payment_status: ["pending", "succeeded", "failed", "refunded"],
+      payment_status: [
+        "pending",
+        "succeeded",
+        "failed",
+        "refunded",
+        "cancelled",
+      ],
       user_role: ["client", "owner", "admin"],
       vessel_status: ["draft", "published", "archived"],
       vessel_type: ["yacht", "catamaran", "expedition", "research", "hybrid"],

@@ -1,6 +1,15 @@
 "use client";
 
-import { LayoutDashboard, LogOut, MapPin, ScrollText, Sparkles, Users, Wallet } from "lucide-react";
+import {
+  CreditCard,
+  LayoutDashboard,
+  LogOut,
+  MapPin,
+  ScrollText,
+  Sparkles,
+  Users,
+  Wallet,
+} from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import type { Locale } from "@/i18n/routing";
 import { Link, usePathname } from "@/i18n/navigation";
@@ -12,6 +21,7 @@ const items = [
   { href: "/admin/locations", key: "locations", icon: MapPin },
   { href: "/admin/amenities", key: "amenities", icon: Sparkles },
   { href: "/admin/commissions", key: "commissions", icon: Wallet },
+  { href: "/admin/payments", key: "payments", icon: CreditCard },
   { href: "/admin/audit-log", key: "auditLog", icon: ScrollText },
 ] as const;
 

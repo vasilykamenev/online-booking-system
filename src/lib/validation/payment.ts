@@ -7,3 +7,7 @@ export const paymentBookingSchema = z.object({
 export const confirmBankTransferSchema = z.object({
   paymentId: z.guid(),
 });
+
+export const cancelPendingPaymentSchema = z.object({
+  paymentId: z.guid(),
+});

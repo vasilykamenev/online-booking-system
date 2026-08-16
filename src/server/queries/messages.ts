@@ -1,6 +1,8 @@
 import "server-only";
 import { cache } from "react";
+import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
+import type { Database } from "@/lib/supabase/database.types";
 
 export interface ConversationSummary {
   id: string;
@@ -116,12 +118,14 @@ export const getConversationById = cache(
   },
 );
 
-/** Finds an existing 1:1 conversation between two profiles, if any — avoids spawning duplicates on repeat contact. */
+/** Finds an existing 1:1 conversation between two profiles, if any — avoids spawning duplicates on repeat contact.
+ * Accepts an existing client (e.g. the admin/service-role one already in scope at a system-message call site). */
 export async function findDirectConversation(
   profileAId: string,
   profileBId: string,
+  client?: SupabaseClient<Database>,
 ): Promise<string | null> {
-  const supabase = await createClient();
+  const supabase = client ?? (await createClient());
 
   const { data: ownRows, error: ownError } = await supabase
     .from("conversation_participants")

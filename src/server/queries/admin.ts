@@ -25,6 +25,13 @@ export async function getPlatformCommissionRate(
   return data?.commission_rate ?? DEFAULT_PLATFORM_COMMISSION_RATE;
 }
 
+/** `platform_settings` is admin-only under RLS, but the rate itself isn't secret — any
+ * paying client needs to see it in the pre-payment fee disclosure, so this reads it
+ * through the service-role client on purpose. */
+export async function getPublicCommissionRate(): Promise<number> {
+  return getPlatformCommissionRate(createAdminClient());
+}
+
 export interface AdminProfile {
   id: string;
   email: string | null;
@@ -262,4 +269,57 @@ export async function getAdminOverview(locale: Locale): Promise<AdminOverview> {
     topDestinations,
     topVessels,
   };
+}
+
+export interface AdminPaymentEntry {
+  id: string;
+  bookingId: string;
+  vesselName: string;
+  payerName: string | null;
+  payeeName: string | null;
+  provider: Database["public"]["Enums"]["payment_provider"];
+  status: Database["public"]["Enums"]["payment_status"];
+  amountMinor: number;
+  currency: string;
+  platformFeeMinor: number;
+  failureReason: string | null;
+  externalReference: string | null;
+  createdAt: string;
+}
+
+/** Every payment attempt (success and failure), platform-wide — the admin-facing audit
+ * trail (CLAUDE.md §9 admin oversight). `payments_read` already grants admins full read
+ * via `is_admin()`, so the caller's own session client is enough — no service role needed. */
+export async function getAllPaymentsAdmin(limit = 200): Promise<AdminPaymentEntry[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("payments")
+    .select(
+      `id, booking_id, provider, status, amount_minor, currency, platform_fee_minor,
+       failure_reason, external_reference, created_at,
+       payer:profiles!payments_payer_id_fkey ( full_name ),
+       payee:profiles!payments_payee_id_fkey ( full_name ),
+       bookings ( vessels ( name ) )`,
+    )
+    .order("created_at", { ascending: false })
+    .limit(limit);
+
+  if (error) throw error;
+
+  return (data ?? []).map((payment) => ({
+    id: payment.id,
+    bookingId: payment.booking_id,
+    vesselName: payment.bookings?.vessels?.name ?? "",
+    payerName: payment.payer?.full_name ?? null,
+    payeeName: payment.payee?.full_name ?? null,
+    provider: payment.provider,
+    status: payment.status,
+    amountMinor: payment.amount_minor,
+    currency: payment.currency,
+    platformFeeMinor: payment.platform_fee_minor,
+    failureReason: payment.failure_reason,
+    externalReference: payment.external_reference,
+    createdAt: payment.created_at,
+  }));
 }

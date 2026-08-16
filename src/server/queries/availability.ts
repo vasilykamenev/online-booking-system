@@ -38,7 +38,7 @@ export async function getVesselBookingContext(vesselId: string): Promise<VesselB
   const blockedRanges = (blockedResult.data ?? []).map((row) =>
     parseDateRangeLiteral(row.date_range as string),
   );
-  const bookedRanges = (bookedResult.data ?? []).map((raw) => parseDateRangeLiteral(raw));
+  const bookedRanges = (bookedResult.data ?? []).map((raw) => parseDateRangeLiteral(raw as string));
 
   return { pricingRules, unavailableRanges: [...blockedRanges, ...bookedRanges] };
 }

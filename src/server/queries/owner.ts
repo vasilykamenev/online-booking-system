@@ -140,7 +140,7 @@ export async function getVesselBookedRanges(
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("get_vessel_booked_ranges", { p_vessel_id: vesselId });
   if (error) throw error;
-  return (data ?? []).map((raw) => parseDateRangeLiteral(raw));
+  return (data ?? []).map((raw) => parseDateRangeLiteral(raw as string));
 }
 
 export interface OwnerPricingRule {
@@ -184,6 +184,7 @@ export interface OwnerBookingItem {
   dateRange: { start: string; end: string };
   guestsCount: number;
   status: Database["public"]["Enums"]["booking_status"];
+  paymentMethod: Database["public"]["Enums"]["payment_provider"] | null;
   priceMinor: number;
   currency: string;
   createdAt: string;
@@ -196,9 +197,9 @@ export async function getOwnerBookings(ownerId: string): Promise<OwnerBookingIte
   const { data, error } = await supabase
     .from("bookings")
     .select(
-      `id, date_range, guests_count, status, price_minor, currency, created_at,
+      `id, date_range, guests_count, status, payment_method, price_minor, currency, created_at,
        vessels!inner ( id, slug, name, owner_id ),
-       payments ( id, provider, status, created_at )`,
+       payments ( id, provider, status, amount_minor, currency, failure_reason, created_at )`,
     )
     .eq("vessels.owner_id", ownerId)
     .order("created_at", { ascending: false });
@@ -218,11 +219,20 @@ export async function getOwnerBookings(ownerId: string): Promise<OwnerBookingIte
       dateRange: parseDateRangeLiteral(booking.date_range as string),
       guestsCount: booking.guests_count,
       status: booking.status,
+      paymentMethod: booking.payment_method,
       priceMinor: booking.price_minor,
       currency: booking.currency,
       createdAt: booking.created_at,
       latestPayment: latestPayment
-        ? { id: latestPayment.id, provider: latestPayment.provider, status: latestPayment.status }
+        ? {
+            id: latestPayment.id,
+            provider: latestPayment.provider,
+            status: latestPayment.status,
+            amountMinor: latestPayment.amount_minor,
+            currency: latestPayment.currency,
+            failureReason: latestPayment.failure_reason,
+            createdAt: latestPayment.created_at,
+          }
         : null,
     };
   });

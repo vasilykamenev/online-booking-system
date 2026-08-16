@@ -6,6 +6,7 @@ import type { Locale } from "@/i18n/routing";
 import { Link } from "@/i18n/navigation";
 import { requireProfile } from "@/server/queries/profile";
 import { getBookingById } from "@/server/queries/bookings";
+import { getPublicCommissionRate } from "@/server/queries/admin";
 import { formatPrice } from "@/lib/pricing/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -41,6 +42,7 @@ export default async function BookingConfirmationPage({
 
   const booking = await getBookingById(id);
   if (!booking) notFound();
+  const commissionRate = await getPublicCommissionRate();
 
   const t = await getTranslations("booking.confirmation");
   const tStatus = await getTranslations("booking.status");
@@ -102,7 +104,12 @@ export default async function BookingConfirmationPage({
           <PaymentSection
             bookingId={booking.id}
             bookingStatus={booking.status}
+            paymentMethod={booking.paymentMethod}
             latestPayment={booking.latestPayment}
+            payments={booking.payments}
+            priceMinor={booking.priceMinor}
+            currency={booking.currency}
+            commissionRate={commissionRate}
           />
         ) : (
           <p className="mt-6 rounded-xl bg-muted px-4 py-3 text-sm font-light text-muted-foreground">
