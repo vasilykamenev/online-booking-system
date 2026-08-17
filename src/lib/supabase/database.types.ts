@@ -329,6 +329,8 @@ export type Database = {
           created_at: string
           description: string
           id: string
+          latitude: number | null
+          longitude: number | null
           region: string
           status: Database["public"]["Enums"]["initiative_status"]
           title: string
@@ -341,6 +343,8 @@ export type Database = {
           created_at?: string
           description: string
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           region: string
           status?: Database["public"]["Enums"]["initiative_status"]
           title: string
@@ -353,6 +357,8 @@ export type Database = {
           created_at?: string
           description?: string
           id?: string
+          latitude?: number | null
+          longitude?: number | null
           region?: string
           status?: Database["public"]["Enums"]["initiative_status"]
           title?: string
@@ -770,8 +776,10 @@ export type Database = {
           description: string
           guests_capacity: number
           id: string
+          latitude: number | null
           length_meters: number
           location_id: string
+          longitude: number | null
           name: string
           owner_id: string
           rating_avg: number
@@ -790,8 +798,10 @@ export type Database = {
           description?: string
           guests_capacity: number
           id?: string
+          latitude?: number | null
           length_meters: number
           location_id: string
+          longitude?: number | null
           name: string
           owner_id: string
           rating_avg?: number
@@ -810,8 +820,10 @@ export type Database = {
           description?: string
           guests_capacity?: number
           id?: string
+          latitude?: number | null
           length_meters?: number
           location_id?: string
+          longitude?: number | null
           name?: string
           owner_id?: string
           rating_avg?: number

@@ -72,9 +72,18 @@ export function VesselCard({
         </h3>
         <div className="mt-1 flex items-center gap-1 text-xs font-light text-muted-foreground">
           <MapPin className="size-3" strokeWidth={1.5} />
-          <span>
-            {pickLocalized(vessel.country, locale)}, {pickLocalized(vessel.city, locale)}
-          </span>
+          {vessel.latitude != null && vessel.longitude != null ? (
+            <Link
+              href={`/vessels/${vessel.slug}#location`}
+              className="transition-colors hover:text-primary"
+            >
+              {pickLocalized(vessel.country, locale)}, {pickLocalized(vessel.city, locale)}
+            </Link>
+          ) : (
+            <span>
+              {pickLocalized(vessel.country, locale)}, {pickLocalized(vessel.city, locale)}
+            </span>
+          )}
         </div>
 
         <div className="mt-4 flex items-center gap-3 text-xs font-light text-muted-foreground">

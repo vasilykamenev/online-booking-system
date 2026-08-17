@@ -29,6 +29,8 @@ function parseVesselForm(formData: FormData) {
     basePrice: formData.get("basePrice"),
     currency: formData.get("currency"),
     status: formData.get("status"),
+    latitude: formData.get("latitude"),
+    longitude: formData.get("longitude"),
   });
 }
 
@@ -62,6 +64,8 @@ export async function createVessel(
       year_built: parsed.data.yearBuilt ?? null,
       base_price_minor: Math.round(parsed.data.basePrice * 100),
       currency: parsed.data.currency,
+      latitude: parsed.data.latitude ?? null,
+      longitude: parsed.data.longitude ?? null,
     })
     .select("id")
     .single();
@@ -102,6 +106,8 @@ export async function updateVessel(
       year_built: parsed.data.yearBuilt ?? null,
       base_price_minor: Math.round(parsed.data.basePrice * 100),
       currency: parsed.data.currency,
+      latitude: parsed.data.latitude ?? null,
+      longitude: parsed.data.longitude ?? null,
     })
     .eq("id", vesselId)
     .eq("owner_id", user.id);

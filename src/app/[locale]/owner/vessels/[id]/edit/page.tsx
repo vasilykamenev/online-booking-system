@@ -61,6 +61,8 @@ export default async function EditVesselPage({
           basePrice: vessel.basePriceMinor / 100,
           currency: vessel.currency,
           status: vessel.status,
+          latitude: vessel.latitude,
+          longitude: vessel.longitude,
         }}
       />
 

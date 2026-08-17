@@ -29,6 +29,8 @@ function parseInitiativeForm(formData: FormData) {
     topic: formData.get("topic"),
     region: formData.get("region"),
     activityType: formData.get("activityType"),
+    latitude: formData.get("latitude"),
+    longitude: formData.get("longitude"),
   });
 }
 
@@ -55,6 +57,8 @@ export async function createInitiative(
       topic: parsed.data.topic,
       region: parsed.data.region,
       activity_type: parsed.data.activityType,
+      latitude: parsed.data.latitude ?? null,
+      longitude: parsed.data.longitude ?? null,
     })
     .select("id")
     .single();

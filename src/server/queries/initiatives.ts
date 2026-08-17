@@ -14,10 +14,12 @@ export interface InitiativeCard {
   createdAt: string;
   authorId: string;
   authorName: string | null;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export const INITIATIVE_CARD_COLUMNS = `id, title, description, topic, region, activity_type, status, created_at,
-       author_id, profiles ( full_name )`;
+       author_id, latitude, longitude, profiles ( full_name )`;
 
 export interface InitiativeCardRow {
   id: string;
@@ -29,6 +31,8 @@ export interface InitiativeCardRow {
   status: Database["public"]["Enums"]["initiative_status"];
   created_at: string;
   author_id: string;
+  latitude: number | null;
+  longitude: number | null;
   profiles: { full_name: string | null } | null;
 }
 
@@ -44,6 +48,8 @@ export function mapInitiativeCardRow(row: InitiativeCardRow): InitiativeCard {
     createdAt: row.created_at,
     authorId: row.author_id,
     authorName: row.profiles?.full_name ?? null,
+    latitude: row.latitude,
+    longitude: row.longitude,
   };
 }
 
