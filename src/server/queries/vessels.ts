@@ -17,11 +17,13 @@ export interface FeaturedVessel {
   currency: string;
   country: LocalizedText;
   city: LocalizedText;
+  latitude: number | null;
+  longitude: number | null;
   image: { url: string; alt: LocalizedText } | null;
 }
 
-export const CARD_COLUMNS = `id, slug, type, name, rating_avg, guests_capacity, cabins, base_price_minor, currency,
-       locations ( country, city ),
+export const CARD_COLUMNS = `id, slug, type, name, rating_avg, guests_capacity, cabins, base_price_minor, currency, latitude, longitude,
+       locations ( country, city, latitude, longitude ),
        vessel_images ( url, alt_text, sort_order )`;
 
 export interface CardRow {
@@ -34,7 +36,9 @@ export interface CardRow {
   cabins: number;
   base_price_minor: number;
   currency: string;
-  locations: { country: unknown; city: unknown } | null;
+  latitude: number | null;
+  longitude: number | null;
+  locations: { country: unknown; city: unknown; latitude: number | null; longitude: number | null } | null;
   vessel_images: { url: string; alt_text: unknown; sort_order: number }[];
 }
 
@@ -53,6 +57,9 @@ export function mapCardRow(vessel: CardRow): FeaturedVessel {
     currency: vessel.currency,
     country: (vessel.locations?.country ?? {}) as LocalizedText,
     city: (vessel.locations?.city ?? {}) as LocalizedText,
+    // Vessel's own pin refines the marina's default point when the owner set one.
+    latitude: vessel.latitude ?? vessel.locations?.latitude ?? null,
+    longitude: vessel.longitude ?? vessel.locations?.longitude ?? null,
     image: image ? { url: image.url, alt: (image.alt_text ?? {}) as LocalizedText } : null,
   };
 }
@@ -141,6 +148,8 @@ export interface SearchLocation {
   id: string;
   country: LocalizedText;
   city: LocalizedText;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 export async function getSearchLocations(): Promise<SearchLocation[]> {
@@ -148,7 +157,7 @@ export async function getSearchLocations(): Promise<SearchLocation[]> {
 
   const { data, error } = await supabase
     .from("locations")
-    .select("id, country, city")
+    .select("id, country, city, latitude, longitude")
     .order("country");
 
   if (error) throw error;
@@ -157,6 +166,8 @@ export async function getSearchLocations(): Promise<SearchLocation[]> {
     id: location.id,
     country: (location.country ?? {}) as LocalizedText,
     city: (location.city ?? {}) as LocalizedText,
+    latitude: location.latitude,
+    longitude: location.longitude,
   }));
 }
 
@@ -189,6 +200,8 @@ export interface VesselDetail {
   country: LocalizedText;
   city: LocalizedText;
   marina: LocalizedText | null;
+  latitude: number | null;
+  longitude: number | null;
   images: VesselImage[];
   amenityKeys: string[];
   reviews: VesselReview[];
@@ -201,8 +214,8 @@ export const getVesselBySlug = cache(async (slug: string): Promise<VesselDetail 
     .from("vessels")
     .select(
       `id, slug, type, name, description, length_meters, cabins, guests_capacity, year_built,
-       rating_avg, rating_count, base_price_minor, currency,
-       locations ( country, city, marina ),
+       rating_avg, rating_count, base_price_minor, currency, latitude, longitude,
+       locations ( country, city, marina, latitude, longitude ),
        vessel_images ( url, alt_text, sort_order ),
        vessel_amenities ( amenities ( key ) )`,
     )
@@ -238,6 +251,9 @@ export const getVesselBySlug = cache(async (slug: string): Promise<VesselDetail 
     country: (vessel.locations?.country ?? {}) as LocalizedText,
     city: (vessel.locations?.city ?? {}) as LocalizedText,
     marina: (vessel.locations?.marina ?? null) as LocalizedText | null,
+    // Vessel's own pin refines the marina's default point when the owner set one.
+    latitude: vessel.latitude ?? vessel.locations?.latitude ?? null,
+    longitude: vessel.longitude ?? vessel.locations?.longitude ?? null,
     images: [...vessel.vessel_images]
       .sort((a, b) => a.sort_order - b.sort_order)
       .map((image) => ({ url: image.url, alt: (image.alt_text ?? {}) as LocalizedText })),

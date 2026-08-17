@@ -29,6 +29,16 @@ export const vesselSchema = z.object({
   basePrice: z.coerce.number().positive().max(10_000_000),
   currency: z.string().trim().toUpperCase().length(3),
   status: z.enum(vesselStatusValues),
+  // Optional owner-set pin that refines the location's default marina/city point
+  // (falls back to `locations.latitude/longitude` when unset — see VesselDetail).
+  latitude: z.preprocess(
+    (value) => (value === "" || value == null ? undefined : value),
+    z.coerce.number().min(-90).max(90).optional(),
+  ),
+  longitude: z.preprocess(
+    (value) => (value === "" || value == null ? undefined : value),
+    z.coerce.number().min(-180).max(180).optional(),
+  ),
 });
 export type VesselInput = z.infer<typeof vesselSchema>;
 

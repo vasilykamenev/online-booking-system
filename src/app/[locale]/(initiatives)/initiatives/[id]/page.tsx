@@ -10,6 +10,7 @@ import { getCurrentProfile } from "@/server/queries/profile";
 import { isInitiativeFavorited } from "@/server/queries/account";
 import { Badge } from "@/components/ui/badge";
 import { InitiativeFavoriteButton } from "@/components/initiatives/initiative-favorite-button";
+import { LocationMap } from "@/components/map/location-map";
 import { RespondForm } from "./respond-form";
 import { ResponsesList } from "./responses-list";
 import { buildTitle } from "@/lib/site";
@@ -56,6 +57,7 @@ export default async function InitiativeDetailPage({
   ]);
 
   const dateFormatter = new Intl.DateTimeFormat(locale, { dateStyle: "long" });
+  const hasPin = initiative.latitude != null && initiative.longitude != null;
 
   return (
     <div className="pt-24 lg:pt-28">
@@ -97,10 +99,20 @@ export default async function InitiativeDetailPage({
             </div>
 
             <div className="mt-3 flex flex-wrap items-center gap-4 text-sm font-light text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <MapPin className="size-4" strokeWidth={1.5} />
-                {initiative.region}
-              </span>
+              {hasPin ? (
+                <a
+                  href="#location"
+                  className="flex items-center gap-1.5 transition-colors hover:text-foreground"
+                >
+                  <MapPin className="size-4" strokeWidth={1.5} />
+                  {initiative.region}
+                </a>
+              ) : (
+                <span className="flex items-center gap-1.5">
+                  <MapPin className="size-4" strokeWidth={1.5} />
+                  {initiative.region}
+                </span>
+              )}
               <span>
                 {t("detail.publishedBy")} {initiative.authorName ?? t("card.unknownAuthor")}
               </span>
@@ -112,6 +124,21 @@ export default async function InitiativeDetailPage({
                 {initiative.description}
               </p>
             </div>
+
+            {hasPin && (
+              <div id="location" className="mt-8 scroll-mt-28 border-t border-border pt-8">
+                <span className="uppercase-label mb-4 block">{t("detail.locationEyebrow")}</span>
+                <h2 className="text-base font-medium tracking-tight">{t("detail.locationTitle")}</h2>
+                <p className="mt-1 text-sm font-light text-muted-foreground">{initiative.region}</p>
+                <div className="mt-4">
+                  <LocationMap
+                    latitude={initiative.latitude!}
+                    longitude={initiative.longitude!}
+                    label={initiative.region}
+                  />
+                </div>
+              </div>
+            )}
 
             {isAuthor && (
               <div className="mt-8 border-t border-border pt-8">

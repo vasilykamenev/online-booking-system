@@ -61,6 +61,8 @@ export interface OwnerVesselDetail {
   basePriceMinor: number;
   currency: string;
   locationId: string;
+  latitude: number | null;
+  longitude: number | null;
   images: { id: string; url: string; altText: LocalizedText }[];
   amenityIds: string[];
 }
@@ -76,7 +78,7 @@ export async function getOwnerVesselDetail(
     .from("vessels")
     .select(
       `id, slug, name, type, status, description, length_meters, cabins, guests_capacity,
-       year_built, base_price_minor, currency, location_id,
+       year_built, base_price_minor, currency, location_id, latitude, longitude,
        vessel_images ( id, url, alt_text, sort_order ),
        vessel_amenities ( amenity_id )`,
     )
@@ -101,6 +103,8 @@ export async function getOwnerVesselDetail(
     basePriceMinor: data.base_price_minor,
     currency: data.currency,
     locationId: data.location_id,
+    latitude: data.latitude,
+    longitude: data.longitude,
     images: [...data.vessel_images]
       .sort((a, b) => a.sort_order - b.sort_order)
       .map((image) => ({ id: image.id, url: image.url, altText: (image.alt_text ?? {}) as LocalizedText })),

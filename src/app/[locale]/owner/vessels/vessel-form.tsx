@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { Locale } from "@/i18n/routing";
 import { createVessel, updateVessel, type VesselActionState } from "@/server/actions/vessels";
@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { LocationPicker } from "@/components/map/location-picker";
 import {
   Select,
   SelectContent,
@@ -49,6 +50,8 @@ export function VesselForm({
     basePrice: number;
     currency: string;
     status: string;
+    latitude: number | null;
+    longitude: number | null;
   };
 }) {
   const t = useTranslations("owner.vessels.form");
@@ -58,6 +61,9 @@ export function VesselForm({
 
   const action = mode === "create" ? createVessel.bind(null, locale) : updateVessel.bind(null, locale, vesselId!);
   const [state, formAction, isPending] = useActionState(action, initialState);
+
+  const [locationId, setLocationId] = useState(defaultValues?.locationId);
+  const selectedLocation = locations.find((location) => location.id === locationId);
 
   return (
     <div className="rounded-2xl border border-border bg-card p-6 shadow-soft md:p-8">
@@ -96,7 +102,7 @@ export function VesselForm({
 
         <div className="flex flex-col gap-2">
           <Label>{t("location")}</Label>
-          <Select name="locationId" defaultValue={defaultValues?.locationId}>
+          <Select name="locationId" value={locationId} onValueChange={setLocationId}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder={t("location")} />
             </SelectTrigger>
@@ -108,6 +114,19 @@ export function VesselForm({
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        <div className="flex flex-col gap-2 sm:col-span-2">
+          <Label>{t("mapPin")}</Label>
+          <LocationPicker
+            latName="latitude"
+            lngName="longitude"
+            initialLatitude={defaultValues?.latitude}
+            initialLongitude={defaultValues?.longitude}
+            fallbackLatitude={selectedLocation?.latitude}
+            fallbackLongitude={selectedLocation?.longitude}
+            hint={t("mapPinHint")}
+          />
         </div>
 
         <div className="flex flex-col gap-2 sm:col-span-2">

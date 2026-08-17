@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { LocationPicker } from "@/components/map/location-picker";
 
 const initialState: InitiativeActionState = {};
 
@@ -50,6 +51,11 @@ export function InitiativeForm() {
         <div className="flex flex-col gap-2">
           <Label htmlFor="description">{t("description")}</Label>
           <Textarea id="description" name="description" rows={6} required />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label>{t("mapPin")}</Label>
+          <LocationPicker latName="latitude" lngName="longitude" hint={t("mapPinHint")} />
         </div>
 
         {state.error && <p className="text-sm text-destructive">{t(`errors.${state.error}`)}</p>}

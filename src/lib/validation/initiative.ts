@@ -20,6 +20,16 @@ export const initiativeSchema = z.object({
   topic: z.string().trim().min(2).max(100),
   region: z.string().trim().min(2).max(100),
   activityType: z.string().trim().min(2).max(100),
+  // Optional exact point for the event/activity — region text stays the primary,
+  // filterable attribute; the pin is a refinement, not every initiative has one.
+  latitude: z.preprocess(
+    (value) => (value === "" || value == null ? undefined : value),
+    z.coerce.number().min(-90).max(90).optional(),
+  ),
+  longitude: z.preprocess(
+    (value) => (value === "" || value == null ? undefined : value),
+    z.coerce.number().min(-180).max(180).optional(),
+  ),
 });
 export type InitiativeInput = z.infer<typeof initiativeSchema>;
 

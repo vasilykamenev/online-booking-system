@@ -21,6 +21,7 @@ import { Link } from "@/i18n/navigation";
 import { Badge } from "@/components/ui/badge";
 import { FavoriteButton } from "@/components/vessels/favorite-button";
 import { BookingWidget } from "@/components/booking/booking-widget";
+import { LocationMap } from "@/components/map/location-map";
 import type { PricingRule } from "@/lib/pricing/calculate";
 import type { DateInterval } from "@/lib/availability/ranges";
 
@@ -41,6 +42,15 @@ export function VesselDetailContent({
 
   const mainImage = vessel.images[0];
   const thumbnails = vessel.images.slice(1);
+
+  const locationText = [
+    pickLocalized(vessel.country, locale),
+    pickLocalized(vessel.city, locale),
+    vessel.marina ? pickLocalized(vessel.marina, locale) : null,
+  ]
+    .filter(Boolean)
+    .join(", ");
+  const hasPin = vessel.latitude != null && vessel.longitude != null;
 
   return (
     <div className="pt-24 lg:pt-28">
@@ -116,11 +126,20 @@ export function VesselDetailContent({
             </h1>
 
             <div className="mt-3 flex flex-wrap items-center gap-4 text-sm font-light text-muted-foreground">
-              <span className="flex items-center gap-1.5">
-                <MapPin className="size-4" strokeWidth={1.5} />
-                {pickLocalized(vessel.country, locale)}, {pickLocalized(vessel.city, locale)}
-                {vessel.marina && `, ${pickLocalized(vessel.marina, locale)}`}
-              </span>
+              {hasPin ? (
+                <a
+                  href="#location"
+                  className="flex items-center gap-1.5 transition-colors hover:text-foreground"
+                >
+                  <MapPin className="size-4" strokeWidth={1.5} />
+                  {locationText}
+                </a>
+              ) : (
+                <span className="flex items-center gap-1.5">
+                  <MapPin className="size-4" strokeWidth={1.5} />
+                  {locationText}
+                </span>
+              )}
               <span className="flex items-center gap-1.5">
                 <Star className="size-4 fill-primary text-primary" />
                 <span className="font-medium text-foreground">
@@ -166,6 +185,21 @@ export function VesselDetailContent({
                 )}
               </div>
             </div>
+
+            {hasPin && (
+              <div id="location" className="mt-8 scroll-mt-28 border-t border-border pt-8">
+                <span className="uppercase-label mb-4 block">{t("locationEyebrow")}</span>
+                <h2 className="text-base font-medium tracking-tight">{t("locationTitle")}</h2>
+                <p className="mt-1 text-sm font-light text-muted-foreground">{locationText}</p>
+                <div className="mt-4">
+                  <LocationMap
+                    latitude={vessel.latitude!}
+                    longitude={vessel.longitude!}
+                    label={locationText}
+                  />
+                </div>
+              </div>
+            )}
 
             {vessel.amenityKeys.length > 0 && (
               <div className="mt-8 border-t border-border pt-8">

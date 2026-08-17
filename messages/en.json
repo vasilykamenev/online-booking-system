@@ -83,6 +83,8 @@
       "yearBuilt": "Year built"
     },
     "descriptionTitle": "About this vessel",
+    "locationEyebrow": "On the map",
+    "locationTitle": "Location",
     "amenitiesTitle": "Amenities",
     "reviews": {
       "eyebrow": "Reviews",
@@ -214,6 +216,8 @@
       "activityType": "Activity type",
       "activityTypePlaceholder": "e.g. expedition",
       "description": "Description",
+      "mapPin": "Event location on the map",
+      "mapPinHint": "Optional: click the map to mark the exact place of the event.",
       "submit": "Publish",
       "errors": {
         "invalid": "Check the fields you filled in",
@@ -223,7 +227,9 @@
     },
     "detail": {
       "back": "All initiatives",
-      "publishedBy": "Published by"
+      "publishedBy": "Published by",
+      "locationEyebrow": "On the map",
+      "locationTitle": "Location"
     },
     "responses": {
       "eyebrow": "Responses",
@@ -624,6 +630,8 @@
         "slug": "Slug (for the URL)",
         "type": "Vessel type",
         "location": "Location",
+        "mapPin": "Map pin",
+        "mapPinHint": "Optional: click the map to fine-tune the vessel's exact mooring spot. Defaults to the selected marina's point.",
         "description": "Description",
         "lengthMeters": "Length, m",
         "yearBuilt": "Year built",
