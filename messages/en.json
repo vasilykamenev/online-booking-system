@@ -217,7 +217,7 @@
       "activityTypePlaceholder": "e.g. expedition",
       "description": "Description",
       "mapPin": "Event location on the map",
-      "mapPinHint": "Optional: click the map to mark the exact place of the event.",
+      "mapPinHint": "Optional: click the map to mark the exact place of the event — the Region field fills in automatically (you can still edit it by hand).",
       "submit": "Publish",
       "errors": {
         "invalid": "Check the fields you filled in",
