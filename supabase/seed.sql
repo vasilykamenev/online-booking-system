@@ -110,13 +110,13 @@ insert into public.vessel_amenities (vessel_id, amenity_id) values
 
 -- Initiatives ---------------------------------------------------------------
 
-insert into public.initiatives (id, author_id, title, description, topic, region, activity_type, status) values
+insert into public.initiatives (id, author_id, title, description, topic, region, activity_type, status, latitude, longitude) values
   ('50000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000003',
    'Svalbard polar expedition', 'A team of glaciologists is looking for partners and an ice-class vessel for a July 2027 glacier expedition.',
-   'research', 'Arctic', 'research', 'open'),
+   'research', 'Arctic', 'research', 'open', 78.22320, 15.62670),
   ('50000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000004',
    'Coral reef monitoring', 'Collecting reef health data near the Maldives, certified volunteer divers needed.',
-   'science', 'Indian Ocean', 'science', 'open'),
+   'science', 'Indian Ocean', 'science', 'open', 4.17550, 73.50930),
   ('50000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000002',
    'Transatlantic crossing', 'Crew wanted for an Atlantic crossing aboard an 18-metre sailing yacht, departing in November.',
-   'sailing', 'Gibraltar — Caribbean', 'sailing', 'open');
+   'sailing', 'Gibraltar — Caribbean', 'sailing', 'open', 36.14080, -5.35360);
