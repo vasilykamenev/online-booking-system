@@ -17,8 +17,13 @@ const WORLD_ZOOM = 2;
 const PIN_ZOOM = 13;
 
 /**
- * Click-to-drop map picker. Renders hidden `latName`/`lngName` inputs so it plugs
- * into the existing native `<form action={serverAction}>` pattern used across the app.
+ * Click-to-drop map picker. When `latName`/`lngName` are given, it renders hidden
+ * inputs under those names so it plugs directly into the existing native
+ * `<form action={serverAction}>` pattern used across the app. When the caller
+ * already owns visible lat/lng fields (e.g. admin's manually-editable inputs),
+ * omit `latName`/`lngName` and pass `onChange` instead — every pin drop (click,
+ * or the fallback-follow effect below) reports the picked point back so the
+ * caller can write it into its own fields.
  * Until the user clicks, it follows `fallbackLatitude`/`fallbackLongitude` (e.g. the
  * selected marina's stored point) so switching a dropdown re-centers the map.
  */
@@ -30,27 +35,38 @@ export function LocationPicker({
   fallbackLatitude,
   fallbackLongitude,
   hint,
+  onChange,
 }: {
-  latName: string;
-  lngName: string;
+  latName?: string;
+  lngName?: string;
   initialLatitude?: number | null;
   initialLongitude?: number | null;
   fallbackLatitude?: number | null;
   fallbackLongitude?: number | null;
   hint?: string;
+  onChange?: (latitude: number, longitude: number) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<import("leaflet").Map | null>(null);
   const markerRef = useRef<import("leaflet").Marker | null>(null);
   const hasManualPinRef = useRef(initialLatitude != null && initialLongitude != null);
+  // The map-click handler below is registered once (mount-only effect); keep the
+  // latest onChange in a ref so it doesn't call a stale closure of the prop.
+  const onChangeRef = useRef(onChange);
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  });
 
-  const [position, setPosition] = useState<[number, number] | null>(
-    initialLatitude != null && initialLongitude != null
-      ? [initialLatitude, initialLongitude]
-      : fallbackLatitude != null && fallbackLongitude != null
-        ? [fallbackLatitude, fallbackLongitude]
-        : null,
+  const [manualPosition, setManualPosition] = useState<[number, number] | null>(
+    initialLatitude != null && initialLongitude != null ? [initialLatitude, initialLongitude] : null,
   );
+  // Derived, not mirrored via effect: renders the fallback immediately (no extra
+  // render pass) until the user drops their own pin.
+  const position: [number, number] | null =
+    manualPosition ??
+    (fallbackLatitude != null && fallbackLongitude != null
+      ? [fallbackLatitude, fallbackLongitude]
+      : null);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -87,7 +103,8 @@ export function LocationPicker({
       map.on("click", (event: import("leaflet").LeafletMouseEvent) => {
         hasManualPinRef.current = true;
         const next: [number, number] = [event.latlng.lat, event.latlng.lng];
-        setPosition(next);
+        setManualPosition(next);
+        onChangeRef.current?.(next[0], next[1]);
         if (markerRef.current) {
           markerRef.current.setLatLng(next);
         } else {
@@ -106,12 +123,15 @@ export function LocationPicker({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Follow the fallback (e.g. selected marina) until the user places their own pin.
+  // Re-center the Leaflet instance on the fallback (e.g. selected marina) until the
+  // user places their own pin. `position` above already derives the displayed/
+  // submitted value from props/state — this effect only drives the imperative
+  // map API, an external system React doesn't manage.
   useEffect(() => {
     if (hasManualPinRef.current) return;
     if (fallbackLatitude == null || fallbackLongitude == null) return;
     const next: [number, number] = [fallbackLatitude, fallbackLongitude];
-    setPosition(next);
+    onChangeRef.current?.(next[0], next[1]);
 
     const map = mapRef.current;
     if (!map) return;
@@ -146,8 +166,8 @@ export function LocationPicker({
           {position[0].toFixed(5)}, {position[1].toFixed(5)}
         </p>
       )}
-      <input type="hidden" name={latName} value={position ? position[0] : ""} readOnly />
-      <input type="hidden" name={lngName} value={position ? position[1] : ""} readOnly />
+      {latName && <input type="hidden" name={latName} value={position ? position[0] : ""} readOnly />}
+      {lngName && <input type="hidden" name={lngName} value={position ? position[1] : ""} readOnly />}
     </div>
   );
 }

@@ -847,6 +847,8 @@
         "cityEn": "City (en)",
         "marinaRu": "Marina (ru)",
         "marinaEn": "Marina (en)",
+        "mapPin": "Map pin",
+        "mapPinHint": "Click the map to set the coordinates — the Latitude and Longitude fields below fill in automatically. You can also type them in by hand.",
         "latitude": "Latitude",
         "longitude": "Longitude",
         "create": "Create",

@@ -1,12 +1,13 @@
 "use client";
 
-import { useActionState } from "react";
+import { useActionState, useRef } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { Locale } from "@/i18n/routing";
 import { createLocation, updateLocation, type LocationActionState } from "@/server/actions/admin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { LocationPicker } from "@/components/map/location-picker";
 
 const initialState: LocationActionState = {};
 
@@ -35,6 +36,14 @@ export function LocationForm({
     mode === "create" ? createLocation.bind(null, locale) : updateLocation.bind(null, locale, locationId!);
   const [state, formAction, isPending] = useActionState(action, initialState);
 
+  const latitudeInputRef = useRef<HTMLInputElement>(null);
+  const longitudeInputRef = useRef<HTMLInputElement>(null);
+
+  function handlePin(latitude: number, longitude: number) {
+    if (latitudeInputRef.current) latitudeInputRef.current.value = latitude.toFixed(5);
+    if (longitudeInputRef.current) longitudeInputRef.current.value = longitude.toFixed(5);
+  }
+
   return (
     <div className="rounded-2xl border border-border bg-card p-6 shadow-soft md:p-8">
       <form action={formAction} className="grid grid-cols-1 gap-5 sm:grid-cols-2">
@@ -62,9 +71,20 @@ export function LocationForm({
           <Label htmlFor="marinaEn">{t("marinaEn")}</Label>
           <Input id="marinaEn" name="marinaEn" defaultValue={defaultValues?.marinaEn} />
         </div>
+        <div className="flex flex-col gap-2 sm:col-span-2">
+          <Label>{t("mapPin")}</Label>
+          <LocationPicker
+            initialLatitude={defaultValues?.latitude}
+            initialLongitude={defaultValues?.longitude}
+            hint={t("mapPinHint")}
+            onChange={handlePin}
+          />
+        </div>
+
         <div className="flex flex-col gap-2">
           <Label htmlFor="latitude">{t("latitude")}</Label>
           <Input
+            ref={latitudeInputRef}
             id="latitude"
             name="latitude"
             type="number"
@@ -78,6 +98,7 @@ export function LocationForm({
         <div className="flex flex-col gap-2">
           <Label htmlFor="longitude">{t("longitude")}</Label>
           <Input
+            ref={longitudeInputRef}
             id="longitude"
             name="longitude"
             type="number"
