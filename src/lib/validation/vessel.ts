@@ -42,9 +42,26 @@ export const vesselSchema = z.object({
 });
 export type VesselInput = z.infer<typeof vesselSchema>;
 
+// Raw upload ceiling before server-side compression (src/lib/images/optimize.ts)
+// — a generous bound on the original camera/phone file, not the stored size.
+// Guards decode time/memory in the server action, not final storage footprint.
+export const vesselImageMaxBytes = 20 * 1024 * 1024;
+export const vesselImageAllowedTypes = [
+  "image/jpeg",
+  "image/png",
+  "image/webp",
+  "image/avif",
+] as const;
+
 export const vesselImageSchema = z.object({
   vesselId: z.guid(),
-  url: z.string().trim().min(1).max(2000),
+  file: z
+    .instanceof(File, { message: "invalid" })
+    .refine((file) => file.size > 0, { message: "invalid" })
+    .refine((file) => file.size <= vesselImageMaxBytes, { message: "tooLarge" })
+    .refine((file) => vesselImageAllowedTypes.includes(file.type as never), {
+      message: "invalidType",
+    }),
   altTextRu: z.string().trim().max(300).default(""),
   altTextEn: z.string().trim().max(300).default(""),
 });

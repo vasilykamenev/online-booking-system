@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useTransition } from "react";
+import { useActionState, useEffect, useRef, useTransition } from "react";
 import { toast } from "sonner";
 import Image from "next/image";
 import { X } from "lucide-react";
@@ -29,6 +29,18 @@ export function VesselImagesManager({
     initialState,
   );
   const [isRemoving, startRemoving] = useTransition();
+  const formRef = useRef<HTMLFormElement>(null);
+  const isFirstRender = useRef(true);
+
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    if (!state.error) {
+      formRef.current?.reset();
+    }
+  }, [state]);
 
   function handleRemove(imageId: string) {
     startRemoving(async () => {
@@ -71,10 +83,20 @@ export function VesselImagesManager({
         </ul>
       )}
 
-      <form action={formAction} className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
-        <Input name="url" placeholder={t("imageUrl")} required />
+      <form
+        ref={formRef}
+        action={formAction}
+        className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3"
+      >
+        <Input
+          type="file"
+          name="file"
+          accept="image/jpeg,image/png,image/webp,image/avif"
+          required
+        />
         <Input name="altTextRu" placeholder={t("altTextRu")} />
         <Input name="altTextEn" placeholder={t("altTextEn")} />
+        <p className="text-xs text-muted-foreground sm:col-span-3">{t("imageFileHint")}</p>
         {state.error && (
           <p className="text-sm text-destructive sm:col-span-3">{t(`errors.${state.error}`)}</p>
         )}
