@@ -647,7 +647,7 @@
         "editTitle": "Edit vessel",
         "editSubtitle": "Core specifications, images, and amenities.",
         "imagesTitle": "Images",
-        "imageUrl": "Image URL",
+        "imageFileHint": "JPEG, PNG, WebP, or AVIF, up to 20 MB — compressed automatically on upload",
         "altTextRu": "Description (ru)",
         "altTextEn": "Description (en)",
         "addImage": "Add image",
@@ -659,7 +659,9 @@
           "invalid": "Check the fields you filled in",
           "unauthenticated": "Sign in to continue",
           "generic": "Couldn't save. Please try again",
-          "slugTaken": "That slug is already taken — choose another"
+          "slugTaken": "That slug is already taken — choose another",
+          "tooLarge": "File is too large (20 MB max)",
+          "invalidType": "Only JPEG, PNG, WebP, and AVIF images are supported"
         }
       },
       "notFound": {

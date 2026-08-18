@@ -5,6 +5,11 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "@/i18n/navigation";
 import type { Locale } from "@/i18n/routing";
 import { vesselSchema, vesselImageSchema, vesselStatusValues } from "@/lib/validation/vessel";
+import {
+  optimizeImage,
+  OPTIMIZED_IMAGE_CONTENT_TYPE,
+  OPTIMIZED_IMAGE_EXTENSION,
+} from "@/lib/images/optimize";
 import { searchVessels, type SearchFilters, type SearchResult } from "@/server/queries/vessels";
 
 export async function loadMoreVessels(filters: SearchFilters): Promise<SearchResult> {
@@ -145,6 +150,8 @@ export async function updateVesselStatus(
   return {};
 }
 
+const VESSEL_IMAGES_BUCKET = "vessel-images";
+
 export async function addVesselImage(
   locale: Locale,
   vesselId: string,
@@ -153,11 +160,11 @@ export async function addVesselImage(
 ): Promise<VesselActionState> {
   const parsed = vesselImageSchema.safeParse({
     vesselId,
-    url: formData.get("url"),
+    file: formData.get("file"),
     altTextRu: formData.get("altTextRu"),
     altTextEn: formData.get("altTextEn"),
   });
-  if (!parsed.success) return { error: "invalid" };
+  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "invalid" };
 
   const supabase = await createClient();
   const {
@@ -165,12 +172,33 @@ export async function addVesselImage(
   } = await supabase.auth.getUser();
   if (!user) return { error: "unauthenticated" };
 
+  let optimized: Buffer;
+  try {
+    optimized = await optimizeImage(await parsed.data.file.arrayBuffer());
+  } catch {
+    return { error: "invalidType" };
+  }
+
+  const path = `${parsed.data.vesselId}/${crypto.randomUUID()}.${OPTIMIZED_IMAGE_EXTENSION}`;
+
+  const { error: uploadError } = await supabase.storage
+    .from(VESSEL_IMAGES_BUCKET)
+    .upload(path, optimized, { contentType: OPTIMIZED_IMAGE_CONTENT_TYPE });
+  if (uploadError) return { error: "generic" };
+
+  const {
+    data: { publicUrl },
+  } = supabase.storage.from(VESSEL_IMAGES_BUCKET).getPublicUrl(path);
+
   const { error } = await supabase.from("vessel_images").insert({
     vessel_id: parsed.data.vesselId,
-    url: parsed.data.url,
+    url: publicUrl,
     alt_text: { ru: parsed.data.altTextRu, en: parsed.data.altTextEn },
   });
-  if (error) return { error: "generic" };
+  if (error) {
+    await supabase.storage.from(VESSEL_IMAGES_BUCKET).remove([path]);
+    return { error: "generic" };
+  }
 
   revalidatePath(`/${locale}/owner/vessels/${vesselId}/edit`);
   return {};
@@ -186,8 +214,20 @@ export async function removeVesselImage(
   imageId: string,
 ): Promise<RemoveImageResult> {
   const supabase = await createClient();
+
+  const { data: image } = await supabase
+    .from("vessel_images")
+    .select("url")
+    .eq("id", imageId)
+    .single();
+
   const { error } = await supabase.from("vessel_images").delete().eq("id", imageId);
   if (error) return { error: "generic" };
+
+  const path = image?.url.split(`/${VESSEL_IMAGES_BUCKET}/`)[1];
+  if (path) {
+    await supabase.storage.from(VESSEL_IMAGES_BUCKET).remove([decodeURIComponent(path)]);
+  }
 
   revalidatePath(`/${locale}/owner/vessels/${vesselId}/edit`);
   return {};
