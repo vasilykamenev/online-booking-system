@@ -135,8 +135,8 @@ function toLocationRow(data: ReturnType<typeof locationSchema.parse>) {
     country: { ru: data.countryRu, en: data.countryEn },
     city: { ru: data.cityRu, en: data.cityEn },
     marina: data.marinaRu || data.marinaEn ? { ru: data.marinaRu, en: data.marinaEn } : null,
-    latitude: data.latitude ?? null,
-    longitude: data.longitude ?? null,
+    latitude: data.latitude,
+    longitude: data.longitude,
   };
 }
 

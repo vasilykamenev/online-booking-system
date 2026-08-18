@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 import { parseDateRangeLiteral } from "@/lib/supabase/date-range";
+import { throwIfSupabaseError } from "@/lib/supabase/errors";
 import type { LocalizedText } from "./vessels";
 import type { BookingPaymentInfo } from "./bookings";
 
@@ -29,7 +30,7 @@ export async function getOwnerVessels(ownerId: string): Promise<OwnerVesselListI
     .eq("owner_id", ownerId)
     .order("created_at", { ascending: false });
 
-  if (error) throw error;
+  throwIfSupabaseError(error);
 
   return (data ?? []).map((vessel) => {
     const image = [...vessel.vessel_images].sort((a, b) => a.sort_order - b.sort_order)[0];
@@ -86,7 +87,7 @@ export async function getOwnerVesselDetail(
     .eq("owner_id", ownerId)
     .maybeSingle();
 
-  if (error) throw error;
+  throwIfSupabaseError(error);
   if (!data) return null;
 
   return {
@@ -127,7 +128,7 @@ export async function getVesselAvailability(vesselId: string): Promise<Availabil
     .eq("vessel_id", vesselId)
     .order("date_range");
 
-  if (error) throw error;
+  throwIfSupabaseError(error);
 
   return (data ?? []).map((row) => ({
     id: row.id,
@@ -143,7 +144,7 @@ export async function getVesselBookedRanges(
 ): Promise<{ start: string; end: string }[]> {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("get_vessel_booked_ranges", { p_vessel_id: vesselId });
-  if (error) throw error;
+  throwIfSupabaseError(error);
   return (data ?? []).map((raw) => parseDateRangeLiteral(raw as string));
 }
 
@@ -165,7 +166,7 @@ export async function getVesselPricingRules(vesselId: string): Promise<OwnerPric
     .eq("vessel_id", vesselId)
     .order("date_range");
 
-  if (error) throw error;
+  throwIfSupabaseError(error);
 
   return (data ?? []).map((rule) => {
     const { start, end } = parseDateRangeLiteral(rule.date_range as string);
@@ -208,7 +209,7 @@ export async function getOwnerBookings(ownerId: string): Promise<OwnerBookingIte
     .eq("vessels.owner_id", ownerId)
     .order("created_at", { ascending: false });
 
-  if (error) throw error;
+  throwIfSupabaseError(error);
 
   return (data ?? []).map((booking) => {
     const latestPayment = [...booking.payments].sort(

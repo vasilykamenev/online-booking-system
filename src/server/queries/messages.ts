@@ -3,6 +3,7 @@ import { cache } from "react";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
+import { throwIfSupabaseError } from "@/lib/supabase/errors";
 
 export interface ConversationSummary {
   id: string;
@@ -18,7 +19,7 @@ export async function getConversations(profileId: string): Promise<ConversationS
     .from("conversation_participants")
     .select("conversation_id")
     .eq("profile_id", profileId);
-  if (participantError) throw participantError;
+  throwIfSupabaseError(participantError);
 
   const conversationIds = (participantRows ?? []).map((row) => row.conversation_id);
   if (conversationIds.length === 0) return [];
@@ -31,7 +32,7 @@ export async function getConversations(profileId: string): Promise<ConversationS
        messages ( body, sender_id, created_at )`,
     )
     .in("id", conversationIds);
-  if (error) throw error;
+  throwIfSupabaseError(error);
 
   return (data ?? [])
     .map((conversation) => {
@@ -131,7 +132,7 @@ export async function findDirectConversation(
     .from("conversation_participants")
     .select("conversation_id")
     .eq("profile_id", profileAId);
-  if (ownError) throw ownError;
+  throwIfSupabaseError(ownError);
 
   const candidateIds = (ownRows ?? []).map((row) => row.conversation_id);
   if (candidateIds.length === 0) return null;
@@ -141,7 +142,7 @@ export async function findDirectConversation(
     .select("conversation_id")
     .eq("profile_id", profileBId)
     .in("conversation_id", candidateIds);
-  if (matchError) throw matchError;
+  throwIfSupabaseError(matchError);
 
   return matches?.[0]?.conversation_id ?? null;
 }

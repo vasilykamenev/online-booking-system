@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 import { parseDateRangeLiteral } from "@/lib/supabase/date-range";
+import { throwIfSupabaseError } from "@/lib/supabase/errors";
 import { CARD_COLUMNS, mapCardRow, type CardRow, type FeaturedVessel } from "./vessels";
 import {
   INITIATIVE_CARD_COLUMNS,
@@ -20,7 +21,7 @@ export async function getFavoriteVessels(profileId: string): Promise<FeaturedVes
     .not("vessel_id", "is", null)
     .order("created_at", { ascending: false });
 
-  if (error) throw error;
+  throwIfSupabaseError(error);
 
   return (data ?? [])
     .map((row) => row.vessels as CardRow | null)
@@ -37,7 +38,7 @@ export async function getFavoriteVesselIds(profileId: string): Promise<Set<strin
     .eq("profile_id", profileId)
     .not("vessel_id", "is", null);
 
-  if (error) throw error;
+  throwIfSupabaseError(error);
   return new Set((data ?? []).map((row) => row.vessel_id as string));
 }
 
@@ -51,7 +52,7 @@ export async function isVesselFavorited(profileId: string, vesselId: string): Pr
     .eq("vessel_id", vesselId)
     .maybeSingle();
 
-  if (error) throw error;
+  throwIfSupabaseError(error);
   return data !== null;
 }
 
@@ -65,7 +66,7 @@ export async function getFavoriteInitiatives(profileId: string): Promise<Initiat
     .not("initiative_id", "is", null)
     .order("created_at", { ascending: false });
 
-  if (error) throw error;
+  throwIfSupabaseError(error);
 
   return (data ?? [])
     .map((row) => row.initiatives as InitiativeCardRow | null)
@@ -86,7 +87,7 @@ export async function isInitiativeFavorited(
     .eq("initiative_id", initiativeId)
     .maybeSingle();
 
-  if (error) throw error;
+  throwIfSupabaseError(error);
   return data !== null;
 }
 
@@ -99,7 +100,7 @@ export async function getFavoriteInitiativeIds(profileId: string): Promise<Set<s
     .eq("profile_id", profileId)
     .not("initiative_id", "is", null);
 
-  if (error) throw error;
+  throwIfSupabaseError(error);
   return new Set((data ?? []).map((row) => row.initiative_id as string));
 }
 
@@ -128,7 +129,7 @@ export async function getBookingHistory(clientId: string): Promise<BookingHistor
     .eq("client_id", clientId)
     .order("created_at", { ascending: false });
 
-  if (error) throw error;
+  throwIfSupabaseError(error);
 
   return (data ?? []).map((booking) => {
     const images = [...(booking.vessels?.vessel_images ?? [])].sort(

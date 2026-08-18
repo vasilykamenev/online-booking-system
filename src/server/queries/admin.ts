@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/supabase/database.types";
 import type { Locale } from "@/i18n/routing";
 import { pickLocalized } from "@/lib/supabase/localized";
+import { throwIfSupabaseError } from "@/lib/supabase/errors";
 import { DEFAULT_PLATFORM_COMMISSION_RATE } from "@/lib/pricing/commission";
 import type { LocalizedText } from "./vessels";
 
@@ -21,7 +22,7 @@ export async function getPlatformCommissionRate(
     .eq("id", true)
     .maybeSingle();
 
-  if (error) throw error;
+  throwIfSupabaseError(error);
   return data?.commission_rate ?? DEFAULT_PLATFORM_COMMISSION_RATE;
 }
 
@@ -49,13 +50,13 @@ export async function getAllProfiles(): Promise<AdminProfile[]> {
     .from("profiles")
     .select("id, full_name, role, created_at")
     .order("created_at", { ascending: false });
-  if (error) throw error;
+  throwIfSupabaseError(error);
 
   const admin = createAdminClient();
   const { data: usersPage, error: usersError } = await admin.auth.admin.listUsers({
     perPage: 1000,
   });
-  if (usersError) throw usersError;
+  throwIfSupabaseError(usersError);
   const emailById = new Map(usersPage.users.map((user) => [user.id, user.email ?? null]));
 
   return (profiles ?? []).map((profile) => ({
@@ -84,7 +85,7 @@ export async function getAllLocationsAdmin(): Promise<AdminLocation[]> {
     .select("id, country, city, marina, latitude, longitude")
     .order("created_at", { ascending: false });
 
-  if (error) throw error;
+  throwIfSupabaseError(error);
 
   return (data ?? []).map((location) => ({
     id: location.id,
@@ -130,7 +131,7 @@ export async function getAllAmenitiesAdmin(): Promise<AdminAmenity[]> {
   const supabase = await createClient();
 
   const { data, error } = await supabase.from("amenities").select("id, key").order("key");
-  if (error) throw error;
+  throwIfSupabaseError(error);
   return data ?? [];
 }
 
@@ -153,7 +154,7 @@ export async function getAuditLog(limit = 100): Promise<AdminAuditLogEntry[]> {
     .order("created_at", { ascending: false })
     .limit(limit);
 
-  if (error) throw error;
+  throwIfSupabaseError(error);
 
   return (data ?? []).map((entry) => ({
     id: entry.id,
@@ -190,7 +191,7 @@ export async function getAdminOverview(locale: Locale): Promise<AdminOverview> {
       `id, status, price_minor, currency, vessel_id,
        vessels ( name, location_id, locations ( country, city ) )`,
     );
-  if (bookingsError) throw bookingsError;
+  throwIfSupabaseError(bookingsError);
 
   const rows = bookings ?? [];
   const bookingsByStatus = {
@@ -305,7 +306,7 @@ export async function getAllPaymentsAdmin(limit = 200): Promise<AdminPaymentEntr
     .order("created_at", { ascending: false })
     .limit(limit);
 
-  if (error) throw error;
+  throwIfSupabaseError(error);
 
   return (data ?? []).map((payment) => ({
     id: payment.id,

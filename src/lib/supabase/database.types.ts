@@ -381,8 +381,8 @@ export type Database = {
           country: Json
           created_at: string
           id: string
-          latitude: number | null
-          longitude: number | null
+          latitude: number
+          longitude: number
           marina: Json | null
           updated_at: string
         }
@@ -391,8 +391,8 @@ export type Database = {
           country: Json
           created_at?: string
           id?: string
-          latitude?: number | null
-          longitude?: number | null
+          latitude: number
+          longitude: number
           marina?: Json | null
           updated_at?: string
         }
@@ -401,8 +401,8 @@ export type Database = {
           country?: Json
           created_at?: string
           id?: string
-          latitude?: number | null
-          longitude?: number | null
+          latitude?: number
+          longitude?: number
           marina?: Json | null
           updated_at?: string
         }

@@ -2,6 +2,7 @@ import "server-only";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 import { parseDateRangeLiteral } from "@/lib/supabase/date-range";
+import { throwIfSupabaseError } from "@/lib/supabase/errors";
 
 export interface BookingPaymentInfo {
   id: string;
@@ -45,7 +46,7 @@ export async function getBookingById(id: string): Promise<BookingDetail | null> 
     .eq("id", id)
     .maybeSingle();
 
-  if (error) throw error;
+  throwIfSupabaseError(error);
   if (!data) return null;
 
   const images = [...(data.vessels?.vessel_images ?? [])].sort(

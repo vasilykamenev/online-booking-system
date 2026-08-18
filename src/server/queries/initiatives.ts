@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
+import { throwIfSupabaseError } from "@/lib/supabase/errors";
 
 export interface InitiativeCard {
   id: string;
@@ -92,7 +93,7 @@ export async function searchInitiatives(
     .order("id", { ascending: false })
     .limit(FEED_PAGE_SIZE + 1);
 
-  if (error) throw error;
+  throwIfSupabaseError(error);
 
   const rows = (data ?? []) as InitiativeCardRow[];
   const hasMore = rows.length > FEED_PAGE_SIZE;
@@ -118,7 +119,7 @@ export async function getInitiativeFacets(): Promise<InitiativeFacets> {
   const { data, error } = await supabase
     .from("initiatives")
     .select("topic, region, activity_type");
-  if (error) throw error;
+  throwIfSupabaseError(error);
 
   const rows = data ?? [];
   const dedupe = (values: string[]) => [...new Set(values)].sort((a, b) => a.localeCompare(b));
@@ -172,7 +173,7 @@ export async function getInitiativeResponses(initiativeId: string): Promise<Init
     .eq("initiative_id", initiativeId)
     .order("created_at", { ascending: false });
 
-  if (error) throw error;
+  throwIfSupabaseError(error);
 
   return (data ?? []).map((row) => ({
     id: row.id,
@@ -197,7 +198,7 @@ export async function getMyInitiativeResponse(
     .eq("responder_id", responderId)
     .maybeSingle();
 
-  if (error) throw error;
+  throwIfSupabaseError(error);
   if (!data) return null;
 
   return {
@@ -229,7 +230,7 @@ export async function getMyInitiatives(authorId: string): Promise<MyInitiative[]
     .select("id, title, topic, region, activity_type, status, created_at")
     .eq("author_id", authorId)
     .order("created_at", { ascending: false });
-  if (error) throw error;
+  throwIfSupabaseError(error);
 
   const initiatives = data ?? [];
   if (initiatives.length === 0) return [];
@@ -241,7 +242,7 @@ export async function getMyInitiatives(authorId: string): Promise<MyInitiative[]
       "initiative_id",
       initiatives.map((initiative) => initiative.id),
     );
-  if (responsesError) throw responsesError;
+  throwIfSupabaseError(responsesError);
 
   const counts = new Map<string, number>();
   for (const response of responses ?? []) {

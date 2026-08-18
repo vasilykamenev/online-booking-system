@@ -129,7 +129,7 @@ export function VesselDetailContent({
               {hasPin ? (
                 <a
                   href="#location"
-                  className="flex items-center gap-1.5 transition-colors hover:text-foreground"
+                  className="flex items-center gap-1.5 transition-colors hover:text-primary"
                 >
                   <MapPin className="size-4" strokeWidth={1.5} />
                   {locationText}

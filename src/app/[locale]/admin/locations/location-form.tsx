@@ -72,6 +72,7 @@ export function LocationForm({
             min="-90"
             max="90"
             defaultValue={defaultValues?.latitude ?? undefined}
+            required
           />
         </div>
         <div className="flex flex-col gap-2">
@@ -84,6 +85,7 @@ export function LocationForm({
             min="-180"
             max="180"
             defaultValue={defaultValues?.longitude ?? undefined}
+            required
           />
         </div>
 

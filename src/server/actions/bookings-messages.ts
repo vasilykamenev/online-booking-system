@@ -1,6 +1,7 @@
 import "server-only";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/lib/supabase/database.types";
+import { throwIfSupabaseError } from "@/lib/supabase/errors";
 import { findDirectConversation } from "@/server/queries/messages";
 
 /** Opens (or reuses) the 1:1 conversation between two profiles and drops a message into it —
@@ -19,7 +20,8 @@ export async function sendBookingMessage(
       .insert({})
       .select("id")
       .single();
-    if (conversationError) throw conversationError;
+    throwIfSupabaseError(conversationError);
+    if (!conversation) throw new Error("Insert into conversations returned no row");
     conversationId = conversation.id;
 
     // Self first: conversation_participants' insert policy allows adding someone
@@ -27,12 +29,12 @@ export async function sendBookingMessage(
     const { error: selfParticipantError } = await client
       .from("conversation_participants")
       .insert({ conversation_id: conversationId, profile_id: fromId });
-    if (selfParticipantError) throw selfParticipantError;
+    throwIfSupabaseError(selfParticipantError);
 
     const { error: otherParticipantError } = await client
       .from("conversation_participants")
       .insert({ conversation_id: conversationId, profile_id: toId });
-    if (otherParticipantError) throw otherParticipantError;
+    throwIfSupabaseError(otherParticipantError);
   }
 
   const { error: messageError } = await client.from("messages").insert({
@@ -40,5 +42,5 @@ export async function sendBookingMessage(
     sender_id: fromId,
     body,
   });
-  if (messageError) throw messageError;
+  throwIfSupabaseError(messageError);
 }

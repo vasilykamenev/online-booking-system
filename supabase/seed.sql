@@ -32,15 +32,19 @@ update public.profiles set role = 'client', full_name = 'Vasily Kamenev' where i
 
 -- Locations ---------------------------------------------------------------
 
-insert into public.locations (id, country, city, marina) values
+insert into public.locations (id, country, city, marina, latitude, longitude) values
   ('20000000-0000-0000-0000-000000000001',
-   '{"ru": "Хорватия", "en": "Croatia"}', '{"ru": "Сплит", "en": "Split"}', '{"ru": "ACI Marina Сплит", "en": "ACI Marina Split"}'),
+   '{"ru": "Хорватия", "en": "Croatia"}', '{"ru": "Сплит", "en": "Split"}', '{"ru": "ACI Marina Сплит", "en": "ACI Marina Split"}',
+   43.50848, 16.43965),
   ('20000000-0000-0000-0000-000000000002',
-   '{"ru": "Греция", "en": "Greece"}', '{"ru": "Икария", "en": "Ikaria"}', '{"ru": "Порт Икарии", "en": "Ikaria Port"}'),
+   '{"ru": "Греция", "en": "Greece"}', '{"ru": "Икария", "en": "Ikaria"}', '{"ru": "Порт Икарии", "en": "Ikaria Port"}',
+   37.59280, 26.28360),
   ('20000000-0000-0000-0000-000000000003',
-   '{"ru": "Экспедиция", "en": "Expedition"}', '{"ru": "Антарктика", "en": "Antarctica"}', null),
+   '{"ru": "Экспедиция", "en": "Expedition"}', '{"ru": "Антарктика", "en": "Antarctica"}', null,
+   -64.82480, -63.49700),
   ('20000000-0000-0000-0000-000000000004',
-   '{"ru": "Япония", "en": "Japan"}', '{"ru": "Йокогама", "en": "Yokohama"}', '{"ru": "Марина Йокогама Бэй", "en": "Yokohama Bay Marina"}');
+   '{"ru": "Япония", "en": "Japan"}', '{"ru": "Йокогама", "en": "Yokohama"}', '{"ru": "Марина Йокогама Бэй", "en": "Yokohama Bay Marina"}',
+   35.44370, 139.63800);
 
 -- Amenities -----------------------------------------------------------------
 

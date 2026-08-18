@@ -86,7 +86,7 @@ export function Hero() {
           >
             <a
               href="#vessels"
-              className="group flex items-center gap-3 rounded-full bg-white px-6 py-3.5 text-sm font-medium tracking-wide text-foreground transition-colors hover:bg-white/90"
+              className="group flex items-center gap-3 rounded-full bg-white px-6 py-3.5 text-sm font-medium tracking-wide text-banner transition-colors hover:bg-white/90"
             >
               {t("cta")}
               <ArrowRight className="size-4 transition-transform group-hover:translate-x-0.5" />

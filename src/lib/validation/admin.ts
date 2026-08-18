@@ -20,13 +20,16 @@ export const locationSchema = z.object({
   cityEn: z.string().trim().min(1).max(200),
   marinaRu: z.string().trim().max(200).default(""),
   marinaEn: z.string().trim().max(200).default(""),
+  // Required: every location needs a point so vessels/initiatives that don't
+  // set their own pin can still fall back to the marina's default location
+  // on the map (see supabase/migrations/20260817120001_geo_coordinates.sql).
   latitude: z.preprocess(
-    (value) => (value === "" ? undefined : value),
-    z.coerce.number().min(-90).max(90).optional(),
+    (value) => (typeof value === "string" && value.trim() !== "" ? Number(value) : value),
+    z.number().min(-90).max(90),
   ),
   longitude: z.preprocess(
-    (value) => (value === "" ? undefined : value),
-    z.coerce.number().min(-180).max(180).optional(),
+    (value) => (typeof value === "string" && value.trim() !== "" ? Number(value) : value),
+    z.number().min(-180).max(180),
   ),
 });
 export type LocationInput = z.infer<typeof locationSchema>;

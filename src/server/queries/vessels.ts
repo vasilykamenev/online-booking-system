@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
+import { throwIfSupabaseError } from "@/lib/supabase/errors";
 
 export type LocalizedText = Partial<Record<"ru" | "en", string>>;
 
@@ -74,7 +75,7 @@ export async function getFeaturedVessels(limit = 4): Promise<FeaturedVessel[]> {
     .order("rating_avg", { ascending: false })
     .limit(limit);
 
-  if (error) throw error;
+  throwIfSupabaseError(error);
 
   return (data ?? []).map(mapCardRow);
 }
@@ -117,7 +118,7 @@ export async function searchVessels(filters: SearchFilters): Promise<SearchResul
     .order("id", { ascending: false })
     .limit(SEARCH_PAGE_SIZE + 1);
 
-  if (error) throw error;
+  throwIfSupabaseError(error);
 
   const rows = data ?? [];
   const hasMore = rows.length > SEARCH_PAGE_SIZE;
@@ -140,7 +141,7 @@ export async function getAllAmenities(): Promise<Amenity[]> {
 
   const { data, error } = await supabase.from("amenities").select("id, key").order("key");
 
-  if (error) throw error;
+  throwIfSupabaseError(error);
   return data ?? [];
 }
 
@@ -160,7 +161,7 @@ export async function getSearchLocations(): Promise<SearchLocation[]> {
     .select("id, country, city, latitude, longitude")
     .order("country");
 
-  if (error) throw error;
+  throwIfSupabaseError(error);
 
   return (data ?? []).map((location) => ({
     id: location.id,
@@ -223,7 +224,7 @@ export const getVesselBySlug = cache(async (slug: string): Promise<VesselDetail 
     .eq("status", "published")
     .maybeSingle();
 
-  if (error) throw error;
+  throwIfSupabaseError(error);
   if (!vessel) return null;
 
   const { data: reviews, error: reviewsError } = await supabase
@@ -232,7 +233,7 @@ export const getVesselBySlug = cache(async (slug: string): Promise<VesselDetail 
     .eq("vessel_id", vessel.id)
     .order("created_at", { ascending: false });
 
-  if (reviewsError) throw reviewsError;
+  throwIfSupabaseError(reviewsError);
 
   return {
     id: vessel.id,
