@@ -154,7 +154,7 @@ export function VesselDetailContent({
                 {t("descriptionTitle")}
               </h2>
               <p className="mt-3 text-sm font-light leading-relaxed text-muted-foreground">
-                {vessel.description}
+                {pickLocalized(vessel.description, locale)}
               </p>
             </div>
 

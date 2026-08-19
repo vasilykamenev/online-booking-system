@@ -189,7 +189,7 @@ export interface VesselDetail {
   slug: string;
   type: Database["public"]["Enums"]["vessel_type"];
   name: string;
-  description: string;
+  description: LocalizedText;
   lengthMeters: number;
   cabins: number;
   guestsCapacity: number;
@@ -240,7 +240,7 @@ export const getVesselBySlug = cache(async (slug: string): Promise<VesselDetail 
     slug: vessel.slug,
     type: vessel.type,
     name: vessel.name,
-    description: vessel.description,
+    description: (vessel.description ?? {}) as LocalizedText,
     lengthMeters: vessel.length_meters,
     cabins: vessel.cabins,
     guestsCapacity: vessel.guests_capacity,

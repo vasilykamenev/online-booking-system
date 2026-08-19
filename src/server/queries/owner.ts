@@ -54,7 +54,7 @@ export interface OwnerVesselDetail {
   name: string;
   type: Database["public"]["Enums"]["vessel_type"];
   status: Database["public"]["Enums"]["vessel_status"];
-  description: string;
+  description: LocalizedText;
   lengthMeters: number;
   cabins: number;
   guestsCapacity: number;
@@ -96,7 +96,7 @@ export async function getOwnerVesselDetail(
     name: data.name,
     type: data.type,
     status: data.status,
-    description: data.description,
+    description: (data.description ?? {}) as LocalizedText,
     lengthMeters: data.length_meters,
     cabins: data.cabins,
     guestsCapacity: data.guests_capacity,

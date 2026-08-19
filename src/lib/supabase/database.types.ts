@@ -783,7 +783,7 @@ export type Database = {
           cabins: number
           created_at: string
           currency: string
-          description: string
+          description: Json
           guests_capacity: number
           id: string
           latitude: number | null
@@ -805,7 +805,7 @@ export type Database = {
           cabins?: number
           created_at?: string
           currency?: string
-          description?: string
+          description?: Json
           guests_capacity: number
           id?: string
           latitude?: number | null
@@ -827,7 +827,7 @@ export type Database = {
           cabins?: number
           created_at?: string
           currency?: string
-          description?: string
+          description?: Json
           guests_capacity?: number
           id?: string
           latitude?: number | null

@@ -7,20 +7,22 @@ import { isVesselFavorited } from "@/server/queries/account";
 import { getVesselBookingContext } from "@/server/queries/availability";
 import { VesselDetailContent } from "./vessel-detail-content";
 import { buildTitle } from "@/lib/site";
+import { pickLocalized } from "@/lib/supabase/localized";
+import type { Locale } from "@/i18n/routing";
 
 export async function generateMetadata({
   params,
 }: {
   params: Promise<{ locale: string; slug: string }>;
 }): Promise<Metadata> {
-  const { slug } = await params;
+  const { locale, slug } = await params;
   const vessel = await getVesselBySlug(slug);
 
   if (!vessel) return {};
 
   return {
     title: buildTitle(vessel.name),
-    description: vessel.description,
+    description: pickLocalized(vessel.description, locale as Locale),
   };
 }
 

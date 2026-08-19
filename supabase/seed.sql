@@ -67,19 +67,19 @@ insert into public.vessels (
 ) values
   ('40000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000001',
    'yacht', 'published', 'Adriatic Breeze', 'adriatic-breeze',
-   'A classic motor yacht cruising the Dalmatian coast, ideal for family charters between Split and the Kornati islands.',
+   '{"ru": "Классическая моторная яхта, курсирующая вдоль Далматинского побережья — идеальна для семейных чартеров между Сплитом и островами Корнати.", "en": "A classic motor yacht cruising the Dalmatian coast, ideal for family charters between Split and the Kornati islands."}',
    32.0, 4, 8, 2019, 95000, 'USD', 4.8, 24),
   ('40000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000002',
    'catamaran', 'published', 'Aegean Horizon', 'aegean-horizon',
-   'A stable, spacious sailing catamaran built for island-hopping the Cyclades and Ikaria coastline.',
+   '{"ru": "Устойчивый просторный парусный катамаран, созданный для путешествий по островам Киклад и побережью Икарии.", "en": "A stable, spacious sailing catamaran built for island-hopping the Cyclades and Ikaria coastline."}',
    15.0, 3, 6, 2021, 62000, 'USD', 4.9, 31),
   ('40000000-0000-0000-0000-000000000003', '10000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000003',
    'expedition', 'published', 'Polar Frontier', 'polar-frontier',
-   'An ice-class expedition vessel outfitted for scientific charters and small-group Antarctic voyages.',
+   '{"ru": "Экспедиционное судно ледового класса, оснащённое для научных чартеров и небольших групп в антарктических плаваниях.", "en": "An ice-class expedition vessel outfitted for scientific charters and small-group Antarctic voyages."}',
    82.0, 12, 24, 2016, 180000, 'USD', 5.0, 9),
   ('40000000-0000-0000-0000-000000000004', '10000000-0000-0000-0000-000000000003', '20000000-0000-0000-0000-000000000004',
    'research', 'published', 'Pacific Explorer', 'pacific-explorer',
-   'A research vessel available for charter between survey campaigns, equipped for marine science expeditions.',
+   '{"ru": "Исследовательское судно, доступное для чартера между экспедициями, оснащённое для морских научных исследований.", "en": "A research vessel available for charter between survey campaigns, equipped for marine science expeditions."}',
    65.0, 10, 20, 2014, 145000, 'USD', 4.7, 17);
 
 -- Vessel images -----------------------------------------------------------

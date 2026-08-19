@@ -42,7 +42,8 @@ export function VesselForm({
     slug: string;
     type: string;
     locationId: string;
-    description: string;
+    descriptionRu: string;
+    descriptionEn: string;
     lengthMeters: number;
     cabins: number;
     guestsCapacity: number;
@@ -129,12 +130,22 @@ export function VesselForm({
           />
         </div>
 
-        <div className="flex flex-col gap-2 sm:col-span-2">
-          <Label htmlFor="description">{t("description")}</Label>
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="descriptionRu">{t("descriptionRu")}</Label>
           <Textarea
-            id="description"
-            name="description"
-            defaultValue={defaultValues?.description}
+            id="descriptionRu"
+            name="descriptionRu"
+            defaultValue={defaultValues?.descriptionRu}
+            rows={4}
+          />
+        </div>
+
+        <div className="flex flex-col gap-2">
+          <Label htmlFor="descriptionEn">{t("descriptionEn")}</Label>
+          <Textarea
+            id="descriptionEn"
+            name="descriptionEn"
+            defaultValue={defaultValues?.descriptionEn}
             rows={4}
           />
         </div>
