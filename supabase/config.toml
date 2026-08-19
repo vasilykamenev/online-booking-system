@@ -223,6 +223,15 @@ web3 = 30
 # provider = "hcaptcha"
 # secret = ""
 
+# NOTE: the hosted production project (MeridianBeyond) intentionally runs
+# enable_confirmations=true, max_frequency="1m0s", otp_length=8 here, and
+# enroll/verify_enabled=true under [auth.mfa.totp] below — stricter than the
+# local-dev-friendly values in this file. `supabase config push` pushes this
+# whole file and WILL silently revert production back to these dev defaults
+# (this happened once — see git history). Before pushing again, diff against
+# https://supabase.com/dashboard/project/fchjztvugxkwuwznrtxv/auth/providers
+# and patch only the field(s) you actually mean to change, e.g. via the
+# Management API (PATCH /v1/projects/{ref}/config/auth) rather than a blanket push.
 [auth.email]
 # Allow/disallow new user signups via email to your project.
 enable_signup = true
