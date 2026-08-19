@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Locale } from "@/i18n/routing";
 import { requireProfile } from "@/server/queries/profile";
+import { getSearchLocations } from "@/server/queries/vessels";
 import { InitiativeForm } from "./initiative-form";
 import { buildTitle } from "@/lib/site";
 
@@ -24,6 +25,7 @@ export default async function NewInitiativePage({
   setRequestLocale(locale);
   await requireProfile(locale);
   const t = await getTranslations("initiativesPage.form");
+  const locations = await getSearchLocations();
 
   return (
     <div className="container-page pt-24 pb-24 lg:pt-28">
@@ -31,7 +33,7 @@ export default async function NewInitiativePage({
         <h1 className="text-2xl font-medium tracking-tight">{t("createTitle")}</h1>
         <p className="mt-1 text-sm font-light text-muted-foreground">{t("createSubtitle")}</p>
         <div className="mt-6">
-          <InitiativeForm />
+          <InitiativeForm locations={locations} />
         </div>
       </div>
     </div>

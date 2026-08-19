@@ -21,11 +21,12 @@ const PIN_ZOOM = 13;
  * inputs under those names so it plugs directly into the existing native
  * `<form action={serverAction}>` pattern used across the app. When the caller
  * already owns visible lat/lng fields (e.g. admin's manually-editable inputs),
- * omit `latName`/`lngName` and pass `onChange` instead — every pin drop (click,
- * or the fallback-follow effect below) reports the picked point back so the
- * caller can write it into its own fields.
+ * omit `latName`/`lngName` and pass `onChange` instead — a click reports the picked
+ * point back so the caller can write it into its own fields.
  * Until the user clicks, it follows `fallbackLatitude`/`fallbackLongitude` (e.g. the
- * selected marina's stored point) so switching a dropdown re-centers the map.
+ * selected marina's stored point) so switching a dropdown re-centers the map —
+ * `onChange` does NOT fire for this case, since the fallback's source already
+ * knows its own coordinates (no need to report them back to itself).
  */
 export function LocationPicker({
   latName,
@@ -126,12 +127,14 @@ export function LocationPicker({
   // Re-center the Leaflet instance on the fallback (e.g. selected marina) until the
   // user places their own pin. `position` above already derives the displayed/
   // submitted value from props/state — this effect only drives the imperative
-  // map API, an external system React doesn't manage.
+  // map API, an external system React doesn't manage. Deliberately does NOT call
+  // onChange: the fallback source (e.g. a location picked from a dropdown) already
+  // knows its own point, so the caller should read it directly rather than pay for
+  // a reverse-geocode round trip onChange is meant for actual clicks.
   useEffect(() => {
     if (hasManualPinRef.current) return;
     if (fallbackLatitude == null || fallbackLongitude == null) return;
     const next: [number, number] = [fallbackLatitude, fallbackLongitude];
-    onChangeRef.current?.(next[0], next[1]);
 
     const map = mapRef.current;
     if (!map) return;

@@ -1,16 +1,32 @@
 "use client";
 
-import { useActionState, useRef } from "react";
+import { useActionState, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { Locale } from "@/i18n/routing";
 import { createInitiative, type InitiativeActionState } from "@/server/actions/initiatives";
+import type { SearchLocation } from "@/server/queries/vessels";
+import { pickLocalized } from "@/lib/supabase/localized";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { LocationPicker } from "@/components/map/location-picker";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 const initialState: InitiativeActionState = {};
+const NO_LOCATION = "__none__";
+
+function locationLabel(location: SearchLocation, locale: Locale): string {
+  const city = pickLocalized(location.city, locale);
+  const country = pickLocalized(location.country, locale);
+  return [city, country].filter(Boolean).join(", ");
+}
 
 /** Best-effort place name for a dropped pin — free OSM service, no API key. */
 async function reverseGeocodeRegion(
@@ -36,7 +52,7 @@ async function reverseGeocodeRegion(
   return place ?? country ?? null;
 }
 
-export function InitiativeForm() {
+export function InitiativeForm({ locations }: { locations: SearchLocation[] }) {
   const t = useTranslations("initiativesPage.form");
   const locale = useLocale() as Locale;
   const [state, formAction, isPending] = useActionState(
@@ -48,6 +64,9 @@ export function InitiativeForm() {
   // Guards against an earlier reverse-geocode call resolving after a later pin drop.
   const geocodeRequestRef = useRef(0);
 
+  const [locationId, setLocationId] = useState<string | undefined>(undefined);
+  const selectedLocation = locations.find((location) => location.id === locationId);
+
   async function handlePin(latitude: number, longitude: number) {
     const requestId = ++geocodeRequestRef.current;
     try {
@@ -57,6 +76,17 @@ export function InitiativeForm() {
       }
     } catch {
       // Best-effort convenience fill — the field stays manually editable either way.
+    }
+  }
+
+  function handleSelectLocation(value: string) {
+    const next = value === NO_LOCATION ? undefined : value;
+    setLocationId(next);
+    const location = locations.find((candidate) => candidate.id === next);
+    // Known dictionary entry already has its own label — fill Region straight
+    // from it instead of round-tripping through reverse geocoding.
+    if (location && regionInputRef.current) {
+      regionInputRef.current.value = locationLabel(location, locale);
     }
   }
 
@@ -100,10 +130,33 @@ export function InitiativeForm() {
         </div>
 
         <div className="flex flex-col gap-2">
+          <Label>{t("existingLocation")}</Label>
+          <Select value={locationId ?? NO_LOCATION} onValueChange={handleSelectLocation}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder={t("existingLocationPlaceholder")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value={NO_LOCATION}>{t("existingLocationNone")}</SelectItem>
+              {locations.map((location) => (
+                <SelectItem key={location.id} value={location.id}>
+                  {locationLabel(location, locale)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs font-light text-muted-foreground">
+            {t("existingLocationHint")}
+          </p>
+          <input type="hidden" name="locationId" value={locationId ?? ""} />
+        </div>
+
+        <div className="flex flex-col gap-2">
           <Label>{t("mapPin")}</Label>
           <LocationPicker
             latName="latitude"
             lngName="longitude"
+            fallbackLatitude={selectedLocation?.latitude}
+            fallbackLongitude={selectedLocation?.longitude}
             hint={t("mapPinHint")}
             onChange={handlePin}
           />

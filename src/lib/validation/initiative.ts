@@ -20,6 +20,10 @@ export const initiativeSchema = z.object({
   topic: z.string().trim().min(2).max(100),
   region: z.string().trim().min(2).max(100),
   activityType: z.string().trim().min(2).max(100),
+  // Optional link into the shared locations dictionary (see CLAUDE.md /
+  // locations table) — gives the map a curated fallback point when the author
+  // hasn't dropped their own pin. Most initiatives won't match one.
+  locationId: z.preprocess((value) => (value === "" ? undefined : value), z.guid().optional()),
   // Optional exact point for the event/activity — region text stays the primary,
   // filterable attribute; the pin is a refinement, not every initiative has one.
   latitude: z.preprocess(

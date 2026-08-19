@@ -330,6 +330,7 @@ export type Database = {
           description: string
           id: string
           latitude: number | null
+          location_id: string | null
           longitude: number | null
           region: string
           status: Database["public"]["Enums"]["initiative_status"]
@@ -344,6 +345,7 @@ export type Database = {
           description: string
           id?: string
           latitude?: number | null
+          location_id?: string | null
           longitude?: number | null
           region: string
           status?: Database["public"]["Enums"]["initiative_status"]
@@ -358,6 +360,7 @@ export type Database = {
           description?: string
           id?: string
           latitude?: number | null
+          location_id?: string | null
           longitude?: number | null
           region?: string
           status?: Database["public"]["Enums"]["initiative_status"]
@@ -371,6 +374,13 @@ export type Database = {
             columns: ["author_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "initiatives_location_id_fkey"
+            columns: ["location_id"]
+            isOneToOne: false
+            referencedRelation: "locations"
             referencedColumns: ["id"]
           },
         ]

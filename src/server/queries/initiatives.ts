@@ -140,7 +140,7 @@ export const getInitiativeById = cache(async (id: string): Promise<InitiativeDet
 
   const { data, error } = await supabase
     .from("initiatives")
-    .select(`${INITIATIVE_CARD_COLUMNS}, updated_at`)
+    .select(`${INITIATIVE_CARD_COLUMNS}, updated_at, locations ( latitude, longitude )`)
     .eq("id", id)
     .maybeSingle();
 
@@ -151,7 +151,19 @@ export const getInitiativeById = cache(async (id: string): Promise<InitiativeDet
   }
   if (!data) return null;
 
-  return { ...mapInitiativeCardRow(data as InitiativeCardRow), updatedAt: data.updated_at };
+  const row = data as InitiativeCardRow & {
+    updated_at: string;
+    locations: { latitude: number | null; longitude: number | null } | null;
+  };
+
+  return {
+    ...mapInitiativeCardRow(row),
+    updatedAt: row.updated_at,
+    // Falls back to the linked location's point when the author didn't drop
+    // their own pin — same pattern as vessels (see getVesselBySlug).
+    latitude: row.latitude ?? row.locations?.latitude ?? null,
+    longitude: row.longitude ?? row.locations?.longitude ?? null,
+  };
 });
 
 export interface InitiativeResponse {
