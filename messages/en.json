@@ -634,8 +634,14 @@
         "slug": "Slug (for the URL)",
         "type": "Vessel type",
         "location": "Location",
+        "newLocationOption": "— Enter a new location —",
+        "newLocationPlaceholder": "e.g. Marina Kaštela, Croatia",
+        "newLocationHint": "Not in the list? Type it in — the spot will be located on the map. Or the other way around: click the map and this field fills in automatically.",
         "mapPin": "Map pin",
-        "mapPinHint": "Optional: click the map to fine-tune the vessel's exact mooring spot. Defaults to the selected marina's point.",
+        "mapPinHint": "Click the map to set the exact mooring spot — the Location field fills in automatically. If a catalog location is already selected, this only fine-tunes its point.",
+        "mainPhoto": "Main photo",
+        "additionalPhotos": "Additional photos",
+        "photosHint": "JPEG, PNG, WebP, or AVIF, up to 20 MB per file — compressed automatically. The main photo is shown in search results. Up to 10 photos per vessel.",
         "descriptionRu": "Description (Russian)",
         "descriptionEn": "Description (English)",
         "lengthMeters": "Length, m",
@@ -657,6 +663,9 @@
         "altTextEn": "Description (en)",
         "addImage": "Add image",
         "removeImage": "Remove image",
+        "setPrimary": "Set as main",
+        "primaryBadge": "Main",
+        "photosRemaining": "You can add {count} more",
         "amenitiesTitle": "Amenities",
         "saveAmenities": "Save amenities",
         "amenitiesSaved": "Amenities saved",
@@ -666,7 +675,8 @@
           "generic": "Couldn't save. Please try again",
           "slugTaken": "That slug is already taken — choose another",
           "tooLarge": "File is too large (20 MB max)",
-          "invalidType": "Only JPEG, PNG, WebP, and AVIF images are supported"
+          "invalidType": "Only JPEG, PNG, WebP, and AVIF images are supported",
+          "maxImages": "Limit reached — up to 10 photos per vessel"
         }
       },
       "notFound": {

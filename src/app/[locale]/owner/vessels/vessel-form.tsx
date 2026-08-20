@@ -1,11 +1,16 @@
 "use client";
 
-import { useActionState, useState } from "react";
+import { useActionState, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { Locale } from "@/i18n/routing";
 import { createVessel, updateVessel, type VesselActionState } from "@/server/actions/vessels";
 import { vesselTypeValues } from "@/lib/validation/search";
-import { vesselStatusValues } from "@/lib/validation/vessel";
+import {
+  vesselStatusValues,
+  vesselImageAllowedTypes,
+  vesselImageMaxCount,
+} from "@/lib/validation/vessel";
+import { currencyCodes } from "@/lib/currencies";
 import type { SearchLocation, LocalizedText } from "@/server/queries/vessels";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,7 +31,51 @@ function locationLabel(location: SearchLocation, locale: Locale): string {
   return [city, country].filter(Boolean).join(", ");
 }
 
+/** Best-effort place label for a dropped pin — free OSM service, no API key. */
+async function reverseGeocodePoint(
+  latitude: number,
+  longitude: number,
+  locale: string,
+): Promise<string | null> {
+  const url = new URL("https://nominatim.openstreetmap.org/reverse");
+  url.searchParams.set("format", "jsonv2");
+  url.searchParams.set("lat", String(latitude));
+  url.searchParams.set("lon", String(longitude));
+  url.searchParams.set("zoom", "14");
+  url.searchParams.set("accept-language", locale);
+
+  const response = await fetch(url);
+  if (!response.ok) return null;
+  const data = await response.json();
+  const address = data.address ?? {};
+  const place: string | undefined =
+    address.city ?? address.town ?? address.village ?? address.county ?? address.state;
+  const country: string | undefined = address.country;
+  if (place && country) return `${place}, ${country}`;
+  return place ?? country ?? null;
+}
+
+/** Best-effort coordinates for a typed place name — free OSM service, no API key. */
+async function forwardGeocodePoint(
+  query: string,
+  locale: string,
+): Promise<{ lat: number; lng: number } | null> {
+  const url = new URL("https://nominatim.openstreetmap.org/search");
+  url.searchParams.set("format", "jsonv2");
+  url.searchParams.set("q", query);
+  url.searchParams.set("limit", "1");
+  url.searchParams.set("accept-language", locale);
+
+  const response = await fetch(url);
+  if (!response.ok) return null;
+  const results = await response.json();
+  const first = results[0];
+  if (!first) return null;
+  return { lat: Number(first.lat), lng: Number(first.lon) };
+}
+
 const initialState: VesselActionState = {};
+const NO_LOCATION = "__none__";
 
 export function VesselForm({
   mode,
@@ -59,12 +108,70 @@ export function VesselForm({
   const tTypes = useTranslations("vessels.types");
   const tStatus = useTranslations("owner.vessels.status");
   const locale = useLocale() as Locale;
+  const currencyNames = new Intl.DisplayNames([locale], { type: "currency" });
 
   const action = mode === "create" ? createVessel.bind(null, locale) : updateVessel.bind(null, locale, vesselId!);
   const [state, formAction, isPending] = useActionState(action, initialState);
 
   const [locationId, setLocationId] = useState(defaultValues?.locationId);
   const selectedLocation = locations.find((location) => location.id === locationId);
+  const [additionalPhotosError, setAdditionalPhotosError] = useState(false);
+
+  // The map pin can be moved two ways: the owner types a new location (forward-geocoded
+  // below) or drops a pin directly (reverse-geocoded back into the text field). Either one
+  // re-mounts LocationPicker at the resolved point via `mapKey`, matching how it already
+  // treats `initialLatitude`/`initialLongitude` as a fresh manual pin on mount.
+  const [pinOverride, setPinOverride] = useState<{ lat: number; lng: number } | null>(null);
+  const [mapKey, setMapKey] = useState(0);
+  const newLocationInputRef = useRef<HTMLInputElement>(null);
+  // Guards against an earlier geocode call resolving after a later, newer one.
+  const geocodeRequestRef = useRef(0);
+
+  const initialSelectedLocation = locations.find(
+    (location) => location.id === defaultValues?.locationId,
+  );
+  const initialLocationLabel = initialSelectedLocation
+    ? locationLabel(initialSelectedLocation, locale)
+    : "";
+
+  function handleSelectLocation(value: string) {
+    const next = value === NO_LOCATION ? undefined : value;
+    setLocationId(next);
+    setPinOverride(null);
+    setMapKey((key) => key + 1);
+    const location = locations.find((candidate) => candidate.id === next);
+    if (newLocationInputRef.current) {
+      newLocationInputRef.current.value = location ? locationLabel(location, locale) : "";
+    }
+  }
+
+  async function handleNewLocationBlur() {
+    const value = newLocationInputRef.current?.value.trim();
+    if (!value) return;
+    const requestId = ++geocodeRequestRef.current;
+    try {
+      const point = await forwardGeocodePoint(value, locale);
+      if (point && requestId === geocodeRequestRef.current) {
+        setPinOverride(point);
+        setMapKey((key) => key + 1);
+      }
+    } catch {
+      // Best-effort convenience — the owner can still drop the pin manually.
+    }
+  }
+
+  async function handlePin(latitude: number, longitude: number) {
+    setLocationId(undefined);
+    const requestId = ++geocodeRequestRef.current;
+    try {
+      const label = await reverseGeocodePoint(latitude, longitude, locale);
+      if (label && requestId === geocodeRequestRef.current && newLocationInputRef.current) {
+        newLocationInputRef.current.value = label;
+      }
+    } catch {
+      // Best-effort convenience — latitude/longitude are already captured either way.
+    }
+  }
 
   return (
     <div className="rounded-2xl border border-border bg-card p-6 shadow-soft md:p-8">
@@ -103,11 +210,12 @@ export function VesselForm({
 
         <div className="flex flex-col gap-2">
           <Label>{t("location")}</Label>
-          <Select name="locationId" value={locationId} onValueChange={setLocationId}>
+          <Select value={locationId ?? NO_LOCATION} onValueChange={handleSelectLocation}>
             <SelectTrigger className="w-full">
               <SelectValue placeholder={t("location")} />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value={NO_LOCATION}>{t("newLocationOption")}</SelectItem>
               {locations.map((location) => (
                 <SelectItem key={location.id} value={location.id}>
                   {locationLabel(location, locale)}
@@ -115,18 +223,62 @@ export function VesselForm({
               ))}
             </SelectContent>
           </Select>
+          <input type="hidden" name="locationId" value={locationId ?? ""} />
+          <Input
+            ref={newLocationInputRef}
+            name="newLocationName"
+            defaultValue={initialLocationLabel}
+            placeholder={t("newLocationPlaceholder")}
+            onChange={() => setLocationId(undefined)}
+            onBlur={handleNewLocationBlur}
+          />
+          <p className="text-xs font-light text-muted-foreground">{t("newLocationHint")}</p>
         </div>
+
+        {mode === "create" && (
+          <div className="flex flex-col gap-2 sm:col-span-2">
+            <Label htmlFor="mainPhoto">{t("mainPhoto")}</Label>
+            <Input
+              id="mainPhoto"
+              name="mainPhoto"
+              type="file"
+              accept={vesselImageAllowedTypes.join(",")}
+              required
+            />
+            <Label htmlFor="additionalPhotos" className="mt-2">
+              {t("additionalPhotos")}
+            </Label>
+            <Input
+              id="additionalPhotos"
+              name="additionalPhotos"
+              type="file"
+              accept={vesselImageAllowedTypes.join(",")}
+              multiple
+              onChange={(event) =>
+                setAdditionalPhotosError(
+                  (event.target.files?.length ?? 0) > vesselImageMaxCount - 1,
+                )
+              }
+            />
+            <p className="text-xs font-light text-muted-foreground">{t("photosHint")}</p>
+            {additionalPhotosError && (
+              <p className="text-sm text-destructive">{t("errors.maxImages")}</p>
+            )}
+          </div>
+        )}
 
         <div className="flex flex-col gap-2 sm:col-span-2">
           <Label>{t("mapPin")}</Label>
           <LocationPicker
+            key={mapKey}
             latName="latitude"
             lngName="longitude"
-            initialLatitude={defaultValues?.latitude}
-            initialLongitude={defaultValues?.longitude}
+            initialLatitude={pinOverride?.lat ?? defaultValues?.latitude}
+            initialLongitude={pinOverride?.lng ?? defaultValues?.longitude}
             fallbackLatitude={selectedLocation?.latitude}
             fallbackLongitude={selectedLocation?.longitude}
             hint={t("mapPinHint")}
+            onChange={handlePin}
           />
         </div>
 
@@ -214,14 +366,18 @@ export function VesselForm({
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="currency">{t("currency")}</Label>
-          <Input
-            id="currency"
-            name="currency"
-            maxLength={3}
-            className="uppercase"
-            defaultValue={defaultValues?.currency ?? "USD"}
-            required
-          />
+          <Select name="currency" defaultValue={defaultValues?.currency ?? "USD"}>
+            <SelectTrigger id="currency" className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {currencyCodes.map((code) => (
+                <SelectItem key={code} value={code}>
+                  {code} — {currencyNames.of(code)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
         </div>
 
         <div className="flex flex-col gap-2">
@@ -247,7 +403,7 @@ export function VesselForm({
         <Button
           type="submit"
           size="lg"
-          disabled={isPending}
+          disabled={isPending || additionalPhotosError}
           className="rounded-full sm:col-span-2 sm:w-fit"
         >
           {mode === "create" ? t("create") : t("save")}

@@ -161,7 +161,7 @@ export function LocationPicker({
     <div className="flex flex-col gap-2">
       <div
         ref={containerRef}
-        className="h-64 w-full overflow-hidden rounded-2xl border border-border"
+        className="isolate h-64 w-full overflow-hidden rounded-2xl border border-border"
       />
       {hint && <p className="text-xs font-light text-muted-foreground">{hint}</p>}
       {position && (

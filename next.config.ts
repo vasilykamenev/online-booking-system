@@ -19,6 +19,9 @@ const supabaseRemotePattern = supabaseUrl
 const nextConfig: NextConfig = {
   images: {
     remotePatterns: supabaseRemotePattern ? [supabaseRemotePattern] : [],
+    // Local Supabase Storage serves images from 127.0.0.1 — dev-only, never in production,
+    // where NEXT_PUBLIC_SUPABASE_URL points at a real (non-private-IP) domain.
+    dangerouslyAllowLocalIP: process.env.NODE_ENV !== "production",
   },
 };
 
