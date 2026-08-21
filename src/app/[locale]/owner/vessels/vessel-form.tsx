@@ -3,9 +3,10 @@
 import { useActionState, useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { Locale } from "@/i18n/routing";
-import { Link } from "@/i18n/navigation";
-import { createVessel, updateVessel, type VesselActionState } from "@/server/actions/vessels";
+import { Link, useRouter } from "@/i18n/navigation";
+import { addVesselImage, createVessel, updateVessel, type VesselActionState } from "@/server/actions/vessels";
 import { clearSessionDraft, readSessionDraft, writeSessionDraft } from "@/lib/storage/session-draft";
+import { uploadAndAttachVesselPhotos, validateVesselImageFile } from "@/lib/images/upload-raw";
 import { vesselTypeValues } from "@/lib/validation/search";
 import {
   vesselStatusValues,
@@ -196,6 +197,19 @@ export function VesselForm({
   const [additionalPhotoNames, setAdditionalPhotoNames] = useState<string[]>(
     initialDraft?.additionalPhotoNames ?? [],
   );
+  // The actual File objects, kept only in memory (never in the draft — they aren't
+  // JSON-serializable). Uploaded straight to Supabase Storage from the browser once the vessel
+  // row exists — see the effect below — which is what keeps this Server Action's request body
+  // tiny regardless of photo size (no more "Body exceeded 1 MB limit").
+  const [mainPhotoFile, setMainPhotoFile] = useState<File | null>(null);
+  const [additionalPhotoFiles, setAdditionalPhotoFiles] = useState<File[]>([]);
+  const [mainPhotoError, setMainPhotoError] = useState<"tooLarge" | "invalidType" | null>(null);
+  const [additionalPhotoError, setAdditionalPhotoError] = useState<"tooLarge" | "invalidType" | null>(
+    null,
+  );
+  const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
+  const [photoUploadError, setPhotoUploadError] = useState<string | null>(null);
+  const router = useRouter();
 
   // The map pin can be moved two ways: the owner types a new location (forward-geocoded
   // below) or drops a pin directly (reverse-geocoded back into the text field). Either one
@@ -219,17 +233,57 @@ export function VesselForm({
     });
   }, [draftKey, fields, locationId, pinOverride, mainPhotoName, additionalPhotoNames]);
 
-  // Clears the draft once a submission actually settles successfully: `updateVessel` returns `{}`
-  // directly, and `createVessel`'s redirect also resolves `isPending` back to false without ever
-  // setting `state.error`. `wasPendingRef` distinguishes that from the initial mount, which also
-  // starts out with `isPending === false` and `state.error === undefined`.
+  // Clears the draft once `updateVessel` actually settles successfully (it returns `{}` directly).
+  // `wasPendingRef` distinguishes that from the initial mount, which also starts out with
+  // `isPending === false` and `state.error === undefined`. `createVessel`'s success doesn't clear
+  // the draft here — for "create" the vessel row exists but photos haven't uploaded yet at that
+  // point, so the photo-upload effect below owns clearing the draft once that finishes too.
   const wasPendingRef = useRef(false);
   useEffect(() => {
+    if (mode !== "edit") return;
     if (wasPendingRef.current && !isPending && !state.error) {
       clearSessionDraft(draftKey);
     }
     wasPendingRef.current = isPending;
-  }, [isPending, state.error, draftKey]);
+  }, [mode, isPending, state.error, draftKey]);
+
+  // `createVessel` only creates the metadata row — its request body stays tiny (text fields only)
+  // regardless of photo size, which is what avoids the "Body exceeded 1 MB limit" error a raw
+  // photo used to trigger. Once it returns a `vesselId`, this uploads the cover photo (and any
+  // extras) straight to Supabase Storage from the browser and attaches each one, then navigates
+  // to the edit page. If a photo fails to attach, the vessel still exists — the owner is pointed
+  // at the edit page's photo manager (which goes through the same upload path) to finish there.
+  useEffect(() => {
+    if (!state.vesselId) return;
+    const newVesselId = state.vesselId;
+    let cancelled = false;
+
+    async function attachPhotos() {
+      setIsUploadingPhotos(true);
+      setPhotoUploadError(null);
+      const photos = mainPhotoFile ? [mainPhotoFile, ...additionalPhotoFiles] : [];
+      const result = await uploadAndAttachVesselPhotos(newVesselId, fields.name, photos, (id, rawPath) =>
+        addVesselImage(locale, id, fields.name, rawPath),
+      );
+      if (cancelled) return;
+
+      if (result.error) {
+        setIsUploadingPhotos(false);
+        setPhotoUploadError(t(`errors.${result.error}`));
+        return;
+      }
+      clearSessionDraft(draftKey);
+      router.push(`/owner/vessels/${newVesselId}/edit`);
+    }
+
+    void attachPhotos();
+    return () => {
+      cancelled = true;
+    };
+    // Runs once per newly created vessel id, using whichever files were selected at submit time —
+    // not meant to re-run on later, unrelated state changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state.vesselId]);
 
   function handleSelectLocation(value: string) {
     const next = value === NO_LOCATION ? undefined : value;
@@ -359,34 +413,39 @@ export function VesselForm({
             <Label htmlFor="mainPhoto">{t("mainPhoto")}</Label>
             <Input
               id="mainPhoto"
-              name="mainPhoto"
               type="file"
               accept={vesselImageAllowedTypes.join(",")}
-              onChange={(event) => setMainPhotoName(event.target.files?.[0]?.name ?? null)}
-              aria-invalid={Boolean(fieldError("mainPhoto"))}
+              onChange={(event) => {
+                const file = event.target.files?.[0] ?? null;
+                setMainPhotoFile(file);
+                setMainPhotoName(file?.name ?? null);
+                setMainPhotoError(file ? validateVesselImageFile(file) : null);
+              }}
+              aria-invalid={Boolean(mainPhotoError)}
               required
             />
             {mainPhotoName && (
               <p className="text-xs font-light text-muted-foreground">{mainPhotoName}</p>
             )}
-            {fieldError("mainPhoto") && (
-              <p className="text-sm text-destructive">{fieldError("mainPhoto")}</p>
-            )}
+            {mainPhotoError && <p className="text-sm text-destructive">{t(`errors.${mainPhotoError}`)}</p>}
             <Label htmlFor="additionalPhotos" className="mt-2">
               {t("additionalPhotos")}
             </Label>
             <Input
               id="additionalPhotos"
-              name="additionalPhotos"
               type="file"
               accept={vesselImageAllowedTypes.join(",")}
               multiple
               onChange={(event) => {
-                const files = event.target.files;
-                setAdditionalPhotosError((files?.length ?? 0) > vesselImageMaxCount - 1);
-                setAdditionalPhotoNames(files ? Array.from(files).map((file) => file.name) : []);
+                const files = event.target.files ? Array.from(event.target.files) : [];
+                setAdditionalPhotosError(files.length > vesselImageMaxCount - 1);
+                setAdditionalPhotoFiles(files);
+                setAdditionalPhotoNames(files.map((file) => file.name));
+                setAdditionalPhotoError(
+                  files.map(validateVesselImageFile).find((error) => error !== null) ?? null,
+                );
               }}
-              aria-invalid={Boolean(fieldError("additionalPhotos"))}
+              aria-invalid={Boolean(additionalPhotoError)}
             />
             {additionalPhotoNames.length > 0 && (
               <p className="text-xs font-light text-muted-foreground">
@@ -397,8 +456,8 @@ export function VesselForm({
             {additionalPhotosError && (
               <p className="text-sm text-destructive">{t("errors.maxImages")}</p>
             )}
-            {fieldError("additionalPhotos") && (
-              <p className="text-sm text-destructive">{fieldError("additionalPhotos")}</p>
+            {additionalPhotoError && (
+              <p className="text-sm text-destructive">{t(`errors.${additionalPhotoError}`)}</p>
             )}
           </div>
         )}
@@ -563,11 +622,26 @@ export function VesselForm({
           <p className="text-sm text-destructive sm:col-span-2">{t(`errors.${state.error}`)}</p>
         )}
 
+        {isUploadingPhotos && (
+          <p className="text-sm text-muted-foreground sm:col-span-2">{t("uploadingPhotos")}</p>
+        )}
+
+        {photoUploadError && (
+          <div className="text-sm text-destructive sm:col-span-2">
+            <p>{photoUploadError}</p>
+            {state.vesselId && (
+              <Link href={`/owner/vessels/${state.vesselId}/edit`} className="underline">
+                {t("photoUploadFailedCta")}
+              </Link>
+            )}
+          </div>
+        )}
+
         <div className="flex items-center gap-3 sm:col-span-2">
           <Button
             type="submit"
             size="lg"
-            disabled={isPending || additionalPhotosError}
+            disabled={isPending || additionalPhotosError || Boolean(mainPhotoError) || Boolean(additionalPhotoError) || isUploadingPhotos}
             className="rounded-full sm:w-fit"
           >
             {mode === "create" ? t("create") : t("save")}

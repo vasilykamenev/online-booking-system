@@ -627,7 +627,8 @@
         "published": "Published",
         "archived": "Archived",
         "updated": "Status updated",
-        "updateError": "Couldn't update the status"
+        "updateError": "Couldn't update the status",
+        "noPhotosError": "Can't publish without a photo — add at least one cover photo first"
       },
       "form": {
         "name": "Name",
@@ -654,11 +655,14 @@
         "create": "Create vessel",
         "save": "Save changes",
         "cancel": "Cancel",
+        "uploadingPhotos": "Uploading photos…",
+        "photoUploadFailedCta": "Go to the editor to add photos",
         "createTitle": "New vessel",
         "createSubtitle": "Fill in the specifications — you can publish it later.",
         "editTitle": "Edit vessel",
         "editSubtitle": "Core specifications, images, and amenities.",
         "imagesTitle": "Images",
+        "noPhotosWarning": "This vessel has no photos yet. It can't be published without a cover photo — add at least one below. If a previous upload failed partway through, just try again.",
         "imageFileHint": "JPEG, PNG, WebP, or AVIF, up to 20 MB — compressed automatically on upload",
         "altTextRu": "Description (ru)",
         "altTextEn": "Description (en)",
@@ -682,7 +686,8 @@
           "fieldInvalid": "Invalid value",
           "invalidSlug": "Lowercase letters, numbers, and hyphens only",
           "geocodeFailed": "Couldn't resolve a city and country for this point — try a more precise spot or pick a catalog location",
-          "networkError": "Trouble connecting to the server. Check your internet connection and try again"
+          "networkError": "Trouble connecting to the server. Check your internet connection and try again",
+          "noPhotos": "Can't publish without a photo — add at least one cover photo first"
         }
       },
       "notFound": {

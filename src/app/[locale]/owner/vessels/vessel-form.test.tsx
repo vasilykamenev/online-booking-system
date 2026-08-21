@@ -39,6 +39,7 @@ vi.mock("@/i18n/navigation", () => ({
       {children}
     </a>
   ),
+  useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
 }));
 
 // The map widget dynamically imports Leaflet and drives real DOM/canvas APIs jsdom doesn't
@@ -47,11 +48,18 @@ vi.mock("@/components/map/location-picker", () => ({
   LocationPicker: () => null,
 }));
 
-// Never actually invoked in these tests (the form is never submitted), but the real module is a
-// "use server" file pulling in the Supabase/Next server graph — mocked to keep the test isolated.
+// Never actually invoked in these tests (the form is never submitted), but the real modules are
+// either "use server" files pulling in the Supabase/Next server graph, or hit real browser
+// storage APIs — mocked to keep the test isolated.
 vi.mock("@/server/actions/vessels", () => ({
   createVessel: vi.fn(async () => ({})),
   updateVessel: vi.fn(async () => ({})),
+  addVesselImage: vi.fn(async () => ({})),
+}));
+
+vi.mock("@/lib/images/upload-raw", () => ({
+  uploadAndAttachVesselPhotos: vi.fn(async () => ({})),
+  validateVesselImageFile: () => null,
 }));
 
 const NEW_VESSEL_DRAFT_KEY = "vessel-form-draft:new";

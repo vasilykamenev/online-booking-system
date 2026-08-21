@@ -9,6 +9,8 @@ export interface VesselActionState {
   error?: string;
   /** Per-field error codes (translated client-side via `errors.${code}`), keyed by form field name. */
   fieldErrors?: Record<string, string>;
+  /** Set by `createVessel` on success — the new vessel's id, for the client to attach photos to. */
+  vesselId?: string;
 }
 
 /** Custom messages already set on the schema (regex/refine) are specific enough to show as-is; anything else collapses to "required" or "fieldInvalid" based on whether the submitted value was empty. */

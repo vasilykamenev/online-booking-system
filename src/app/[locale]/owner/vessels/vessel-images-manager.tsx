@@ -1,58 +1,77 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { useRef, useState, useTransition, type FormEvent } from "react";
 import { toast } from "sonner";
 import Image from "next/image";
 import { Star, X } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import type { Locale } from "@/i18n/routing";
 import { useRouter } from "@/i18n/navigation";
-import {
-  addVesselImage,
-  removeVesselImage,
-  setPrimaryVesselImage,
-  type VesselActionState,
-} from "@/server/actions/vessels";
-import { vesselImageMaxCount } from "@/lib/validation/vessel";
+import { addVesselImage, removeVesselImage, setPrimaryVesselImage } from "@/server/actions/vessels";
+import { uploadAndAttachVesselPhotos, validateVesselImageFile } from "@/lib/images/upload-raw";
+import { vesselImageAllowedTypes, vesselImageMaxCount } from "@/lib/validation/vessel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { LocalizedText } from "@/server/queries/vessels";
 
-const initialState: VesselActionState = {};
-
 export function VesselImagesManager({
   vesselId,
+  vesselName,
   images,
 }: {
   vesselId: string;
+  vesselName: string;
   images: { id: string; url: string; altText: LocalizedText }[];
 }) {
   const t = useTranslations("owner.vessels.form");
   const locale = useLocale() as Locale;
   const router = useRouter();
-  const [state, formAction, isPending] = useActionState(
-    addVesselImage.bind(null, locale, vesselId),
-    initialState,
-  );
   const [isRemoving, startRemoving] = useTransition();
   const [settingPrimaryId, setSettingPrimaryId] = useState<string | null>(null);
   const [isSettingPrimary, startSettingPrimary] = useTransition();
-  const formRef = useRef<HTMLFormElement>(null);
-  const isFirstRender = useRef(true);
   const maxReached = images.length >= vesselImageMaxCount;
   // Images arrive pre-sorted by sort_order (server/queries/owner.ts) — the first one is the cover photo.
   const primaryId = images[0]?.id;
 
-  useEffect(() => {
-    if (isFirstRender.current) {
-      isFirstRender.current = false;
-      return;
-    }
-    if (!state.error) {
-      formRef.current?.reset();
-    }
-  }, [state]);
+  // The file is uploaded directly to Supabase Storage from the browser (see uploadRawVesselImage)
+  // before `addVesselImage` is ever called, so the Server Action only ever receives the resulting
+  // storage path plus two short text fields — never the photo's bytes. That's what keeps this
+  // request body tiny regardless of the original photo's size ("Body exceeded 1 MB limit" no
+  // longer applies here).
+  const [isAdding, startAdding] = useTransition();
+  const [addError, setAddError] = useState<string | null>(null);
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [fileError, setFileError] = useState<"tooLarge" | "invalidType" | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const altTextRuRef = useRef<HTMLInputElement>(null);
+  const altTextEnRef = useRef<HTMLInputElement>(null);
+
+  function handleFileChange(file: File | null) {
+    setSelectedFile(file);
+    setFileError(file ? validateVesselImageFile(file) : null);
+  }
+
+  function handleAddSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!selectedFile || fileError) return;
+    setAddError(null);
+    startAdding(async () => {
+      const result = await uploadAndAttachVesselPhotos(vesselId, vesselName, [selectedFile], (id, rawPath) =>
+        addVesselImage(locale, id, vesselName, rawPath, altTextRuRef.current?.value, altTextEnRef.current?.value),
+      );
+      if (result.error) {
+        setAddError(t(`errors.${result.error}`));
+        return;
+      }
+      setSelectedFile(null);
+      setFileError(null);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (altTextRuRef.current) altTextRuRef.current.value = "";
+      if (altTextEnRef.current) altTextEnRef.current.value = "";
+      router.refresh();
+    });
+  }
 
   function handleRemove(imageId: string) {
     startRemoving(async () => {
@@ -130,30 +149,29 @@ export function VesselImagesManager({
       {maxReached ? (
         <p className="mt-4 text-xs text-muted-foreground">{t("errors.maxImages")}</p>
       ) : (
-        <form
-          ref={formRef}
-          action={formAction}
-          className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3"
-        >
+        <form onSubmit={handleAddSubmit} className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Input
+            ref={fileInputRef}
             type="file"
-            name="file"
-            accept="image/jpeg,image/png,image/webp,image/avif"
+            accept={vesselImageAllowedTypes.join(",")}
+            onChange={(event) => handleFileChange(event.target.files?.[0] ?? null)}
+            aria-invalid={Boolean(fileError)}
             required
           />
-          <Input name="altTextRu" placeholder={t("altTextRu")} />
-          <Input name="altTextEn" placeholder={t("altTextEn")} />
+          <Input ref={altTextRuRef} name="altTextRu" placeholder={t("altTextRu")} />
+          <Input ref={altTextEnRef} name="altTextEn" placeholder={t("altTextEn")} />
           <p className="text-xs text-muted-foreground sm:col-span-3">
             {t("imageFileHint")} {t("photosRemaining", { count: vesselImageMaxCount - images.length })}
           </p>
-          {state.error && (
-            <p className="text-sm text-destructive sm:col-span-3">{t(`errors.${state.error}`)}</p>
+          {fileError && (
+            <p className="text-sm text-destructive sm:col-span-3">{t(`errors.${fileError}`)}</p>
           )}
+          {addError && <p className="text-sm text-destructive sm:col-span-3">{addError}</p>}
           <Button
             type="submit"
             variant="outline"
             size="sm"
-            disabled={isPending}
+            disabled={isAdding || !selectedFile || Boolean(fileError)}
             className="w-fit rounded-full sm:col-span-3"
           >
             {t("addImage")}

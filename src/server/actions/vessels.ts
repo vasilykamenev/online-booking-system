@@ -2,21 +2,16 @@
 
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
-import { redirect } from "@/i18n/navigation";
 import type { Locale } from "@/i18n/routing";
 import {
   vesselSchema,
   vesselImageSchema,
-  vesselCreateImagesSchema,
   vesselImageMaxCount,
   vesselStatusValues,
   type VesselInput,
 } from "@/lib/validation/vessel";
-import {
-  optimizeImage,
-  OPTIMIZED_IMAGE_CONTENT_TYPE,
-  OPTIMIZED_IMAGE_EXTENSION,
-} from "@/lib/images/optimize";
+import { optimizeImage, OPTIMIZED_IMAGE_CONTENT_TYPE } from "@/lib/images/optimize";
+import { vesselImageFinalPath } from "@/lib/images/vessel-image-path";
 import { reverseGeocodeBilingual } from "@/lib/geo/reverse-geocode";
 import {
   buildFieldErrors,
@@ -32,6 +27,11 @@ export async function loadMoreVessels(filters: SearchFilters): Promise<SearchRes
   return searchVessels(filters);
 }
 
+// Originals and optimized photos share this one bucket, distinguished only by path: the browser
+// stages an original under `{vesselId}/raw/...` (bypassing the Next.js server entirely — see
+// src/lib/images/upload-raw.ts — which is what keeps a Server Action's request body tiny even for
+// a full-size camera photo), and `attachOptimizedVesselImage` below re-uploads the optimized
+// result to `{vesselId}/...` before deleting the staged original.
 const VESSEL_IMAGES_BUCKET = "vessel-images";
 
 function parseVesselForm(formData: FormData) {
@@ -55,17 +55,28 @@ function parseVesselForm(formData: FormData) {
   });
 }
 
-/** Optimizes and uploads one photo, then records it. Throws on any failure — caller rolls back. */
-async function uploadVesselImage(
+/**
+ * Downloads a photo the browser already staged at `{vesselId}/raw/...`, optimizes it, and
+ * records it as a vessel image. Throws on any failure — caller rolls back. The download is a
+ * server-to-server call to Supabase Storage, not an inbound request to this server, so it isn't
+ * subject to the Server Action body-size limit no matter how large the original photo was.
+ */
+async function attachOptimizedVesselImage(
   supabase: Awaited<ReturnType<typeof createClient>>,
   vesselId: string,
-  file: File,
+  vesselName: string,
+  rawPath: string,
   sortOrder: number,
   uploadedPaths: string[],
   altText?: { ru: string; en: string },
 ) {
-  const optimized = await optimizeImage(await file.arrayBuffer());
-  const path = `${vesselId}/${crypto.randomUUID()}.${OPTIMIZED_IMAGE_EXTENSION}`;
+  const { data: rawFile, error: downloadError } = await supabase.storage
+    .from(VESSEL_IMAGES_BUCKET)
+    .download(rawPath);
+  if (downloadError || !rawFile) throw downloadError ?? new Error("raw vessel image not found");
+
+  const optimized = await optimizeImage(await rawFile.arrayBuffer());
+  const path = vesselImageFinalPath(vesselId, vesselName);
 
   const { error: uploadError } = await supabase.storage
     .from(VESSEL_IMAGES_BUCKET)
@@ -84,6 +95,21 @@ async function uploadVesselImage(
     ...(altText && { alt_text: altText }),
   });
   if (insertError) throw insertError;
+
+  // Best-effort cleanup of the staging copy — a leftover raw file costs storage, not correctness.
+  await supabase.storage.from(VESSEL_IMAGES_BUCKET).remove([rawPath]);
+}
+
+/** Vessel status can only become "published" once it has at least one photo (the cover shot). */
+async function hasVesselPhoto(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  vesselId: string,
+): Promise<boolean> {
+  const { count } = await supabase
+    .from("vessel_images")
+    .select("id", { count: "exact", head: true })
+    .eq("vessel_id", vesselId);
+  return (count ?? 0) > 0;
 }
 
 /**
@@ -126,6 +152,15 @@ async function resolveLocationId(
   return { locationId: location.id };
 }
 
+/**
+ * Creates the vessel row from its text/number fields only — no photo bytes travel through this
+ * request, so its body stays well under Next's default 1 MB Server Action limit regardless of
+ * how many/large the owner's photos are. On success, the caller (`VesselForm`) uploads the cover
+ * photo (and any extras) directly to Supabase Storage and attaches them via `addVesselImage`
+ * before navigating to the edit page — the vessel therefore briefly exists without photos, which
+ * `VesselForm` accounts for by not treating "created" as "done" until at least the cover photo
+ * lands, and by pointing the owner at the edit page's photo manager to retry if it doesn't.
+ */
 export async function createVessel(
   locale: Locale,
   _prevState: VesselActionState,
@@ -134,31 +169,14 @@ export async function createVessel(
   const parsed = parseVesselForm(formData);
   if (!parsed.success) return { error: "invalid", fieldErrors: buildFieldErrors(formData, parsed.error) };
 
-  // A cover photo is required at registration (used as the vessel's search-result thumbnail);
-  // up to 9 more can be attached in the same submission, the rest later from the edit page.
-  const additionalPhotos = formData
-    .getAll("additionalPhotos")
-    .filter((entry): entry is File => entry instanceof File && entry.size > 0);
-  const photosParsed = vesselCreateImagesSchema.safeParse({
-    mainPhoto: formData.get("mainPhoto"),
-    additionalPhotos,
-  });
-  if (!photosParsed.success) {
-    const firstIssue = photosParsed.error.issues[0];
-    const field = String(firstIssue?.path[0] ?? "mainPhoto");
-    return {
-      error: firstIssue?.message ?? "invalid",
-      fieldErrors: { [field]: firstIssue?.message ?? "invalid" },
-    };
+  // No vessel_images row can exist yet at creation time — photos are attached in a follow-up
+  // step (see the doc comment above) — so "published" is never satisfiable here. Draft/archived
+  // are unaffected; the owner can publish later via updateVessel/updateVesselStatus once a cover
+  // photo is attached.
+  if (parsed.data.status === "published") {
+    return { error: "noPhotos", fieldErrors: { status: "noPhotos" } };
   }
 
-  // Everything below can throw on infra failures the explicit `{ error }` checks below don't
-  // cover (a dropped DB connection, the Supabase client itself throwing, etc.). Catching it here
-  // turns that into a normal returned state — see `handleUnexpectedActionError` — instead of an
-  // uncaught exception that trips the route's error boundary and unmounts the form. `redirect()`
-  // deliberately stays outside this block: it works by throwing Next's own control-flow error,
-  // which must propagate untouched.
-  let vesselId: string;
   try {
     const supabase = await createClient();
     const {
@@ -193,27 +211,11 @@ export async function createVessel(
 
     if (error) return vesselDbError(error);
 
-    const photos = [photosParsed.data.mainPhoto, ...photosParsed.data.additionalPhotos];
-    const uploadedPaths: string[] = [];
-    try {
-      for (const [index, file] of photos.entries()) {
-        await uploadVesselImage(supabase, vessel.id, file, index, uploadedPaths);
-      }
-    } catch {
-      if (uploadedPaths.length > 0) {
-        await supabase.storage.from(VESSEL_IMAGES_BUCKET).remove(uploadedPaths);
-      }
-      await supabase.from("vessels").delete().eq("id", vessel.id);
-      return { error: "generic" };
-    }
-
-    vesselId = vessel.id;
+    revalidatePath(`/${locale}/owner/vessels`);
+    return { vesselId: vessel.id };
   } catch (err) {
     return handleUnexpectedActionError("createVessel", err);
   }
-
-  revalidatePath(`/${locale}/owner/vessels`);
-  return redirect({ href: `/owner/vessels/${vesselId}/edit`, locale });
 }
 
 export async function updateVessel(
@@ -233,6 +235,10 @@ export async function updateVessel(
       data: { user },
     } = await supabase.auth.getUser();
     if (!user) return { error: "unauthenticated" };
+
+    if (parsed.data.status === "published" && !(await hasVesselPhoto(supabase, vesselId))) {
+      return { error: "noPhotos", fieldErrors: { status: "noPhotos" } };
+    }
 
     const locationResult = await resolveLocationId(supabase, parsed.data);
     if ("error" in locationResult) return locationResult.error;
@@ -269,7 +275,7 @@ export async function updateVessel(
 }
 
 export interface VesselStatusResult {
-  error?: "unauthenticated" | "generic";
+  error?: "unauthenticated" | "generic" | "noPhotos";
 }
 
 export async function updateVesselStatus(
@@ -283,6 +289,10 @@ export async function updateVesselStatus(
   } = await supabase.auth.getUser();
   if (!user) return { error: "unauthenticated" };
 
+  if (status === "published" && !(await hasVesselPhoto(supabase, vesselId))) {
+    return { error: "noPhotos" };
+  }
+
   const { error } = await supabase
     .from("vessels")
     .update({ status })
@@ -294,43 +304,55 @@ export async function updateVesselStatus(
   return {};
 }
 
+/**
+ * Attaches a photo the browser already uploaded directly to `{vesselId}/raw/...` (see
+ * `uploadRawVesselImage`, src/lib/images/upload-raw.ts). Used both right after `createVessel`
+ * (for the cover photo and any extras) and from the edit page's photo manager — in both cases
+ * the request carries only a storage path and some short text fields, never photo bytes.
+ */
 export async function addVesselImage(
   locale: Locale,
   vesselId: string,
-  _prevState: VesselActionState,
-  formData: FormData,
+  vesselName: string,
+  rawPath: string,
+  altTextRu?: string,
+  altTextEn?: string,
 ): Promise<VesselActionState> {
-  const parsed = vesselImageSchema.safeParse({
-    vesselId,
-    file: formData.get("file"),
-    altTextRu: formData.get("altTextRu"),
-    altTextEn: formData.get("altTextEn"),
-  });
-  if (!parsed.success) return { error: parsed.error.issues[0]?.message ?? "invalid" };
+  const parsed = vesselImageSchema.safeParse({ vesselId, vesselName, rawPath, altTextRu, altTextEn });
+  if (!parsed.success) return { error: "invalid" };
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "unauthenticated" };
-
-  const { count } = await supabase
-    .from("vessel_images")
-    .select("id", { count: "exact", head: true })
-    .eq("vessel_id", parsed.data.vesselId);
-  if ((count ?? 0) >= vesselImageMaxCount) return { error: "maxImages" };
-
-  const uploadedPaths: string[] = [];
   try {
-    await uploadVesselImage(supabase, parsed.data.vesselId, parsed.data.file, count ?? 0, uploadedPaths, {
-      ru: parsed.data.altTextRu,
-      en: parsed.data.altTextEn,
-    });
-  } catch {
-    if (uploadedPaths.length > 0) {
-      await supabase.storage.from(VESSEL_IMAGES_BUCKET).remove(uploadedPaths);
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { error: "unauthenticated" };
+
+    const { count } = await supabase
+      .from("vessel_images")
+      .select("id", { count: "exact", head: true })
+      .eq("vessel_id", parsed.data.vesselId);
+    if ((count ?? 0) >= vesselImageMaxCount) return { error: "maxImages" };
+
+    const uploadedPaths: string[] = [];
+    try {
+      await attachOptimizedVesselImage(
+        supabase,
+        parsed.data.vesselId,
+        parsed.data.vesselName,
+        parsed.data.rawPath,
+        count ?? 0,
+        uploadedPaths,
+        { ru: parsed.data.altTextRu, en: parsed.data.altTextEn },
+      );
+    } catch {
+      if (uploadedPaths.length > 0) {
+        await supabase.storage.from(VESSEL_IMAGES_BUCKET).remove(uploadedPaths);
+      }
+      return { error: "generic" };
     }
-    return { error: "generic" };
+  } catch (err) {
+    return handleUnexpectedActionError("addVesselImage", err);
   }
 
   revalidatePath(`/${locale}/owner/vessels/${vesselId}/edit`);

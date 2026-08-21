@@ -69,8 +69,11 @@ export default async function EditVesselPage({
 
       <div className="rounded-2xl border border-border bg-card p-6 shadow-soft md:p-8">
         <h2 className="text-base font-medium tracking-tight">{t("imagesTitle")}</h2>
+        {vessel.images.length === 0 && (
+          <p className="mt-2 text-sm text-destructive">{t("noPhotosWarning")}</p>
+        )}
         <div className="mt-4">
-          <VesselImagesManager vesselId={vessel.id} images={vessel.images} />
+          <VesselImagesManager vesselId={vessel.id} vesselName={vessel.name} images={vessel.images} />
         </div>
       </div>
 

@@ -33,7 +33,7 @@ export function VesselStatusSelect({
     startTransition(async () => {
       const result = await updateVesselStatus(locale, vesselId, value as VesselStatus);
       if (result.error) {
-        toast.error(t("updateError"));
+        toast.error(result.error === "noPhotos" ? t("noPhotosError") : t("updateError"));
         return;
       }
       toast.success(t("updated"));

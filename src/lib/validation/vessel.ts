@@ -60,9 +60,11 @@ export const vesselSchema = z
   );
 export type VesselInput = z.infer<typeof vesselSchema>;
 
-// Raw upload ceiling before server-side compression (src/lib/images/optimize.ts)
-// — a generous bound on the original camera/phone file, not the stored size.
-// Guards decode time/memory in the server action, not final storage footprint.
+// Raw upload ceiling before server-side compression (src/lib/images/optimize.ts) — a generous
+// bound on the original camera/phone file, not the stored size. Enforced by the browser (accept
+// attribute + this constant) and by the `vessel-images` storage bucket's own file_size_limit
+// (supabase/migrations/20260821090001_vessel_images_raw_staging.sql) — the original file never
+// passes through a Server Action, so there's nothing here to check it against server-side.
 export const vesselImageMaxBytes = 20 * 1024 * 1024;
 export const vesselImageAllowedTypes = [
   "image/jpeg",
@@ -74,25 +76,18 @@ export const vesselImageAllowedTypes = [
 // Total photos per vessel (1 main + up to 9 additional), enforced client- and server-side.
 export const vesselImageMaxCount = 10;
 
-const vesselImageFile = z
-  .instanceof(File, { message: "invalid" })
-  .refine((file) => file.size > 0, { message: "invalid" })
-  .refine((file) => file.size <= vesselImageMaxBytes, { message: "tooLarge" })
-  .refine((file) => vesselImageAllowedTypes.includes(file.type as never), {
-    message: "invalidType",
-  });
+// `{vesselId}/raw/{name-slug}-{timestampHash}{random}.{ext}` — see vesselImageRawPath
+// (src/lib/images/vessel-image-path.ts) and the storage bucket's RLS policies. Just a shape
+// check; real authorization is the storage/DB RLS.
+const rawImagePath = z
+  .string()
+  .regex(/^[0-9a-f-]{36}\/raw\/[a-z0-9-]+\.(jpg|png|webp|avif)$/i, { message: "invalid" });
 
 export const vesselImageSchema = z.object({
   vesselId: z.guid(),
-  file: vesselImageFile,
+  vesselName: z.string().trim().min(1).max(200),
+  rawPath: rawImagePath,
   altTextRu: z.string().trim().max(300).default(""),
   altTextEn: z.string().trim().max(300).default(""),
 });
 export type VesselImageInput = z.infer<typeof vesselImageSchema>;
-
-// Registration requires a cover photo up front; the rest can follow later from the edit page.
-export const vesselCreateImagesSchema = z.object({
-  mainPhoto: vesselImageFile,
-  additionalPhotos: z.array(vesselImageFile).max(vesselImageMaxCount - 1, { message: "maxImages" }),
-});
-export type VesselCreateImagesInput = z.infer<typeof vesselCreateImagesSchema>;
