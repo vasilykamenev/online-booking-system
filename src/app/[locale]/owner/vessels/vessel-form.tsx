@@ -1,10 +1,11 @@
 "use client";
 
-import { useActionState, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { Locale } from "@/i18n/routing";
 import { Link } from "@/i18n/navigation";
 import { createVessel, updateVessel, type VesselActionState } from "@/server/actions/vessels";
+import { clearSessionDraft, readSessionDraft, writeSessionDraft } from "@/lib/storage/session-draft";
 import { vesselTypeValues } from "@/lib/validation/search";
 import {
   vesselStatusValues,
@@ -78,6 +79,35 @@ async function forwardGeocodePoint(
 const initialState: VesselActionState = {};
 const NO_LOCATION = "__none__";
 
+interface VesselFormFields {
+  name: string;
+  slug: string;
+  type: string;
+  newLocationName: string;
+  descriptionRu: string;
+  descriptionEn: string;
+  lengthMeters: string;
+  yearBuilt: string;
+  cabins: string;
+  guestsCapacity: string;
+  basePrice: string;
+  currency: string;
+  status: string;
+}
+
+/** Everything needed to fully reconstruct the form's editable state after a remount. */
+interface VesselFormDraft {
+  fields: VesselFormFields;
+  locationId?: string;
+  pinOverride: { lat: number; lng: number } | null;
+  mainPhotoName: string | null;
+  additionalPhotoNames: string[];
+}
+
+// Long enough to survive an owner clicking "Try again" (or refreshing) moments after an error,
+// short enough that a genuinely abandoned draft doesn't resurface days later on an unrelated visit.
+const DRAFT_TTL_MS = 15 * 60 * 1000;
+
 export function VesselForm({
   mode,
   vesselId,
@@ -114,6 +144,13 @@ export function VesselForm({
   const action = mode === "create" ? createVessel.bind(null, locale) : updateVessel.bind(null, locale, vesselId!);
   const [state, formAction, isPending] = useActionState(action, initialState);
 
+  const draftKey = mode === "create" ? "vessel-form-draft:new" : `vessel-form-draft:${vesselId}`;
+  // A same-tab draft saved just before an unexpected error — e.g. the owner/error.tsx boundary's
+  // "Try again" button remounts this form from scratch after a Server Action threw. Read once via
+  // the lazy `useState` initializers below (not an effect) so the very first client render already
+  // has the restored values, with no extra render pass or setState-during-effect.
+  const [initialDraft] = useState(() => readSessionDraft<VesselFormDraft>(draftKey, DRAFT_TTL_MS));
+
   const initialSelectedLocation = locations.find(
     (location) => location.id === defaultValues?.locationId,
   );
@@ -127,42 +164,72 @@ export function VesselForm({
   // of relying on `defaultValue` sidesteps that: state survives the reset because
   // React re-syncs controlled `value` props on the next render regardless of what the
   // native reset did to the DOM.
-  const [fields, setFields] = useState({
-    name: defaultValues?.name ?? "",
-    slug: defaultValues?.slug ?? "",
-    type: defaultValues?.type ?? "",
-    newLocationName: initialLocationLabel,
-    descriptionRu: defaultValues?.descriptionRu ?? "",
-    descriptionEn: defaultValues?.descriptionEn ?? "",
-    lengthMeters: defaultValues?.lengthMeters?.toString() ?? "",
-    yearBuilt: defaultValues?.yearBuilt?.toString() ?? "",
-    cabins: defaultValues?.cabins?.toString() ?? "",
-    guestsCapacity: defaultValues?.guestsCapacity?.toString() ?? "",
-    basePrice: defaultValues?.basePrice?.toString() ?? "",
-    currency: defaultValues?.currency ?? "USD",
-    status: defaultValues?.status ?? "draft",
-  });
+  const [fields, setFields] = useState<VesselFormFields>(
+    () =>
+      initialDraft?.fields ?? {
+        name: defaultValues?.name ?? "",
+        slug: defaultValues?.slug ?? "",
+        type: defaultValues?.type ?? "",
+        newLocationName: initialLocationLabel,
+        descriptionRu: defaultValues?.descriptionRu ?? "",
+        descriptionEn: defaultValues?.descriptionEn ?? "",
+        lengthMeters: defaultValues?.lengthMeters?.toString() ?? "",
+        yearBuilt: defaultValues?.yearBuilt?.toString() ?? "",
+        cabins: defaultValues?.cabins?.toString() ?? "",
+        guestsCapacity: defaultValues?.guestsCapacity?.toString() ?? "",
+        basePrice: defaultValues?.basePrice?.toString() ?? "",
+        currency: defaultValues?.currency ?? "USD",
+        status: defaultValues?.status ?? "draft",
+      },
+  );
   function setField<K extends keyof typeof fields>(key: K, value: (typeof fields)[K]) {
     setFields((prev) => ({ ...prev, [key]: value }));
   }
 
-  const [locationId, setLocationId] = useState(defaultValues?.locationId);
+  const [locationId, setLocationId] = useState(initialDraft?.locationId ?? defaultValues?.locationId);
   const selectedLocation = locations.find((location) => location.id === locationId);
   const [additionalPhotosError, setAdditionalPhotosError] = useState(false);
   // File inputs can't be programmatically restored after a submission (browsers clear
   // them for security), so this just lets the owner see what they'd picked before an
   // error, rather than silently losing that context along with the actual files.
-  const [mainPhotoName, setMainPhotoName] = useState<string | null>(null);
-  const [additionalPhotoNames, setAdditionalPhotoNames] = useState<string[]>([]);
+  const [mainPhotoName, setMainPhotoName] = useState<string | null>(initialDraft?.mainPhotoName ?? null);
+  const [additionalPhotoNames, setAdditionalPhotoNames] = useState<string[]>(
+    initialDraft?.additionalPhotoNames ?? [],
+  );
 
   // The map pin can be moved two ways: the owner types a new location (forward-geocoded
   // below) or drops a pin directly (reverse-geocoded back into the text field). Either one
   // re-mounts LocationPicker at the resolved point via `mapKey`, matching how it already
   // treats `initialLatitude`/`initialLongitude` as a fresh manual pin on mount.
-  const [pinOverride, setPinOverride] = useState<{ lat: number; lng: number } | null>(null);
+  const [pinOverride, setPinOverride] = useState<{ lat: number; lng: number } | null>(
+    initialDraft?.pinOverride ?? null,
+  );
   const [mapKey, setMapKey] = useState(0);
   // Guards against an earlier geocode call resolving after a later, newer one.
   const geocodeRequestRef = useRef(0);
+
+  // Keeps the draft in sync with what's on screen, so a crash mid-fill-in can be recovered above.
+  useEffect(() => {
+    writeSessionDraft<VesselFormDraft>(draftKey, {
+      fields,
+      locationId,
+      pinOverride,
+      mainPhotoName,
+      additionalPhotoNames,
+    });
+  }, [draftKey, fields, locationId, pinOverride, mainPhotoName, additionalPhotoNames]);
+
+  // Clears the draft once a submission actually settles successfully: `updateVessel` returns `{}`
+  // directly, and `createVessel`'s redirect also resolves `isPending` back to false without ever
+  // setting `state.error`. `wasPendingRef` distinguishes that from the initial mount, which also
+  // starts out with `isPending === false` and `state.error === undefined`.
+  const wasPendingRef = useRef(false);
+  useEffect(() => {
+    if (wasPendingRef.current && !isPending && !state.error) {
+      clearSessionDraft(draftKey);
+    }
+    wasPendingRef.current = isPending;
+  }, [isPending, state.error, draftKey]);
 
   function handleSelectLocation(value: string) {
     const next = value === NO_LOCATION ? undefined : value;
@@ -506,7 +573,9 @@ export function VesselForm({
             {mode === "create" ? t("create") : t("save")}
           </Button>
           <Button asChild variant="outline" size="lg" className="rounded-full sm:w-fit">
-            <Link href="/owner/vessels">{t("cancel")}</Link>
+            <Link href="/owner/vessels" onClick={() => clearSessionDraft(draftKey)}>
+              {t("cancel")}
+            </Link>
           </Button>
         </div>
       </form>
