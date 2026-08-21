@@ -104,4 +104,33 @@ describe("uploadAndAttachVesselPhotos", () => {
     expect(result).toEqual({ error: "generic" });
     expect(attach).not.toHaveBeenCalled();
   });
+
+  it("reports progress after each file finishes uploading and attaching, not before", async () => {
+    const files = [fakeFile("a.jpg", "image/jpeg", 1024), fakeFile("b.jpg", "image/jpeg", 1024)];
+    const upload = vi.fn(async (_vesselId: string, _vesselName: string, file: File) => ({
+      path: `staging/${file.name}`,
+    }));
+    const attach = vi.fn(async () => ({}));
+    const onProgress = vi.fn();
+
+    await uploadAndAttachVesselPhotos("vessel-1", "Adriatic Dream", files, attach, upload, onProgress);
+
+    expect(onProgress).toHaveBeenCalledTimes(2);
+    expect(onProgress).toHaveBeenNthCalledWith(1, 1, 2);
+    expect(onProgress).toHaveBeenNthCalledWith(2, 2, 2);
+  });
+
+  it("never reports the failed file as progress when a later file's attach fails", async () => {
+    const files = [fakeFile("a.jpg", "image/jpeg", 1024), fakeFile("b.jpg", "image/jpeg", 1024)];
+    const upload = vi.fn(async (_vesselId: string, _vesselName: string, file: File) => ({
+      path: `staging/${file.name}`,
+    }));
+    const attach = vi.fn().mockResolvedValueOnce({}).mockResolvedValueOnce({ error: "generic" });
+    const onProgress = vi.fn();
+
+    await uploadAndAttachVesselPhotos("vessel-1", "Adriatic Dream", files, attach, upload, onProgress);
+
+    expect(onProgress).toHaveBeenCalledTimes(1);
+    expect(onProgress).toHaveBeenCalledWith(1, 2);
+  });
 });

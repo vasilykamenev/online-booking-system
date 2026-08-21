@@ -656,6 +656,7 @@
         "save": "Сохранить изменения",
         "cancel": "Отмена",
         "uploadingPhotos": "Загружаем фото…",
+        "uploadingSeconds": "{seconds, plural, one {# секунда} few {# секунды} other {# секунд}}",
         "photoUploadFailedCta": "Перейти к редактированию, чтобы добавить фото",
         "createTitle": "Новое судно",
         "createSubtitle": "Заполните характеристики — судно можно опубликовать позже.",

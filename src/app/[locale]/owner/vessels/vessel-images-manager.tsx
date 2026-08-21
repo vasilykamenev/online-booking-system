@@ -12,6 +12,7 @@ import { uploadAndAttachVesselPhotos, validateVesselImageFile } from "@/lib/imag
 import { vesselImageAllowedTypes, vesselImageMaxCount } from "@/lib/validation/vessel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { UploadProgressIndicator } from "@/components/upload-progress-indicator";
 import { cn } from "@/lib/utils";
 import type { LocalizedText } from "@/server/queries/vessels";
 
@@ -167,6 +168,13 @@ export function VesselImagesManager({
             <p className="text-sm text-destructive sm:col-span-3">{t(`errors.${fileError}`)}</p>
           )}
           {addError && <p className="text-sm text-destructive sm:col-span-3">{addError}</p>}
+          {isAdding && (
+            <UploadProgressIndicator
+              className="sm:col-span-3"
+              label={t("uploadingPhotos")}
+              secondsLabel={(seconds) => t("uploadingSeconds", { seconds })}
+            />
+          )}
           <Button
             type="submit"
             variant="outline"

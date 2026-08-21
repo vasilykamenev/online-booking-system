@@ -76,13 +76,18 @@ export async function uploadAndAttachVesselPhotos(
     vesselName: string,
     file: File,
   ) => Promise<RawUploadResult> = uploadRawVesselImage,
+  // Lets the caller drive a progress indicator ("photo 2 of 4") — there's no byte-level progress
+  // available here (the Supabase JS client uploads via `fetch`, which doesn't expose upload
+  // progress events), so file-count granularity is the most precise signal on offer.
+  onProgress?: (completed: number, total: number) => void,
 ): Promise<{ error?: string }> {
-  for (const file of files) {
+  for (const [index, file] of files.entries()) {
     const raw = await upload(vesselId, vesselName, file);
     if (raw.error || !raw.path) return { error: raw.error ?? "generic" };
 
     const attached = await attach(vesselId, raw.path);
     if (attached.error) return { error: attached.error };
+    onProgress?.(index + 1, files.length);
   }
   return {};
 }

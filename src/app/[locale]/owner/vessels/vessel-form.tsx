@@ -7,6 +7,7 @@ import { Link, useRouter } from "@/i18n/navigation";
 import { addVesselImage, createVessel, updateVessel, type VesselActionState } from "@/server/actions/vessels";
 import { clearSessionDraft, readSessionDraft, writeSessionDraft } from "@/lib/storage/session-draft";
 import { uploadAndAttachVesselPhotos, validateVesselImageFile } from "@/lib/images/upload-raw";
+import { UploadProgressIndicator } from "@/components/upload-progress-indicator";
 import { vesselTypeValues } from "@/lib/validation/search";
 import {
   vesselStatusValues,
@@ -208,6 +209,7 @@ export function VesselForm({
     null,
   );
   const [isUploadingPhotos, setIsUploadingPhotos] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState({ current: 0, total: 0 });
   const [photoUploadError, setPhotoUploadError] = useState<string | null>(null);
   const router = useRouter();
 
@@ -262,8 +264,16 @@ export function VesselForm({
       setIsUploadingPhotos(true);
       setPhotoUploadError(null);
       const photos = mainPhotoFile ? [mainPhotoFile, ...additionalPhotoFiles] : [];
-      const result = await uploadAndAttachVesselPhotos(newVesselId, fields.name, photos, (id, rawPath) =>
-        addVesselImage(locale, id, fields.name, rawPath),
+      setUploadProgress({ current: 0, total: photos.length });
+      const result = await uploadAndAttachVesselPhotos(
+        newVesselId,
+        fields.name,
+        photos,
+        (id, rawPath) => addVesselImage(locale, id, fields.name, rawPath),
+        undefined,
+        (completed, total) => {
+          if (!cancelled) setUploadProgress({ current: completed, total });
+        },
       );
       if (cancelled) return;
 
@@ -623,7 +633,13 @@ export function VesselForm({
         )}
 
         {isUploadingPhotos && (
-          <p className="text-sm text-muted-foreground sm:col-span-2">{t("uploadingPhotos")}</p>
+          <UploadProgressIndicator
+            className="sm:col-span-2"
+            current={uploadProgress.current}
+            total={uploadProgress.total}
+            label={t("uploadingPhotos")}
+            secondsLabel={(seconds) => t("uploadingSeconds", { seconds })}
+          />
         )}
 
         {photoUploadError && (

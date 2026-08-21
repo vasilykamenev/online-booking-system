@@ -656,6 +656,7 @@
         "save": "Save changes",
         "cancel": "Cancel",
         "uploadingPhotos": "Uploading photos…",
+        "uploadingSeconds": "{seconds, plural, one {# second} other {# seconds}}",
         "photoUploadFailedCta": "Go to the editor to add photos",
         "createTitle": "New vessel",
         "createSubtitle": "Fill in the specifications — you can publish it later.",
