@@ -3,6 +3,7 @@
 import { useActionState, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { Locale } from "@/i18n/routing";
+import { Link } from "@/i18n/navigation";
 import { createVessel, updateVessel, type VesselActionState } from "@/server/actions/vessels";
 import { vesselTypeValues } from "@/lib/validation/search";
 import {
@@ -113,20 +114,6 @@ export function VesselForm({
   const action = mode === "create" ? createVessel.bind(null, locale) : updateVessel.bind(null, locale, vesselId!);
   const [state, formAction, isPending] = useActionState(action, initialState);
 
-  const [locationId, setLocationId] = useState(defaultValues?.locationId);
-  const selectedLocation = locations.find((location) => location.id === locationId);
-  const [additionalPhotosError, setAdditionalPhotosError] = useState(false);
-
-  // The map pin can be moved two ways: the owner types a new location (forward-geocoded
-  // below) or drops a pin directly (reverse-geocoded back into the text field). Either one
-  // re-mounts LocationPicker at the resolved point via `mapKey`, matching how it already
-  // treats `initialLatitude`/`initialLongitude` as a fresh manual pin on mount.
-  const [pinOverride, setPinOverride] = useState<{ lat: number; lng: number } | null>(null);
-  const [mapKey, setMapKey] = useState(0);
-  const newLocationInputRef = useRef<HTMLInputElement>(null);
-  // Guards against an earlier geocode call resolving after a later, newer one.
-  const geocodeRequestRef = useRef(0);
-
   const initialSelectedLocation = locations.find(
     (location) => location.id === defaultValues?.locationId,
   );
@@ -134,19 +121,60 @@ export function VesselForm({
     ? locationLabel(initialSelectedLocation, locale)
     : "";
 
+  // React resets uncontrolled form fields (via requestFormReset) after every Server
+  // Action submission, success or failure — so on validation errors the owner would
+  // otherwise see their typed data vanish. Keeping every field in React state instead
+  // of relying on `defaultValue` sidesteps that: state survives the reset because
+  // React re-syncs controlled `value` props on the next render regardless of what the
+  // native reset did to the DOM.
+  const [fields, setFields] = useState({
+    name: defaultValues?.name ?? "",
+    slug: defaultValues?.slug ?? "",
+    type: defaultValues?.type ?? "",
+    newLocationName: initialLocationLabel,
+    descriptionRu: defaultValues?.descriptionRu ?? "",
+    descriptionEn: defaultValues?.descriptionEn ?? "",
+    lengthMeters: defaultValues?.lengthMeters?.toString() ?? "",
+    yearBuilt: defaultValues?.yearBuilt?.toString() ?? "",
+    cabins: defaultValues?.cabins?.toString() ?? "",
+    guestsCapacity: defaultValues?.guestsCapacity?.toString() ?? "",
+    basePrice: defaultValues?.basePrice?.toString() ?? "",
+    currency: defaultValues?.currency ?? "USD",
+    status: defaultValues?.status ?? "draft",
+  });
+  function setField<K extends keyof typeof fields>(key: K, value: (typeof fields)[K]) {
+    setFields((prev) => ({ ...prev, [key]: value }));
+  }
+
+  const [locationId, setLocationId] = useState(defaultValues?.locationId);
+  const selectedLocation = locations.find((location) => location.id === locationId);
+  const [additionalPhotosError, setAdditionalPhotosError] = useState(false);
+  // File inputs can't be programmatically restored after a submission (browsers clear
+  // them for security), so this just lets the owner see what they'd picked before an
+  // error, rather than silently losing that context along with the actual files.
+  const [mainPhotoName, setMainPhotoName] = useState<string | null>(null);
+  const [additionalPhotoNames, setAdditionalPhotoNames] = useState<string[]>([]);
+
+  // The map pin can be moved two ways: the owner types a new location (forward-geocoded
+  // below) or drops a pin directly (reverse-geocoded back into the text field). Either one
+  // re-mounts LocationPicker at the resolved point via `mapKey`, matching how it already
+  // treats `initialLatitude`/`initialLongitude` as a fresh manual pin on mount.
+  const [pinOverride, setPinOverride] = useState<{ lat: number; lng: number } | null>(null);
+  const [mapKey, setMapKey] = useState(0);
+  // Guards against an earlier geocode call resolving after a later, newer one.
+  const geocodeRequestRef = useRef(0);
+
   function handleSelectLocation(value: string) {
     const next = value === NO_LOCATION ? undefined : value;
     setLocationId(next);
     setPinOverride(null);
     setMapKey((key) => key + 1);
     const location = locations.find((candidate) => candidate.id === next);
-    if (newLocationInputRef.current) {
-      newLocationInputRef.current.value = location ? locationLabel(location, locale) : "";
-    }
+    setField("newLocationName", location ? locationLabel(location, locale) : "");
   }
 
   async function handleNewLocationBlur() {
-    const value = newLocationInputRef.current?.value.trim();
+    const value = fields.newLocationName.trim();
     if (!value) return;
     const requestId = ++geocodeRequestRef.current;
     try {
@@ -165,20 +193,35 @@ export function VesselForm({
     const requestId = ++geocodeRequestRef.current;
     try {
       const label = await reverseGeocodePoint(latitude, longitude, locale);
-      if (label && requestId === geocodeRequestRef.current && newLocationInputRef.current) {
-        newLocationInputRef.current.value = label;
+      if (label && requestId === geocodeRequestRef.current) {
+        setField("newLocationName", label);
       }
     } catch {
       // Best-effort convenience — latitude/longitude are already captured either way.
     }
   }
 
+  /** Translated message for a field's error code, or undefined if the field is clean. */
+  function fieldError(name: string): string | undefined {
+    const code = state.fieldErrors?.[name];
+    return code ? t(`errors.${code}`) : undefined;
+  }
+  const locationError = fieldError("newLocationName") ?? fieldError("locationId");
+
   return (
     <div className="rounded-2xl border border-border bg-card p-6 shadow-soft md:p-8">
       <form action={formAction} className="grid grid-cols-1 gap-5 sm:grid-cols-2">
         <div className="flex flex-col gap-2">
           <Label htmlFor="name">{t("name")}</Label>
-          <Input id="name" name="name" defaultValue={defaultValues?.name} required />
+          <Input
+            id="name"
+            name="name"
+            value={fields.name}
+            onChange={(event) => setField("name", event.target.value)}
+            aria-invalid={Boolean(fieldError("name"))}
+            required
+          />
+          {fieldError("name") && <p className="text-sm text-destructive">{fieldError("name")}</p>}
         </div>
 
         <div className="flex flex-col gap-2">
@@ -186,16 +229,19 @@ export function VesselForm({
           <Input
             id="slug"
             name="slug"
-            defaultValue={defaultValues?.slug}
+            value={fields.slug}
+            onChange={(event) => setField("slug", event.target.value)}
             pattern="[a-z0-9]+(-[a-z0-9]+)*"
+            aria-invalid={Boolean(fieldError("slug"))}
             required
           />
+          {fieldError("slug") && <p className="text-sm text-destructive">{fieldError("slug")}</p>}
         </div>
 
         <div className="flex flex-col gap-2">
           <Label>{t("type")}</Label>
-          <Select name="type" defaultValue={defaultValues?.type}>
-            <SelectTrigger className="w-full">
+          <Select value={fields.type} onValueChange={(value) => setField("type", value)}>
+            <SelectTrigger className="w-full" aria-invalid={Boolean(fieldError("type"))}>
               <SelectValue placeholder={t("type")} />
             </SelectTrigger>
             <SelectContent>
@@ -206,6 +252,8 @@ export function VesselForm({
               ))}
             </SelectContent>
           </Select>
+          <input type="hidden" name="type" value={fields.type} />
+          {fieldError("type") && <p className="text-sm text-destructive">{fieldError("type")}</p>}
         </div>
 
         <div className="flex flex-col gap-2">
@@ -225,14 +273,18 @@ export function VesselForm({
           </Select>
           <input type="hidden" name="locationId" value={locationId ?? ""} />
           <Input
-            ref={newLocationInputRef}
             name="newLocationName"
-            defaultValue={initialLocationLabel}
+            value={fields.newLocationName}
             placeholder={t("newLocationPlaceholder")}
-            onChange={() => setLocationId(undefined)}
+            onChange={(event) => {
+              setField("newLocationName", event.target.value);
+              setLocationId(undefined);
+            }}
             onBlur={handleNewLocationBlur}
+            aria-invalid={Boolean(locationError)}
           />
           <p className="text-xs font-light text-muted-foreground">{t("newLocationHint")}</p>
+          {locationError && <p className="text-sm text-destructive">{locationError}</p>}
         </div>
 
         {mode === "create" && (
@@ -243,8 +295,16 @@ export function VesselForm({
               name="mainPhoto"
               type="file"
               accept={vesselImageAllowedTypes.join(",")}
+              onChange={(event) => setMainPhotoName(event.target.files?.[0]?.name ?? null)}
+              aria-invalid={Boolean(fieldError("mainPhoto"))}
               required
             />
+            {mainPhotoName && (
+              <p className="text-xs font-light text-muted-foreground">{mainPhotoName}</p>
+            )}
+            {fieldError("mainPhoto") && (
+              <p className="text-sm text-destructive">{fieldError("mainPhoto")}</p>
+            )}
             <Label htmlFor="additionalPhotos" className="mt-2">
               {t("additionalPhotos")}
             </Label>
@@ -254,15 +314,24 @@ export function VesselForm({
               type="file"
               accept={vesselImageAllowedTypes.join(",")}
               multiple
-              onChange={(event) =>
-                setAdditionalPhotosError(
-                  (event.target.files?.length ?? 0) > vesselImageMaxCount - 1,
-                )
-              }
+              onChange={(event) => {
+                const files = event.target.files;
+                setAdditionalPhotosError((files?.length ?? 0) > vesselImageMaxCount - 1);
+                setAdditionalPhotoNames(files ? Array.from(files).map((file) => file.name) : []);
+              }}
+              aria-invalid={Boolean(fieldError("additionalPhotos"))}
             />
+            {additionalPhotoNames.length > 0 && (
+              <p className="text-xs font-light text-muted-foreground">
+                {additionalPhotoNames.join(", ")}
+              </p>
+            )}
             <p className="text-xs font-light text-muted-foreground">{t("photosHint")}</p>
             {additionalPhotosError && (
               <p className="text-sm text-destructive">{t("errors.maxImages")}</p>
+            )}
+            {fieldError("additionalPhotos") && (
+              <p className="text-sm text-destructive">{fieldError("additionalPhotos")}</p>
             )}
           </div>
         )}
@@ -287,7 +356,8 @@ export function VesselForm({
           <Textarea
             id="descriptionRu"
             name="descriptionRu"
-            defaultValue={defaultValues?.descriptionRu}
+            value={fields.descriptionRu}
+            onChange={(event) => setField("descriptionRu", event.target.value)}
             rows={4}
           />
         </div>
@@ -297,7 +367,8 @@ export function VesselForm({
           <Textarea
             id="descriptionEn"
             name="descriptionEn"
-            defaultValue={defaultValues?.descriptionEn}
+            value={fields.descriptionEn}
+            onChange={(event) => setField("descriptionEn", event.target.value)}
             rows={4}
           />
         </div>
@@ -310,9 +381,14 @@ export function VesselForm({
             type="number"
             step="0.1"
             min="0"
-            defaultValue={defaultValues?.lengthMeters}
+            value={fields.lengthMeters}
+            onChange={(event) => setField("lengthMeters", event.target.value)}
+            aria-invalid={Boolean(fieldError("lengthMeters"))}
             required
           />
+          {fieldError("lengthMeters") && (
+            <p className="text-sm text-destructive">{fieldError("lengthMeters")}</p>
+          )}
         </div>
 
         <div className="flex flex-col gap-2">
@@ -323,8 +399,13 @@ export function VesselForm({
             type="number"
             min="1900"
             max="2100"
-            defaultValue={defaultValues?.yearBuilt ?? undefined}
+            value={fields.yearBuilt}
+            onChange={(event) => setField("yearBuilt", event.target.value)}
+            aria-invalid={Boolean(fieldError("yearBuilt"))}
           />
+          {fieldError("yearBuilt") && (
+            <p className="text-sm text-destructive">{fieldError("yearBuilt")}</p>
+          )}
         </div>
 
         <div className="flex flex-col gap-2">
@@ -334,9 +415,12 @@ export function VesselForm({
             name="cabins"
             type="number"
             min="0"
-            defaultValue={defaultValues?.cabins}
+            value={fields.cabins}
+            onChange={(event) => setField("cabins", event.target.value)}
+            aria-invalid={Boolean(fieldError("cabins"))}
             required
           />
+          {fieldError("cabins") && <p className="text-sm text-destructive">{fieldError("cabins")}</p>}
         </div>
 
         <div className="flex flex-col gap-2">
@@ -346,9 +430,14 @@ export function VesselForm({
             name="guestsCapacity"
             type="number"
             min="1"
-            defaultValue={defaultValues?.guestsCapacity}
+            value={fields.guestsCapacity}
+            onChange={(event) => setField("guestsCapacity", event.target.value)}
+            aria-invalid={Boolean(fieldError("guestsCapacity"))}
             required
           />
+          {fieldError("guestsCapacity") && (
+            <p className="text-sm text-destructive">{fieldError("guestsCapacity")}</p>
+          )}
         </div>
 
         <div className="flex flex-col gap-2">
@@ -359,14 +448,19 @@ export function VesselForm({
             type="number"
             step="0.01"
             min="0"
-            defaultValue={defaultValues?.basePrice}
+            value={fields.basePrice}
+            onChange={(event) => setField("basePrice", event.target.value)}
+            aria-invalid={Boolean(fieldError("basePrice"))}
             required
           />
+          {fieldError("basePrice") && (
+            <p className="text-sm text-destructive">{fieldError("basePrice")}</p>
+          )}
         </div>
 
         <div className="flex flex-col gap-2">
           <Label htmlFor="currency">{t("currency")}</Label>
-          <Select name="currency" defaultValue={defaultValues?.currency ?? "USD"}>
+          <Select value={fields.currency} onValueChange={(value) => setField("currency", value)}>
             <SelectTrigger id="currency" className="w-full">
               <SelectValue />
             </SelectTrigger>
@@ -378,11 +472,12 @@ export function VesselForm({
               ))}
             </SelectContent>
           </Select>
+          <input type="hidden" name="currency" value={fields.currency} />
         </div>
 
         <div className="flex flex-col gap-2">
           <Label>{t("status")}</Label>
-          <Select name="status" defaultValue={defaultValues?.status ?? "draft"}>
+          <Select value={fields.status} onValueChange={(value) => setField("status", value)}>
             <SelectTrigger className="w-full">
               <SelectValue />
             </SelectTrigger>
@@ -394,20 +489,26 @@ export function VesselForm({
               ))}
             </SelectContent>
           </Select>
+          <input type="hidden" name="status" value={fields.status} />
         </div>
 
         {state.error && (
           <p className="text-sm text-destructive sm:col-span-2">{t(`errors.${state.error}`)}</p>
         )}
 
-        <Button
-          type="submit"
-          size="lg"
-          disabled={isPending || additionalPhotosError}
-          className="rounded-full sm:col-span-2 sm:w-fit"
-        >
-          {mode === "create" ? t("create") : t("save")}
-        </Button>
+        <div className="flex items-center gap-3 sm:col-span-2">
+          <Button
+            type="submit"
+            size="lg"
+            disabled={isPending || additionalPhotosError}
+            className="rounded-full sm:w-fit"
+          >
+            {mode === "create" ? t("create") : t("save")}
+          </Button>
+          <Button asChild variant="outline" size="lg" className="rounded-full sm:w-fit">
+            <Link href="/owner/vessels">{t("cancel")}</Link>
+          </Button>
+        </div>
       </form>
     </div>
   );

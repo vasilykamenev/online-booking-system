@@ -26,9 +26,33 @@ export async function loadMoreVessels(filters: SearchFilters): Promise<SearchRes
 
 export interface VesselActionState {
   error?: string;
+  /** Per-field error codes (translated client-side via `errors.${code}`), keyed by form field name. */
+  fieldErrors?: Record<string, string>;
 }
 
 const VESSEL_IMAGES_BUCKET = "vessel-images";
+
+/** Custom messages already set on the schema (regex/refine) are specific enough to show as-is; anything else collapses to "required" or "fieldInvalid" based on whether the submitted value was empty. */
+const KNOWN_FIELD_ERROR_CODES = new Set(["invalidSlug", "invalid"]);
+
+function buildFieldErrors(
+  formData: FormData,
+  error: { issues: { path: PropertyKey[]; message: string }[] },
+): Record<string, string> {
+  const fieldErrors: Record<string, string> = {};
+  for (const issue of error.issues) {
+    const field = String(issue.path[0] ?? "");
+    if (!field || fieldErrors[field]) continue;
+    const raw = formData.get(field);
+    const isEmpty = raw == null || raw === "";
+    fieldErrors[field] = KNOWN_FIELD_ERROR_CODES.has(issue.message)
+      ? issue.message
+      : isEmpty
+        ? "required"
+        : "fieldInvalid";
+  }
+  return fieldErrors;
+}
 
 function parseVesselForm(formData: FormData) {
   return vesselSchema.safeParse({
@@ -49,6 +73,13 @@ function parseVesselForm(formData: FormData) {
     latitude: formData.get("latitude"),
     longitude: formData.get("longitude"),
   });
+}
+
+/** Maps a Postgres error from the vessels insert/update to a field-specific message where possible. */
+function vesselDbError(error: { code?: string }): VesselActionState {
+  if (error.code === "23505") return { error: "slugTaken", fieldErrors: { slug: "slugTaken" } };
+  if (error.code === "23503") return { error: "generic", fieldErrors: { locationId: "fieldInvalid" } };
+  return { error: "generic" };
 }
 
 /** Optimizes and uploads one photo, then records it. Throws on any failure — caller rolls back. */
@@ -91,14 +122,20 @@ async function uploadVesselImage(
 async function resolveLocationId(
   supabase: Awaited<ReturnType<typeof createClient>>,
   data: Pick<VesselInput, "locationId" | "newLocationName" | "latitude" | "longitude">,
-): Promise<{ locationId: string } | { error: "generic" }> {
+): Promise<{ locationId: string } | { error: VesselActionState }> {
   if (data.locationId) return { locationId: data.locationId };
   if (!data.newLocationName || data.latitude == null || data.longitude == null) {
-    return { error: "generic" };
+    return {
+      error: { error: "invalid", fieldErrors: { newLocationName: "required" } },
+    };
   }
 
   const geocoded = await reverseGeocodeBilingual(data.latitude, data.longitude);
-  if (!geocoded) return { error: "generic" };
+  if (!geocoded) {
+    return {
+      error: { error: "generic", fieldErrors: { newLocationName: "geocodeFailed" } },
+    };
+  }
 
   const { data: location, error } = await supabase
     .from("locations")
@@ -111,7 +148,7 @@ async function resolveLocationId(
     })
     .select("id")
     .single();
-  if (error) return { error: "generic" };
+  if (error) return { error: { error: "generic" } };
 
   return { locationId: location.id };
 }
@@ -122,7 +159,7 @@ export async function createVessel(
   formData: FormData,
 ): Promise<VesselActionState> {
   const parsed = parseVesselForm(formData);
-  if (!parsed.success) return { error: "invalid" };
+  if (!parsed.success) return { error: "invalid", fieldErrors: buildFieldErrors(formData, parsed.error) };
 
   // A cover photo is required at registration (used as the vessel's search-result thumbnail);
   // up to 9 more can be attached in the same submission, the rest later from the edit page.
@@ -133,7 +170,14 @@ export async function createVessel(
     mainPhoto: formData.get("mainPhoto"),
     additionalPhotos,
   });
-  if (!photosParsed.success) return { error: photosParsed.error.issues[0]?.message ?? "invalid" };
+  if (!photosParsed.success) {
+    const firstIssue = photosParsed.error.issues[0];
+    const field = String(firstIssue?.path[0] ?? "mainPhoto");
+    return {
+      error: firstIssue?.message ?? "invalid",
+      fieldErrors: { [field]: firstIssue?.message ?? "invalid" },
+    };
+  }
 
   const supabase = await createClient();
   const {
@@ -142,7 +186,7 @@ export async function createVessel(
   if (!user) return { error: "unauthenticated" };
 
   const locationResult = await resolveLocationId(supabase, parsed.data);
-  if ("error" in locationResult) return locationResult;
+  if ("error" in locationResult) return locationResult.error;
 
   const { data: vessel, error } = await supabase
     .from("vessels")
@@ -166,7 +210,7 @@ export async function createVessel(
     .select("id")
     .single();
 
-  if (error) return { error: error.code === "23505" ? "slugTaken" : "generic" };
+  if (error) return vesselDbError(error);
 
   const photos = [photosParsed.data.mainPhoto, ...photosParsed.data.additionalPhotos];
   const uploadedPaths: string[] = [];
@@ -193,7 +237,7 @@ export async function updateVessel(
   formData: FormData,
 ): Promise<VesselActionState> {
   const parsed = parseVesselForm(formData);
-  if (!parsed.success) return { error: "invalid" };
+  if (!parsed.success) return { error: "invalid", fieldErrors: buildFieldErrors(formData, parsed.error) };
 
   const supabase = await createClient();
   const {
@@ -202,7 +246,7 @@ export async function updateVessel(
   if (!user) return { error: "unauthenticated" };
 
   const locationResult = await resolveLocationId(supabase, parsed.data);
-  if ("error" in locationResult) return locationResult;
+  if ("error" in locationResult) return locationResult.error;
 
   const { error } = await supabase
     .from("vessels")
@@ -225,7 +269,7 @@ export async function updateVessel(
     .eq("id", vesselId)
     .eq("owner_id", user.id);
 
-  if (error) return { error: error.code === "23505" ? "slugTaken" : "generic" };
+  if (error) return vesselDbError(error);
 
   revalidatePath(`/${locale}/owner/vessels`);
   revalidatePath(`/${locale}/owner/vessels/${vesselId}/edit`);

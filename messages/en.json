@@ -653,6 +653,7 @@
         "status": "Status",
         "create": "Create vessel",
         "save": "Save changes",
+        "cancel": "Cancel",
         "createTitle": "New vessel",
         "createSubtitle": "Fill in the specifications — you can publish it later.",
         "editTitle": "Edit vessel",
@@ -670,13 +671,17 @@
         "saveAmenities": "Save amenities",
         "amenitiesSaved": "Amenities saved",
         "errors": {
-          "invalid": "Check the fields you filled in",
+          "invalid": "Check the fields marked below",
           "unauthenticated": "Sign in to continue",
           "generic": "Couldn't save. Please try again",
           "slugTaken": "That slug is already taken — choose another",
           "tooLarge": "File is too large (20 MB max)",
           "invalidType": "Only JPEG, PNG, WebP, and AVIF images are supported",
-          "maxImages": "Limit reached — up to 10 photos per vessel"
+          "maxImages": "Limit reached — up to 10 photos per vessel",
+          "required": "Required field",
+          "fieldInvalid": "Invalid value",
+          "invalidSlug": "Lowercase letters, numbers, and hyphens only",
+          "geocodeFailed": "Couldn't resolve a city and country for this point — try a more precise spot or pick a catalog location"
         }
       },
       "notFound": {
