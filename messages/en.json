@@ -681,7 +681,8 @@
           "required": "Required field",
           "fieldInvalid": "Invalid value",
           "invalidSlug": "Lowercase letters, numbers, and hyphens only",
-          "geocodeFailed": "Couldn't resolve a city and country for this point — try a more precise spot or pick a catalog location"
+          "geocodeFailed": "Couldn't resolve a city and country for this point — try a more precise spot or pick a catalog location",
+          "networkError": "Trouble connecting to the server. Check your internet connection and try again"
         }
       },
       "notFound": {

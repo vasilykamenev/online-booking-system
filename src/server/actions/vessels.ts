@@ -18,41 +18,21 @@ import {
   OPTIMIZED_IMAGE_EXTENSION,
 } from "@/lib/images/optimize";
 import { reverseGeocodeBilingual } from "@/lib/geo/reverse-geocode";
+import {
+  buildFieldErrors,
+  vesselDbError,
+  handleUnexpectedActionError,
+  type VesselActionState,
+} from "@/lib/validation/vessel-errors";
 import { searchVessels, type SearchFilters, type SearchResult } from "@/server/queries/vessels";
+
+export type { VesselActionState } from "@/lib/validation/vessel-errors";
 
 export async function loadMoreVessels(filters: SearchFilters): Promise<SearchResult> {
   return searchVessels(filters);
 }
 
-export interface VesselActionState {
-  error?: string;
-  /** Per-field error codes (translated client-side via `errors.${code}`), keyed by form field name. */
-  fieldErrors?: Record<string, string>;
-}
-
 const VESSEL_IMAGES_BUCKET = "vessel-images";
-
-/** Custom messages already set on the schema (regex/refine) are specific enough to show as-is; anything else collapses to "required" or "fieldInvalid" based on whether the submitted value was empty. */
-const KNOWN_FIELD_ERROR_CODES = new Set(["invalidSlug", "invalid"]);
-
-function buildFieldErrors(
-  formData: FormData,
-  error: { issues: { path: PropertyKey[]; message: string }[] },
-): Record<string, string> {
-  const fieldErrors: Record<string, string> = {};
-  for (const issue of error.issues) {
-    const field = String(issue.path[0] ?? "");
-    if (!field || fieldErrors[field]) continue;
-    const raw = formData.get(field);
-    const isEmpty = raw == null || raw === "";
-    fieldErrors[field] = KNOWN_FIELD_ERROR_CODES.has(issue.message)
-      ? issue.message
-      : isEmpty
-        ? "required"
-        : "fieldInvalid";
-  }
-  return fieldErrors;
-}
 
 function parseVesselForm(formData: FormData) {
   return vesselSchema.safeParse({
@@ -73,13 +53,6 @@ function parseVesselForm(formData: FormData) {
     latitude: formData.get("latitude"),
     longitude: formData.get("longitude"),
   });
-}
-
-/** Maps a Postgres error from the vessels insert/update to a field-specific message where possible. */
-function vesselDbError(error: { code?: string }): VesselActionState {
-  if (error.code === "23505") return { error: "slugTaken", fieldErrors: { slug: "slugTaken" } };
-  if (error.code === "23503") return { error: "generic", fieldErrors: { locationId: "fieldInvalid" } };
-  return { error: "generic" };
 }
 
 /** Optimizes and uploads one photo, then records it. Throws on any failure — caller rolls back. */
@@ -179,55 +152,68 @@ export async function createVessel(
     };
   }
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "unauthenticated" };
-
-  const locationResult = await resolveLocationId(supabase, parsed.data);
-  if ("error" in locationResult) return locationResult.error;
-
-  const { data: vessel, error } = await supabase
-    .from("vessels")
-    .insert({
-      owner_id: user.id,
-      location_id: locationResult.locationId,
-      type: parsed.data.type,
-      status: parsed.data.status,
-      name: parsed.data.name,
-      slug: parsed.data.slug,
-      description: { ru: parsed.data.descriptionRu, en: parsed.data.descriptionEn },
-      length_meters: parsed.data.lengthMeters,
-      cabins: parsed.data.cabins,
-      guests_capacity: parsed.data.guestsCapacity,
-      year_built: parsed.data.yearBuilt ?? null,
-      base_price_minor: Math.round(parsed.data.basePrice * 100),
-      currency: parsed.data.currency,
-      latitude: parsed.data.latitude ?? null,
-      longitude: parsed.data.longitude ?? null,
-    })
-    .select("id")
-    .single();
-
-  if (error) return vesselDbError(error);
-
-  const photos = [photosParsed.data.mainPhoto, ...photosParsed.data.additionalPhotos];
-  const uploadedPaths: string[] = [];
+  // Everything below can throw on infra failures the explicit `{ error }` checks below don't
+  // cover (a dropped DB connection, the Supabase client itself throwing, etc.). Catching it here
+  // turns that into a normal returned state — see `handleUnexpectedActionError` — instead of an
+  // uncaught exception that trips the route's error boundary and unmounts the form. `redirect()`
+  // deliberately stays outside this block: it works by throwing Next's own control-flow error,
+  // which must propagate untouched.
+  let vesselId: string;
   try {
-    for (const [index, file] of photos.entries()) {
-      await uploadVesselImage(supabase, vessel.id, file, index, uploadedPaths);
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { error: "unauthenticated" };
+
+    const locationResult = await resolveLocationId(supabase, parsed.data);
+    if ("error" in locationResult) return locationResult.error;
+
+    const { data: vessel, error } = await supabase
+      .from("vessels")
+      .insert({
+        owner_id: user.id,
+        location_id: locationResult.locationId,
+        type: parsed.data.type,
+        status: parsed.data.status,
+        name: parsed.data.name,
+        slug: parsed.data.slug,
+        description: { ru: parsed.data.descriptionRu, en: parsed.data.descriptionEn },
+        length_meters: parsed.data.lengthMeters,
+        cabins: parsed.data.cabins,
+        guests_capacity: parsed.data.guestsCapacity,
+        year_built: parsed.data.yearBuilt ?? null,
+        base_price_minor: Math.round(parsed.data.basePrice * 100),
+        currency: parsed.data.currency,
+        latitude: parsed.data.latitude ?? null,
+        longitude: parsed.data.longitude ?? null,
+      })
+      .select("id")
+      .single();
+
+    if (error) return vesselDbError(error);
+
+    const photos = [photosParsed.data.mainPhoto, ...photosParsed.data.additionalPhotos];
+    const uploadedPaths: string[] = [];
+    try {
+      for (const [index, file] of photos.entries()) {
+        await uploadVesselImage(supabase, vessel.id, file, index, uploadedPaths);
+      }
+    } catch {
+      if (uploadedPaths.length > 0) {
+        await supabase.storage.from(VESSEL_IMAGES_BUCKET).remove(uploadedPaths);
+      }
+      await supabase.from("vessels").delete().eq("id", vessel.id);
+      return { error: "generic" };
     }
-  } catch {
-    if (uploadedPaths.length > 0) {
-      await supabase.storage.from(VESSEL_IMAGES_BUCKET).remove(uploadedPaths);
-    }
-    await supabase.from("vessels").delete().eq("id", vessel.id);
-    return { error: "generic" };
+
+    vesselId = vessel.id;
+  } catch (err) {
+    return handleUnexpectedActionError("createVessel", err);
   }
 
   revalidatePath(`/${locale}/owner/vessels`);
-  return redirect({ href: `/owner/vessels/${vessel.id}/edit`, locale });
+  return redirect({ href: `/owner/vessels/${vesselId}/edit`, locale });
 }
 
 export async function updateVessel(
@@ -239,37 +225,43 @@ export async function updateVessel(
   const parsed = parseVesselForm(formData);
   if (!parsed.success) return { error: "invalid", fieldErrors: buildFieldErrors(formData, parsed.error) };
 
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) return { error: "unauthenticated" };
+  // See the matching comment in `createVessel` — this keeps an unexpected infra failure from
+  // tripping the route's error boundary and wiping the edit form.
+  try {
+    const supabase = await createClient();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
+    if (!user) return { error: "unauthenticated" };
 
-  const locationResult = await resolveLocationId(supabase, parsed.data);
-  if ("error" in locationResult) return locationResult.error;
+    const locationResult = await resolveLocationId(supabase, parsed.data);
+    if ("error" in locationResult) return locationResult.error;
 
-  const { error } = await supabase
-    .from("vessels")
-    .update({
-      location_id: locationResult.locationId,
-      type: parsed.data.type,
-      status: parsed.data.status,
-      name: parsed.data.name,
-      slug: parsed.data.slug,
-      description: { ru: parsed.data.descriptionRu, en: parsed.data.descriptionEn },
-      length_meters: parsed.data.lengthMeters,
-      cabins: parsed.data.cabins,
-      guests_capacity: parsed.data.guestsCapacity,
-      year_built: parsed.data.yearBuilt ?? null,
-      base_price_minor: Math.round(parsed.data.basePrice * 100),
-      currency: parsed.data.currency,
-      latitude: parsed.data.latitude ?? null,
-      longitude: parsed.data.longitude ?? null,
-    })
-    .eq("id", vesselId)
-    .eq("owner_id", user.id);
+    const { error } = await supabase
+      .from("vessels")
+      .update({
+        location_id: locationResult.locationId,
+        type: parsed.data.type,
+        status: parsed.data.status,
+        name: parsed.data.name,
+        slug: parsed.data.slug,
+        description: { ru: parsed.data.descriptionRu, en: parsed.data.descriptionEn },
+        length_meters: parsed.data.lengthMeters,
+        cabins: parsed.data.cabins,
+        guests_capacity: parsed.data.guestsCapacity,
+        year_built: parsed.data.yearBuilt ?? null,
+        base_price_minor: Math.round(parsed.data.basePrice * 100),
+        currency: parsed.data.currency,
+        latitude: parsed.data.latitude ?? null,
+        longitude: parsed.data.longitude ?? null,
+      })
+      .eq("id", vesselId)
+      .eq("owner_id", user.id);
 
-  if (error) return vesselDbError(error);
+    if (error) return vesselDbError(error);
+  } catch (err) {
+    return handleUnexpectedActionError("updateVessel", err);
+  }
 
   revalidatePath(`/${locale}/owner/vessels`);
   revalidatePath(`/${locale}/owner/vessels/${vesselId}/edit`);

@@ -20,17 +20,27 @@ async function reverseGeocodeOnce(
   url.searchParams.set("zoom", "10");
   url.searchParams.set("accept-language", locale);
 
-  const response = await fetch(url, {
-    // Nominatim's usage policy requires a way to identify the calling application.
-    headers: { "User-Agent": "MeridianBeyond/1.0 (https://meridian.travel)" },
-  });
-  if (!response.ok) return null;
-  const data = await response.json();
-  const address = data.address ?? {};
-  return {
-    city: address.city ?? address.town ?? address.village ?? address.county ?? address.state,
-    country: address.country,
-  };
+  try {
+    const response = await fetch(url, {
+      // Nominatim's usage policy requires a way to identify the calling application.
+      headers: { "User-Agent": "MeridianBeyond/1.0 (https://meridian.travel)" },
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!response.ok) return null;
+    const data = await response.json();
+    const address = data.address ?? {};
+    return {
+      city: address.city ?? address.town ?? address.village ?? address.county ?? address.state,
+      country: address.country,
+    };
+  } catch (error) {
+    // Network failure, timeout, or a malformed response from the geocoding service — treated
+    // the same as "couldn't resolve" by the caller. Must not throw: this runs inside a Server
+    // Action, and an uncaught error here would trip the route's error boundary and blow away
+    // whatever the owner had typed into the registration form.
+    console.error("[reverseGeocodeOnce] geocoding request failed", { latitude, longitude, locale, error });
+    return null;
+  }
 }
 
 /**
