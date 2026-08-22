@@ -8,7 +8,7 @@ import { criteriaToChips, isEmptyCriteria, MINOR_UNITS_PER_MAJOR } from "@/lib/s
 import { formatPrice } from "@/lib/pricing/format";
 import { runGlobalVesselSearch } from "@/server/search/global-search-service";
 import { buildSearchVocabulary } from "@/server/queries/search-vocabulary";
-import { brilionsProvider } from "@/server/search/providers/brilions/provider";
+import { getActiveExternalProviders } from "@/server/search/provider-registry";
 import { DiscoverForm } from "./discover-form";
 import { GlobalResultCard } from "./result-card";
 
@@ -50,9 +50,12 @@ export default async function DiscoverPage({
     ? await runGlobalVesselSearch(query, {
         locale: locale as Locale,
         removedCriteria: removed,
-        externalProviders: [brilionsProvider],
-        // Generous relative to the internal search's own budget: brilions.com fetches happen over
-        // the real network, city-filtered but still several page loads. BRD §8's ≤1s applies to
+        // Which sites get consulted is data-driven (`search_sources.enabled`), not a fixed list —
+        // see `provider-registry.ts`. Disabling a source in /admin/search-sources takes it out of
+        // search immediately, with no code change.
+        externalProviders: await getActiveExternalProviders(),
+        // Generous relative to the internal search's own budget: external sources fetch over the
+        // real network, city-filtered but still several page loads. BRD §8's ≤1s applies to
         // internal search; external is the acknowledged exception (see README's two-phase note).
         externalTimeoutMs: 15_000,
       })
