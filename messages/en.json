@@ -1006,7 +1006,7 @@
     "searchSources": {
       "title": "Search sources",
       "subtitle": "External sites the smart search can use as an additional source of listings.",
-      "wiringHint": "Adding a source here does not by itself make the app crawl it — it only affects the ranking reliability bonus and the robots.txt cache. For a source to actually be searched, a provider must be implemented in code (see src/server/search/providers/) and wired into discover/page.tsx.",
+      "wiringHint": "Enabling or disabling an already-wired source (e.g. brilions.com) takes effect immediately, no code change needed. But adding a brand-new site here does not by itself make the app crawl it — a provider has to be implemented in code (see src/server/search/providers/) and registered in provider-registry.ts; until then the row only affects the ranking reliability bonus and the robots.txt cache.",
       "empty": "No sources yet.",
       "enable": "Enable",
       "disable": "Disable",
