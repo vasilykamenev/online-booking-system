@@ -135,6 +135,53 @@ export async function getAllAmenitiesAdmin(): Promise<AdminAmenity[]> {
   return data ?? [];
 }
 
+export interface AdminSearchSource {
+  id: string;
+  name: string;
+  domain: string;
+  baseUrl: string;
+  enabled: boolean;
+  sourceType: Database["public"]["Enums"]["search_source_type"];
+  processingType: Database["public"]["Enums"]["search_processing_type"];
+  priority: number;
+  reliabilityScore: number | null;
+  robotsAllows: boolean | null;
+  lastCheckedAt: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+/** Every row, enabled or not — unlike `listEnabledSources` (spec §8's search-time read), the admin
+ * view needs disabled sources too so they can be re-enabled. */
+export async function getAllSearchSourcesAdmin(): Promise<AdminSearchSource[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("search_sources")
+    .select(
+      "id, name, domain, base_url, enabled, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, notes, created_at",
+    )
+    .order("priority", { ascending: false });
+
+  throwIfSupabaseError(error);
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    name: row.name,
+    domain: row.domain,
+    baseUrl: row.base_url,
+    enabled: row.enabled,
+    sourceType: row.source_type,
+    processingType: row.processing_type,
+    priority: row.priority,
+    reliabilityScore: row.reliability_score,
+    robotsAllows: row.robots_allows,
+    lastCheckedAt: row.last_checked_at,
+    notes: row.notes,
+    createdAt: row.created_at,
+  }));
+}
+
 export interface AdminAuditLogEntry {
   id: string;
   adminName: string | null;

@@ -4,6 +4,7 @@
   },
   "nav": {
     "vessels": "Vessels",
+    "discover": "Smart search",
     "destinations": "Destinations",
     "initiatives": "Initiatives",
     "about": "About",
@@ -126,6 +127,60 @@
       "priceMax": "Price per night, up to",
       "priceMaxPlaceholder": "e.g. 1000",
       "apply": "Apply"
+    }
+  },
+  "discover": {
+    "eyebrow": "Global search",
+    "title": "Describe the vessel or trip you are looking for",
+    "subtitle": "One request in plain language — the system breaks it into criteria and gathers offers from our own catalogue and external sources, always with a link to the original listing.",
+    "placeholder": "For example: motor yacht in Greece for 6 people in September, about a week, budget up to 5000 EUR, preferably with a captain",
+    "hint": "Mention only what matters to you. Enter to search, Shift+Enter for a new line.",
+    "search": "Search",
+    "understoodAs": "Understood as",
+    "nothingUnderstood": "No specific criteria could be extracted from this request, so these are general results. Try naming a destination, guest count or budget.",
+    "removeCriterion": "Remove criterion: {criterion}",
+    "degraded": "This query was parsed by the simplified non-AI interpreter — some criteria may have been missed.",
+    "resultsCount": "{count, plural, =0 {Nothing found} one {# offer} other {# offers}}",
+    "meta": "Internal: {internal} · External: {external} · {ms} ms",
+    "emptyCriteria": "Try being more specific — name a country, a guest count or a budget.",
+    "noResults": "Nothing matched these criteria. Try removing one of the criteria above.",
+    "externalSkipped": "External sources are not connected yet — these are offers from our own catalogue.",
+    "untitled": "Untitled",
+    "lengthMeters": "{value} m",
+    "priceUnknown": "Price not listed",
+    "open": "Open",
+    "openSource": "View on source site",
+    "sourceLabel": "Source: {name}",
+    "alsoListedOn": "{count, plural, one {also found on # more site:} other {also found on # more sites:}}",
+    "origin": {
+      "internal": "Our catalogue",
+      "external": "External source"
+    },
+    "priceUnit": {
+      "HOUR": "/ hour",
+      "DAY": "/ day",
+      "WEEK": "/ week",
+      "MONTH": "/ month",
+      "TRIP": "/ trip"
+    },
+    "chips": {
+      "country": "Country",
+      "region": "Region",
+      "city": "City",
+      "marina": "Marina",
+      "vesselType": "Vessel type",
+      "guests": "Guests",
+      "cabins": "Cabins",
+      "dateFrom": "From",
+      "dateTo": "To",
+      "month": "Month",
+      "year": "Year",
+      "duration": "Duration",
+      "durationValue": "{unit, select, HOUR {{value} h} DAY {{value} d} WEEK {{value} wk} MONTH {{value} mo} other {{value}}}",
+      "priceMax": "Up to",
+      "captain": "With captain",
+      "crew": "With crew",
+      "feature": "Feature"
     }
   },
   "features": {
@@ -281,27 +336,60 @@
       "platform": {
         "title": "Platform",
         "links": [
-          { "label": "Vessels", "href": "/#vessels" },
-          { "label": "Destinations", "href": "/#vessels" },
-          { "label": "Initiatives", "href": "/#initiatives" },
-          { "label": "How it works", "href": "/#why-us" }
+          {
+            "label": "Vessels",
+            "href": "/#vessels"
+          },
+          {
+            "label": "Destinations",
+            "href": "/#vessels"
+          },
+          {
+            "label": "Initiatives",
+            "href": "/#initiatives"
+          },
+          {
+            "label": "How it works",
+            "href": "/#why-us"
+          }
         ]
       },
       "company": {
         "title": "Company",
         "links": [
-          { "label": "About", "href": "/about" },
-          { "label": "Contact", "href": "/contact" },
-          { "label": "Blog", "href": "#" }
+          {
+            "label": "About",
+            "href": "/about"
+          },
+          {
+            "label": "Contact",
+            "href": "/contact"
+          },
+          {
+            "label": "Blog",
+            "href": "#"
+          }
         ]
       },
       "support": {
         "title": "Support",
         "links": [
-          { "label": "Help", "href": "/contact" },
-          { "label": "Cancellation policy", "href": "#" },
-          { "label": "Terms of use", "href": "#" },
-          { "label": "Privacy", "href": "#" }
+          {
+            "label": "Help",
+            "href": "/contact"
+          },
+          {
+            "label": "Cancellation policy",
+            "href": "#"
+          },
+          {
+            "label": "Terms of use",
+            "href": "#"
+          },
+          {
+            "label": "Privacy",
+            "href": "#"
+          }
         ]
       }
     },
@@ -793,6 +881,7 @@
       "users": "Users",
       "locations": "Locations",
       "amenities": "Amenities",
+      "searchSources": "Search sources",
       "commissions": "Commission",
       "payments": "Payments",
       "auditLog": "Audit log"
@@ -911,6 +1000,73 @@
           "forbidden": "Not enough permissions",
           "keyTaken": "That key already exists",
           "generic": "Couldn't add the amenity"
+        }
+      }
+    },
+    "searchSources": {
+      "title": "Search sources",
+      "subtitle": "External sites the smart search can use as an additional source of listings.",
+      "wiringHint": "Adding a source here does not by itself make the app crawl it — it only affects the ranking reliability bonus and the robots.txt cache. For a source to actually be searched, a provider must be implemented in code (see src/server/search/providers/) and wired into discover/page.tsx.",
+      "empty": "No sources yet.",
+      "enable": "Enable",
+      "disable": "Disable",
+      "enabled": "Source enabled",
+      "disabled": "Source disabled",
+      "statusEnabled": "Enabled",
+      "statusDisabled": "Disabled",
+      "delete": "Delete",
+      "confirmDelete": "Delete this source? This cannot be undone.",
+      "deleted": "Source deleted",
+      "deleteError": "Couldn't delete the source",
+      "toggleErrors": {
+        "unauthenticated": "Sign in to change a source's status",
+        "forbidden": "Not enough permissions",
+        "generic": "Couldn't change the source's status"
+      },
+      "columns": {
+        "source": "Source",
+        "processing": "Processing",
+        "priority": "Priority",
+        "robots": "robots.txt",
+        "status": "Status",
+        "actions": "Actions"
+      },
+      "robots": {
+        "unknown": "Not checked yet",
+        "allowed": "Allowed",
+        "disallowed": "Disallowed"
+      },
+      "sourceType": {
+        "WEBSITE": "Website",
+        "API": "API"
+      },
+      "processingType": {
+        "API": "API",
+        "HTML": "HTML parsing",
+        "STRUCTURED_DATA": "Structured data",
+        "AI_EXTRACTION": "AI extraction",
+        "HYBRID": "Hybrid (HTML + AI)"
+      },
+      "form": {
+        "name": "Name",
+        "namePlaceholder": "e.g. Meridian Beyond",
+        "domain": "Domain",
+        "domainPlaceholder": "e.g. meridian.com",
+        "baseUrl": "Base URL",
+        "baseUrlPlaceholder": "https://meridian.com",
+        "sourceType": "Source type",
+        "processingType": "Processing strategy",
+        "priority": "Priority",
+        "priorityHint": "Higher runs earlier when the search's crawl budget is limited.",
+        "notes": "Notes",
+        "notesPlaceholder": "Source quirks: no pricing, specific regions only, etc.",
+        "add": "Add source",
+        "errors": {
+          "invalid": "Check the fields you filled in",
+          "unauthenticated": "Sign in to add a source",
+          "forbidden": "Not enough permissions",
+          "domainTaken": "A source with that domain already exists",
+          "generic": "Couldn't add the source"
         }
       }
     },

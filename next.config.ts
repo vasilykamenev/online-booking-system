@@ -18,7 +18,13 @@ const supabaseRemotePattern = supabaseUrl
 
 const nextConfig: NextConfig = {
   images: {
-    remotePatterns: supabaseRemotePattern ? [supabaseRemotePattern] : [],
+    remotePatterns: [
+      ...(supabaseRemotePattern ? [supabaseRemotePattern] : []),
+      // brilions.com — the first ExternalSearchProvider (src/server/search/providers/brilions/).
+      // next/image refuses to optimize an unlisted remote host, so every external source's image
+      // domain has to be added here as it's wired up.
+      { protocol: "https", hostname: "brilions.com", pathname: "/wp-content/uploads/**" },
+    ],
     // Local Supabase Storage serves images from 127.0.0.1 — dev-only, never in production,
     // where NEXT_PUBLIC_SUPABASE_URL points at a real (non-private-IP) domain.
     dangerouslyAllowLocalIP: process.env.NODE_ENV !== "production",

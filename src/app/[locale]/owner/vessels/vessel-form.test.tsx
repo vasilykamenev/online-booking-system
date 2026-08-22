@@ -13,6 +13,14 @@ import { VesselForm } from "./vessel-form";
  * error boundary.
  */
 
+// Each render of VesselForm mounts a currency Select carrying every ISO 4217 code — ~160 Radix
+// items — on top of the type, location and status selects. That lands around a second per render
+// in jsdom, which fits the default 5s timeout in isolation but not when vitest runs this file
+// alongside others on a loaded machine. The component is doing the right thing (the currency list
+// is reference data, not a hardcoded shortlist — CLAUDE.md §9); it is the test budget that needs
+// to acknowledge the cost.
+vi.setConfig({ testTimeout: 20_000 });
+
 vi.mock("next-intl", () => ({
   useTranslations: () => (key: string) => key,
   useLocale: () => "en",

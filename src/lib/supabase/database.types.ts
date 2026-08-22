@@ -712,6 +712,164 @@ export type Database = {
           },
         ]
       }
+      search_page_cache: {
+        Row: {
+          content_hash: string
+          fetched_at: string
+          html: string
+          http_status: number
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          content_hash: string
+          fetched_at?: string
+          html: string
+          http_status: number
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          content_hash?: string
+          fetched_at?: string
+          html?: string
+          http_status?: number
+          updated_at?: string
+          url?: string
+        }
+        Relationships: []
+      }
+      search_runs: {
+        Row: {
+          ai_calls: number
+          created_at: string
+          degraded_reason: string | null
+          duplicates_detected: number
+          errors: Json
+          execution_ms: number | null
+          external_phase: Database["public"]["Enums"]["search_external_phase"]
+          external_results: number
+          generated_queries: Json
+          id: string
+          internal_results: number
+          interpretation_mode: string
+          interpreted_criteria: Json
+          locale: string
+          offers_extracted: number
+          offers_normalized: number
+          original_query: string
+          pages_rejected: number
+          pages_visited: number
+          sources_visited: number
+          user_id: string | null
+        }
+        Insert: {
+          ai_calls?: number
+          created_at?: string
+          degraded_reason?: string | null
+          duplicates_detected?: number
+          errors?: Json
+          execution_ms?: number | null
+          external_phase?: Database["public"]["Enums"]["search_external_phase"]
+          external_results?: number
+          generated_queries?: Json
+          id?: string
+          internal_results?: number
+          interpretation_mode?: string
+          interpreted_criteria?: Json
+          locale: string
+          offers_extracted?: number
+          offers_normalized?: number
+          original_query: string
+          pages_rejected?: number
+          pages_visited?: number
+          sources_visited?: number
+          user_id?: string | null
+        }
+        Update: {
+          ai_calls?: number
+          created_at?: string
+          degraded_reason?: string | null
+          duplicates_detected?: number
+          errors?: Json
+          execution_ms?: number | null
+          external_phase?: Database["public"]["Enums"]["search_external_phase"]
+          external_results?: number
+          generated_queries?: Json
+          id?: string
+          internal_results?: number
+          interpretation_mode?: string
+          interpreted_criteria?: Json
+          locale?: string
+          offers_extracted?: number
+          offers_normalized?: number
+          original_query?: string
+          pages_rejected?: number
+          pages_visited?: number
+          sources_visited?: number
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "search_runs_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      search_sources: {
+        Row: {
+          base_url: string
+          created_at: string
+          domain: string
+          enabled: boolean
+          id: string
+          last_checked_at: string | null
+          name: string
+          notes: string | null
+          priority: number
+          processing_type: Database["public"]["Enums"]["search_processing_type"]
+          reliability_score: number | null
+          robots_allows: boolean | null
+          source_type: Database["public"]["Enums"]["search_source_type"]
+          updated_at: string
+        }
+        Insert: {
+          base_url: string
+          created_at?: string
+          domain: string
+          enabled?: boolean
+          id?: string
+          last_checked_at?: string | null
+          name: string
+          notes?: string | null
+          priority?: number
+          processing_type?: Database["public"]["Enums"]["search_processing_type"]
+          reliability_score?: number | null
+          robots_allows?: boolean | null
+          source_type?: Database["public"]["Enums"]["search_source_type"]
+          updated_at?: string
+        }
+        Update: {
+          base_url?: string
+          created_at?: string
+          domain?: string
+          enabled?: boolean
+          id?: string
+          last_checked_at?: string | null
+          name?: string
+          notes?: string | null
+          priority?: number
+          processing_type?: Database["public"]["Enums"]["search_processing_type"]
+          reliability_score?: number | null
+          robots_allows?: boolean | null
+          source_type?: Database["public"]["Enums"]["search_source_type"]
+          updated_at?: string
+        }
+        Relationships: []
+      }
       vessel_amenities: {
         Row: {
           amenity_id: string
@@ -874,6 +1032,13 @@ export type Database = {
         Args: { p_vessel_id: string }
         Returns: unknown[]
       }
+      get_vessels_booked_ranges: {
+        Args: { p_vessel_ids: string[] }
+        Returns: {
+          date_range: unknown
+          vessel_id: string
+        }[]
+      }
       is_admin: { Args: never; Returns: boolean }
       is_conversation_participant: {
         Args: { p_conversation_id: string }
@@ -899,6 +1064,14 @@ export type Database = {
         | "failed"
         | "refunded"
         | "cancelled"
+      search_external_phase: "SKIPPED" | "PENDING" | "COMPLETE" | "FAILED"
+      search_processing_type:
+        | "API"
+        | "HTML"
+        | "STRUCTURED_DATA"
+        | "AI_EXTRACTION"
+        | "HYBRID"
+      search_source_type: "WEBSITE" | "API"
       user_role: "client" | "owner" | "admin"
       vessel_status: "draft" | "published" | "archived"
       vessel_type: "yacht" | "catamaran" | "expedition" | "research" | "hybrid"
@@ -1053,6 +1226,15 @@ export const Constants = {
         "refunded",
         "cancelled",
       ],
+      search_external_phase: ["SKIPPED", "PENDING", "COMPLETE", "FAILED"],
+      search_processing_type: [
+        "API",
+        "HTML",
+        "STRUCTURED_DATA",
+        "AI_EXTRACTION",
+        "HYBRID",
+      ],
+      search_source_type: ["WEBSITE", "API"],
       user_role: ["client", "owner", "admin"],
       vessel_status: ["draft", "published", "archived"],
       vessel_type: ["yacht", "catamaran", "expedition", "research", "hybrid"],

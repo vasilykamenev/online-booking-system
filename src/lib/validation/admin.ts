@@ -48,3 +48,38 @@ export const commissionRateSchema = z.object({
   ratePercent: z.coerce.number().min(0).max(100),
 });
 export type CommissionRateInput = z.infer<typeof commissionRateSchema>;
+
+export const searchSourceTypeValues = [
+  "WEBSITE",
+  "API",
+] as const satisfies readonly Database["public"]["Enums"]["search_source_type"][];
+
+export const searchProcessingTypeValues = [
+  "API",
+  "HTML",
+  "STRUCTURED_DATA",
+  "AI_EXTRACTION",
+  "HYBRID",
+] as const satisfies readonly Database["public"]["Enums"]["search_processing_type"][];
+
+/**
+ * A row here is registry metadata (reliability bonus for ranking, cached robots.txt verdict) —
+ * it does not by itself make the app crawl the site. Actually searching a source still requires
+ * an `ExternalSearchProvider` implementation wired into `discover/page.tsx`'s `externalProviders`
+ * array (see `src/server/search/README.md`). The admin form makes this explicit rather than
+ * implying "add a row, get a new source searched".
+ */
+export const searchSourceSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  domain: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .regex(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/, "invalidDomain"),
+  baseUrl: z.url().max(500),
+  sourceType: z.enum(searchSourceTypeValues),
+  processingType: z.enum(searchProcessingTypeValues),
+  priority: z.coerce.number().int().min(0).max(1000).default(50),
+  notes: z.string().trim().max(2000).default(""),
+});
+export type SearchSourceInput = z.infer<typeof searchSourceSchema>;

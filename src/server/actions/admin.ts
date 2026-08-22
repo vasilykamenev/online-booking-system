@@ -10,6 +10,7 @@ import {
   locationSchema,
   amenityKeySchema,
   commissionRateSchema,
+  searchSourceSchema,
   type userRoleValues,
 } from "@/lib/validation/admin";
 
@@ -253,5 +254,94 @@ export async function deleteAmenity(locale: Locale, amenityId: string): Promise<
   await logAudit(supabase, admin.id, "delete_amenity", "amenities", amenityId);
 
   revalidatePath(`/${locale}/admin/amenities`);
+  return {};
+}
+
+export interface SearchSourceActionState {
+  error?: string;
+}
+
+export async function createSearchSource(
+  locale: Locale,
+  _prevState: SearchSourceActionState,
+  formData: FormData,
+): Promise<SearchSourceActionState> {
+  const parsed = searchSourceSchema.safeParse({
+    name: formData.get("name"),
+    domain: formData.get("domain"),
+    baseUrl: formData.get("baseUrl"),
+    sourceType: formData.get("sourceType"),
+    processingType: formData.get("processingType"),
+    priority: formData.get("priority"),
+    notes: formData.get("notes"),
+  });
+  if (!parsed.success) return { error: "invalid" };
+
+  const supabase = await createClient();
+  const admin = await requireAdmin(supabase);
+  if ("error" in admin) return { error: admin.error };
+
+  const { data: source, error } = await supabase
+    .from("search_sources")
+    .insert({
+      name: parsed.data.name,
+      domain: parsed.data.domain,
+      base_url: parsed.data.baseUrl,
+      source_type: parsed.data.sourceType,
+      processing_type: parsed.data.processingType,
+      priority: parsed.data.priority,
+      notes: parsed.data.notes || null,
+    })
+    .select("id")
+    .single();
+  if (error) return { error: error.code === "23505" ? "domainTaken" : "generic" };
+
+  await logAudit(supabase, admin.id, "create_search_source", "search_sources", source.id, {
+    domain: parsed.data.domain,
+  });
+
+  revalidatePath(`/${locale}/admin/search-sources`);
+  return {};
+}
+
+export interface SetSearchSourceEnabledResult {
+  error?: "unauthenticated" | "forbidden" | "generic";
+}
+
+export async function setSearchSourceEnabled(
+  locale: Locale,
+  sourceId: string,
+  enabled: boolean,
+): Promise<SetSearchSourceEnabledResult> {
+  const supabase = await createClient();
+  const admin = await requireAdmin(supabase);
+  if ("error" in admin) return { error: admin.error };
+
+  const { error } = await supabase.from("search_sources").update({ enabled }).eq("id", sourceId);
+  if (error) return { error: "generic" };
+
+  await logAudit(
+    supabase,
+    admin.id,
+    enabled ? "enable_search_source" : "disable_search_source",
+    "search_sources",
+    sourceId,
+  );
+
+  revalidatePath(`/${locale}/admin/search-sources`);
+  return {};
+}
+
+export async function deleteSearchSource(locale: Locale, sourceId: string): Promise<DeleteResult> {
+  const supabase = await createClient();
+  const admin = await requireAdmin(supabase);
+  if ("error" in admin) return { error: admin.error };
+
+  const { error } = await supabase.from("search_sources").delete().eq("id", sourceId);
+  if (error) return { error: "generic" };
+
+  await logAudit(supabase, admin.id, "delete_search_source", "search_sources", sourceId);
+
+  revalidatePath(`/${locale}/admin/search-sources`);
   return {};
 }

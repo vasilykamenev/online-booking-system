@@ -48,6 +48,7 @@ export function Header({ profile }: { profile: Profile | null }) {
 
   const navItems = [
     { label: t("vessels"), href: "/#vessels" },
+    { label: t("discover"), href: "/discover" },
     { label: t("destinations"), href: "/#vessels" },
     { label: t("initiatives"), href: "/initiatives" },
     { label: t("about"), href: "/about" },
