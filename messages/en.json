@@ -1006,7 +1006,7 @@
     "searchSources": {
       "title": "Search sources",
       "subtitle": "External sites the smart search can use as an additional source of listings.",
-      "wiringHint": "Enabling or disabling an already-wired source (e.g. brilions.com) takes effect immediately, no code change needed. But adding a brand-new site here does not by itself make the app crawl it — a provider has to be implemented in code (see src/server/search/providers/) and registered in provider-registry.ts; until then the row only affects the ranking reliability bonus and the robots.txt cache.",
+      "wiringHint": "A new source is added as a draft and stays out of search until it's checked (\"Check\" — reachability, robots.txt, sitemap, structured data, a candidate-card preview) and approved. Enabling or disabling an already-approved, already-wired source (e.g. brilions.com) takes effect immediately, no code change needed. But approving a brand-new site does not by itself make the app crawl it — a provider still has to be implemented in code (see src/server/search/providers/) and registered in provider-registry.ts; until then the approved row only affects the ranking reliability bonus and the robots.txt cache.",
       "empty": "No sources yet.",
       "enable": "Enable",
       "disable": "Disable",
@@ -1054,6 +1054,27 @@
         "AI_EXTRACTION": "Sends the page text to an AI model to pull out the data. Handles messy, free-form pages, but costs more and runs slower per page.",
         "HYBRID": "Fixed selectors for fields that are always in the same place, AI for the rest (e.g. a free-text amenities list)."
       },
+      "lifecycle": {
+        "badge": {
+          "draft": "Draft",
+          "needs_review": "Needs review",
+          "active": "Active",
+          "rejected": "Rejected"
+        },
+        "actions": {
+          "approve": "Approve",
+          "reject": "Reject"
+        },
+        "toast": {
+          "approved": "Source approved and enabled",
+          "rejected": "Source rejected"
+        },
+        "errors": {
+          "unauthenticated": "Sign in to change a source's status",
+          "forbidden": "Not enough permissions",
+          "generic": "Couldn't change the source's status"
+        }
+      },
       "form": {
         "name": "Name",
         "namePlaceholder": "e.g. Meridian Beyond",
@@ -1074,6 +1095,57 @@
           "forbidden": "Not enough permissions",
           "domainTaken": "A source with that domain already exists",
           "generic": "Couldn't add the source"
+        }
+      },
+      "validation": {
+        "checkButton": "Check",
+        "checking": "Checking…",
+        "title": "Check results",
+        "reachable": {
+          "ok": "Site responds (HTTP {status})",
+          "reasons": {
+            "unsupported-scheme": "Site unreachable: unsupported URL scheme",
+            "private-address": "Site unreachable: address points at a private/local network",
+            "dns-error": "Site unreachable: couldn't resolve the domain",
+            "too-large": "Site unreachable: response exceeds the size limit",
+            "too-many-redirects": "Site unreachable: too many redirects",
+            "timeout": "Site unreachable: request timed out",
+            "http-error": "Site unreachable: HTTP error {status}",
+            "network-error": "Site unreachable: network error"
+          }
+        },
+        "robots": {
+          "found": "robots.txt found",
+          "notFound": "robots.txt not found",
+          "allowed": "base path allowed",
+          "disallowed": "base path disallowed"
+        },
+        "sitemap": {
+          "found": "Sitemap found: {url} (~{count} entries)",
+          "notFound": "No sitemap found"
+        },
+        "structuredData": {
+          "found": "Structured data found (JSON-LD): {types}",
+          "notFound": "No structured data (JSON-LD) found"
+        },
+        "suggestion": "Suggested processing strategy: {type}",
+        "apply": "Apply",
+        "candidatePreview": {
+          "title": "Candidate card preview",
+          "unavailable": "No sitemap found — candidate preview unavailable",
+          "summary": "Look like vessel listings: {matched} of {total}",
+          "fetchFailed": "Couldn't load the page",
+          "structuredMatch": "Structured data on page: {types}",
+          "aiMatch": "Looks like a vessel listing",
+          "aiNoMatch": "Doesn't look like a vessel listing",
+          "extracted": "{name} · guests: {guests} · cabins: {cabins}",
+          "unknownField": "—"
+        },
+        "errors": {
+          "invalid": "Enter a valid base URL before checking",
+          "unauthenticated": "Sign in to check a source",
+          "forbidden": "Not enough permissions",
+          "generic": "Couldn't check the source"
         }
       }
     },

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { isAllowedByRobots, parseRobotsTxt } from "./robots-rules";
+import { extractSitemapDirectives, isAllowedByRobots, parseRobotsTxt } from "./robots-rules";
 
 // Modeled on the real robots.txt observed at brilions.com during integration research — a
 // standard Yoast SEO block: disallow WordPress internals/search, allow uploads, no crawl-delay.
@@ -69,5 +69,26 @@ describe("isAllowedByRobots", () => {
 
   it("allows everything when there are no rules at all", () => {
     expect(isAllowedByRobots({ rules: [] }, "/anything/")).toBe(true);
+  });
+});
+
+describe("extractSitemapDirectives", () => {
+  it("extracts the Sitemap directive from the fixture", () => {
+    expect(extractSitemapDirectives(BRILIONS_LIKE_ROBOTS)).toEqual([
+      "https://brilions.com/sitemap_index.xml",
+    ]);
+  });
+
+  it("returns an empty array when there is no Sitemap directive", () => {
+    expect(extractSitemapDirectives("User-agent: *\nDisallow: /admin\n")).toEqual([]);
+  });
+
+  it("collects multiple Sitemap directives regardless of where they sit relative to a user-agent block", () => {
+    const text =
+      "Sitemap: https://a.com/s1.xml\nUser-agent: *\nDisallow: /\nSitemap: https://a.com/s2.xml\n";
+    expect(extractSitemapDirectives(text)).toEqual([
+      "https://a.com/s1.xml",
+      "https://a.com/s2.xml",
+    ]);
   });
 });

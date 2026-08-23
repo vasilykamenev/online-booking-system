@@ -53,3 +53,23 @@ export function isAllowedByRobots(rules: RobotsRules, path: string): boolean {
   }
   return best ? best.allow : true;
 }
+
+/**
+ * `Sitemap:` directives apply to the whole file regardless of which user-agent block (if any) they
+ * sit under — unlike `Allow`/`Disallow`, so unlike `parseRobotsTxt` this scans every line, not just
+ * the wildcard block. Used by source registration to discover sitemap candidates before falling
+ * back to guessing common paths (`sitemap.xml`, `sitemap_index.xml`).
+ */
+export function extractSitemapDirectives(text: string): string[] {
+  const urls: string[] = [];
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.split("#")[0].trim();
+    if (!line) continue;
+
+    const [rawField, ...rest] = line.split(":");
+    if (rawField.trim().toLowerCase() !== "sitemap") continue;
+    const value = rest.join(":").trim();
+    if (value) urls.push(value);
+  }
+  return urls;
+}

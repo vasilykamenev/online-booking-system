@@ -1,10 +1,15 @@
 "use client";
 
-import { useActionState, useEffect, useRef, useState } from "react";
+import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { Locale } from "@/i18n/routing";
 import { useRouter } from "@/i18n/navigation";
-import { createSearchSource, type SearchSourceActionState } from "@/server/actions/admin";
+import {
+  createSearchSource,
+  validateSearchSourceCandidate,
+  type SearchSourceActionState,
+  type SearchSourceValidationState,
+} from "@/server/actions/admin";
 import {
   searchProcessingTypeValues,
   searchSourceTypeValues,
@@ -28,6 +33,7 @@ export function SearchSourceForm() {
   const tProcessing = useTranslations("admin.searchSources.processingType");
   const tProcessingHint = useTranslations("admin.searchSources.processingTypeHint");
   const tSourceType = useTranslations("admin.searchSources.sourceType");
+  const tValidation = useTranslations("admin.searchSources.validation");
   const locale = useLocale() as Locale;
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
@@ -38,13 +44,26 @@ export function SearchSourceForm() {
   );
   const [processingType, setProcessingType] =
     useState<(typeof searchProcessingTypeValues)[number]>("HTML");
+  const [validation, setValidation] = useState<SearchSourceValidationState | null>(null);
+  const [isValidating, startValidation] = useTransition();
+
+  function handleValidate() {
+    const input = formRef.current?.elements.namedItem("baseUrl");
+    const baseUrl = input instanceof HTMLInputElement ? input.value : "";
+    startValidation(async () => {
+      setValidation(await validateSearchSourceCandidate(baseUrl));
+    });
+  }
   // Tracks which `state` the processingType hint was last adjusted for, so a successful submit
   // can reset it back to the default in the same render — setState-in-render is the React-endorsed
   // way to do this, unlike setState-in-effect, which would cause an extra cascading render.
   const [adjustedForState, setAdjustedForState] = useState(state);
   if (state !== adjustedForState) {
     setAdjustedForState(state);
-    if (!state.error) setProcessingType("HTML");
+    if (!state.error) {
+      setProcessingType("HTML");
+      setValidation(null);
+    }
   }
 
   useEffect(() => {
@@ -69,14 +88,152 @@ export function SearchSourceForm() {
       </div>
       <div className="flex flex-col gap-2 sm:col-span-2">
         <Label htmlFor="baseUrl">{t("baseUrl")}</Label>
-        <Input
-          id="baseUrl"
-          name="baseUrl"
-          type="url"
-          placeholder={t("baseUrlPlaceholder")}
-          required
-        />
+        <div className="flex gap-2">
+          <Input
+            id="baseUrl"
+            name="baseUrl"
+            type="url"
+            placeholder={t("baseUrlPlaceholder")}
+            required
+            className="flex-1"
+          />
+          <Button
+            type="button"
+            variant="outline"
+            className="shrink-0 rounded-full"
+            disabled={isValidating}
+            onClick={handleValidate}
+          >
+            {isValidating ? tValidation("checking") : tValidation("checkButton")}
+          </Button>
+        </div>
       </div>
+
+      {validation && (
+        <div className="flex flex-col gap-1.5 rounded-2xl border border-border bg-muted/40 p-4 text-sm sm:col-span-2">
+          {validation.error ? (
+            <p className="text-destructive">{tValidation(`errors.${validation.error}`)}</p>
+          ) : validation.report ? (
+            <>
+              <p className="font-medium">{tValidation("title")}</p>
+              <p className="font-light text-muted-foreground">
+                {validation.report.reachable
+                  ? tValidation("reachable.ok", { status: validation.report.status ?? 0 })
+                  : tValidation(`reachable.reasons.${validation.report.failureReason}`, {
+                      status: validation.report.status ?? "—",
+                    })}
+              </p>
+              <p className="font-light text-muted-foreground">
+                {validation.report.robotsTxt.found
+                  ? tValidation("robots.found")
+                  : tValidation("robots.notFound")}
+                {" — "}
+                {validation.report.robotsTxt.allowsBasePath
+                  ? tValidation("robots.allowed")
+                  : tValidation("robots.disallowed")}
+              </p>
+              <p className="font-light text-muted-foreground">
+                {validation.report.sitemap.found
+                  ? tValidation("sitemap.found", {
+                      url: validation.report.sitemap.url ?? "",
+                      count: validation.report.sitemap.entryCount ?? 0,
+                    })
+                  : tValidation("sitemap.notFound")}
+              </p>
+              <p className="font-light text-muted-foreground">
+                {validation.report.structuredData.found
+                  ? tValidation("structuredData.found", {
+                      types: validation.report.structuredData.types.join(", "),
+                    })
+                  : tValidation("structuredData.notFound")}
+              </p>
+              {validation.report.suggestedProcessingType && (
+                <div className="mt-1 flex flex-wrap items-center gap-2">
+                  <span>
+                    {tValidation("suggestion", {
+                      type: tProcessing(validation.report.suggestedProcessingType),
+                    })}
+                  </span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="rounded-full"
+                    onClick={() =>
+                      setProcessingType(validation.report!.suggestedProcessingType!)
+                    }
+                  >
+                    {tValidation("apply")}
+                  </Button>
+                </div>
+              )}
+
+              <div className="mt-2 flex flex-col gap-1.5 border-t border-border pt-2">
+                <p className="font-medium">{tValidation("candidatePreview.title")}</p>
+                {!validation.report.candidatePreview.attempted ? (
+                  <p className="font-light text-muted-foreground">
+                    {tValidation("candidatePreview.unavailable")}
+                  </p>
+                ) : (
+                  <>
+                    <p className="font-light text-muted-foreground">
+                      {tValidation("candidatePreview.summary", {
+                        matched: validation.report.candidatePreview.samples.filter(
+                          (sample) =>
+                            sample.structuredDataTypes.length > 0 ||
+                            sample.classification?.looksLikeVesselListing,
+                        ).length,
+                        total: validation.report.candidatePreview.samples.length,
+                      })}
+                    </p>
+                    <ul className="flex flex-col gap-1">
+                      {validation.report.candidatePreview.samples.map((sample) => (
+                        <li
+                          key={sample.url}
+                          className="rounded-lg border border-border bg-card px-3 py-2 font-light text-muted-foreground"
+                        >
+                          <p className="truncate text-xs" title={sample.url}>
+                            {sample.url}
+                          </p>
+                          {!sample.fetched ? (
+                            <p>{tValidation("candidatePreview.fetchFailed")}</p>
+                          ) : sample.structuredDataTypes.length > 0 ? (
+                            <p>
+                              {tValidation("candidatePreview.structuredMatch", {
+                                types: sample.structuredDataTypes.join(", "),
+                              })}
+                            </p>
+                          ) : sample.classification?.looksLikeVesselListing ? (
+                            <>
+                              <p>{tValidation("candidatePreview.aiMatch")}</p>
+                              <p>
+                                {tValidation("candidatePreview.extracted", {
+                                  name:
+                                    sample.classification.extracted.name ??
+                                    tValidation("candidatePreview.unknownField"),
+                                  guests:
+                                    sample.classification.extracted.guests ??
+                                    tValidation("candidatePreview.unknownField"),
+                                  cabins:
+                                    sample.classification.extracted.cabins ??
+                                    tValidation("candidatePreview.unknownField"),
+                                })}
+                              </p>
+                            </>
+                          ) : (
+                            <p>{tValidation("candidatePreview.aiNoMatch")}</p>
+                          )}
+                        </li>
+                      ))}
+                    </ul>
+                  </>
+                )}
+              </div>
+            </>
+          ) : null}
+        </div>
+      )}
+
       <div className="flex flex-col gap-2">
         <Label htmlFor="sourceType">{t("sourceType")}</Label>
         <Select name="sourceType" defaultValue={searchSourceTypeValues[0]}>

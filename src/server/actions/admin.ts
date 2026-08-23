@@ -13,6 +13,10 @@ import {
   searchSourceSchema,
   type userRoleValues,
 } from "@/lib/validation/admin";
+import {
+  validateSearchSource,
+  type SourceValidationReport,
+} from "@/server/search/source-validation";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -257,6 +261,34 @@ export async function deleteAmenity(locale: Locale, amenityId: string): Promise<
   return {};
 }
 
+export interface SearchSourceValidationState {
+  error?: "unauthenticated" | "forbidden" | "invalid" | "generic";
+  report?: SourceValidationReport;
+}
+
+/**
+ * Read-only pre-registration probe (spec §9) for the "Проверить" button in the search-source form
+ * — never writes to `search_sources`, just gives the admin a live report to decide on before
+ * `createSearchSource` runs. See `source-validation.ts` for why it doesn't cache `robots_allows`.
+ */
+export async function validateSearchSourceCandidate(
+  baseUrl: string,
+): Promise<SearchSourceValidationState> {
+  const parsed = searchSourceSchema.shape.baseUrl.safeParse(baseUrl);
+  if (!parsed.success) return { error: "invalid" };
+
+  const supabase = await createClient();
+  const admin = await requireAdmin(supabase);
+  if ("error" in admin) return { error: admin.error };
+
+  try {
+    const report = await validateSearchSource(parsed.data);
+    return { report };
+  } catch {
+    return { error: "generic" };
+  }
+}
+
 export interface SearchSourceActionState {
   error?: string;
 }
@@ -291,6 +323,9 @@ export async function createSearchSource(
       processing_type: parsed.data.processingType,
       priority: parsed.data.priority,
       notes: parsed.data.notes || null,
+      // Every new source starts unreviewed — `approveSearchSource` is the only path to `enabled`.
+      status: "draft",
+      enabled: false,
     })
     .select("id")
     .single();
@@ -299,6 +334,52 @@ export async function createSearchSource(
   await logAudit(supabase, admin.id, "create_search_source", "search_sources", source.id, {
     domain: parsed.data.domain,
   });
+
+  revalidatePath(`/${locale}/admin/search-sources`);
+  return {};
+}
+
+export interface SetSearchSourceStatusResult {
+  error?: "unauthenticated" | "forbidden" | "generic";
+}
+
+/** Moves a draft/needs_review source to active and switches it on — the only path that sets
+ *  `enabled: true`, so it's always paired with the source having been reviewed. */
+export async function approveSearchSource(
+  locale: Locale,
+  sourceId: string,
+): Promise<SetSearchSourceStatusResult> {
+  const supabase = await createClient();
+  const admin = await requireAdmin(supabase);
+  if ("error" in admin) return { error: admin.error };
+
+  const { error } = await supabase
+    .from("search_sources")
+    .update({ status: "active", enabled: true })
+    .eq("id", sourceId);
+  if (error) return { error: "generic" };
+
+  await logAudit(supabase, admin.id, "approve_search_source", "search_sources", sourceId);
+
+  revalidatePath(`/${locale}/admin/search-sources`);
+  return {};
+}
+
+export async function rejectSearchSource(
+  locale: Locale,
+  sourceId: string,
+): Promise<SetSearchSourceStatusResult> {
+  const supabase = await createClient();
+  const admin = await requireAdmin(supabase);
+  if ("error" in admin) return { error: admin.error };
+
+  const { error } = await supabase
+    .from("search_sources")
+    .update({ status: "rejected", enabled: false })
+    .eq("id", sourceId);
+  if (error) return { error: "generic" };
+
+  await logAudit(supabase, admin.id, "reject_search_source", "search_sources", sourceId);
 
   revalidatePath(`/${locale}/admin/search-sources`);
   return {};

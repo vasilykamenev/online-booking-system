@@ -15,6 +15,7 @@ import type { Database } from "@/lib/supabase/database.types";
 /** Straight from the DB enums, so a new strategy is a migration the types then enforce. */
 export type SearchProcessingType = Database["public"]["Enums"]["search_processing_type"];
 export type SearchSourceType = Database["public"]["Enums"]["search_source_type"];
+export type SearchSourceStatus = Database["public"]["Enums"]["search_source_status"];
 
 export interface SearchSource {
   id: string;
@@ -46,6 +47,10 @@ export const listEnabledSources = cache(async (): Promise<SearchSource[]> => {
       "id, name, domain, base_url, enabled, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at",
     )
     .eq("enabled", true)
+    // Belt-and-suspenders: `enabled` should only ever be true alongside status = 'active' (that's
+    // what `approveSearchSource` enforces), but a search-time read is exactly the place not to rely
+    // on that invariant holding elsewhere — a draft/rejected row must never be searched, full stop.
+    .eq("status", "active")
     .order("priority", { ascending: false });
 
   // A read failure must not break search — the internal half of a global search is perfectly

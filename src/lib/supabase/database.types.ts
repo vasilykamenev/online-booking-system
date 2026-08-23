@@ -7,6 +7,11 @@ export type Json =
   | Json[]
 
 export type Database = {
+  // Allows to automatically instantiate createClient with right options
+  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
+  __InternalSupabase: {
+    PostgrestVersion: "14.15"
+  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -834,6 +839,7 @@ export type Database = {
           reliability_score: number | null
           robots_allows: boolean | null
           source_type: Database["public"]["Enums"]["search_source_type"]
+          status: Database["public"]["Enums"]["search_source_status"]
           updated_at: string
         }
         Insert: {
@@ -850,6 +856,7 @@ export type Database = {
           reliability_score?: number | null
           robots_allows?: boolean | null
           source_type?: Database["public"]["Enums"]["search_source_type"]
+          status?: Database["public"]["Enums"]["search_source_status"]
           updated_at?: string
         }
         Update: {
@@ -866,6 +873,7 @@ export type Database = {
           reliability_score?: number | null
           robots_allows?: boolean | null
           source_type?: Database["public"]["Enums"]["search_source_type"]
+          status?: Database["public"]["Enums"]["search_source_status"]
           updated_at?: string
         }
         Relationships: []
@@ -1071,6 +1079,7 @@ export type Database = {
         | "STRUCTURED_DATA"
         | "AI_EXTRACTION"
         | "HYBRID"
+      search_source_status: "draft" | "needs_review" | "active" | "rejected"
       search_source_type: "WEBSITE" | "API"
       user_role: "client" | "owner" | "admin"
       vessel_status: "draft" | "published" | "archived"
@@ -1234,6 +1243,7 @@ export const Constants = {
         "AI_EXTRACTION",
         "HYBRID",
       ],
+      search_source_status: ["draft", "needs_review", "active", "rejected"],
       search_source_type: ["WEBSITE", "API"],
       user_role: ["client", "owner", "admin"],
       vessel_status: ["draft", "published", "archived"],
@@ -1241,4 +1251,3 @@ export const Constants = {
     },
   },
 } as const
-

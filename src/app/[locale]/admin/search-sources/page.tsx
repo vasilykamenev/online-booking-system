@@ -12,9 +12,23 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import type { Database } from "@/lib/supabase/database.types";
 import { SearchSourceForm } from "./search-source-form";
 import { SearchSourceToggleButton } from "./search-source-toggle-button";
+import { SearchSourceStatusActions } from "./search-source-status-actions";
 import { SearchSourceDeleteButton } from "./search-source-delete-button";
+
+type SearchSourceStatus = Database["public"]["Enums"]["search_source_status"];
+
+const STATUS_BADGE_VARIANT: Record<
+  SearchSourceStatus,
+  "outline" | "secondary" | "default" | "destructive"
+> = {
+  draft: "outline",
+  needs_review: "secondary",
+  active: "default",
+  rejected: "destructive",
+};
 
 export async function generateMetadata({
   params,
@@ -35,6 +49,7 @@ export default async function AdminSearchSourcesPage({
   setRequestLocale(locale);
   const t = await getTranslations("admin.searchSources");
   const tProcessing = await getTranslations("admin.searchSources.processingType");
+  const tLifecycle = await getTranslations("admin.searchSources.lifecycle");
 
   const sources = await getAllSearchSourcesAdmin();
 
@@ -95,13 +110,24 @@ export default async function AdminSearchSourcesPage({
                     )}
                   </TableCell>
                   <TableCell>
-                    <Badge variant={source.enabled ? "default" : "outline"}>
-                      {source.enabled ? t("statusEnabled") : t("statusDisabled")}
-                    </Badge>
+                    <div className="flex flex-wrap gap-1">
+                      <Badge variant={STATUS_BADGE_VARIANT[source.status]}>
+                        {tLifecycle(`badge.${source.status}`)}
+                      </Badge>
+                      {source.status === "active" && (
+                        <Badge variant={source.enabled ? "default" : "outline"}>
+                          {source.enabled ? t("statusEnabled") : t("statusDisabled")}
+                        </Badge>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
-                      <SearchSourceToggleButton sourceId={source.id} enabled={source.enabled} />
+                      {source.status === "active" ? (
+                        <SearchSourceToggleButton sourceId={source.id} enabled={source.enabled} />
+                      ) : (
+                        <SearchSourceStatusActions sourceId={source.id} status={source.status} />
+                      )}
                       <SearchSourceDeleteButton sourceId={source.id} />
                     </div>
                   </TableCell>
