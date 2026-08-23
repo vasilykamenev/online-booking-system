@@ -11,6 +11,9 @@ export interface PageSummary {
   title: string | null;
   description: string | null;
   heading: string | null;
+  /** `og:image`, the one deterministic photo signal that works across near-arbitrary markup —
+   *  reused so a generic provider doesn't need AI to hallucinate an image URL. */
+  image: string | null;
   /** Visible body text, whitespace-collapsed and capped — enough for a model to judge the page's
    *  subject without spending the whole call budget on one page. */
   bodyText: string;
@@ -28,6 +31,7 @@ export function extractPageSummary(html: string): PageSummary {
     $('meta[property="og:description"]').attr("content")?.trim() ||
     null;
   const heading = $("h1").first().text().trim() || null;
+  const image = $('meta[property="og:image"]').attr("content")?.trim() || null;
 
   const bodyText = $("body")
     .text()
@@ -35,5 +39,5 @@ export function extractPageSummary(html: string): PageSummary {
     .trim()
     .slice(0, MAX_BODY_TEXT_LENGTH);
 
-  return { title, description, heading, bodyText };
+  return { title, description, heading, image, bodyText };
 }

@@ -24,16 +24,15 @@ function collectTypes(node: unknown, into: Set<string>): void {
   if ("@graph" in record) collectTypes(record["@graph"], into);
 }
 
+const SCRIPT_PATTERN = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
+
 /**
  * Extracts every `@type` declared across a page's `<script type="application/ld+json">` blocks.
  * A malformed block is skipped, not fatal — one broken script tag must not hide data in the others.
  */
 export function extractJsonLdTypes(html: string): string[] {
   const types = new Set<string>();
-  const scriptPattern =
-    /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
-
-  for (const match of html.matchAll(scriptPattern)) {
+  for (const match of html.matchAll(SCRIPT_PATTERN)) {
     try {
       collectTypes(JSON.parse(match[1]), types);
     } catch {
@@ -41,4 +40,70 @@ export function extractJsonLdTypes(html: string): string[] {
     }
   }
   return [...types];
+}
+
+export interface JsonLdFields {
+  name: string | null;
+  description: string | null;
+  image: string | null;
+}
+
+function firstString(value: unknown): string | null {
+  if (typeof value === "string" && value.trim()) return value.trim();
+  if (Array.isArray(value)) {
+    for (const item of value) {
+      if (typeof item === "string" && item.trim()) return item.trim();
+      // schema.org `image` is sometimes an ImageObject rather than a bare URL string.
+      if (item && typeof item === "object" && typeof (item as Record<string, unknown>).url === "string") {
+        return (item as Record<string, unknown>).url as string;
+      }
+    }
+    return null;
+  }
+  if (value && typeof value === "object" && typeof (value as Record<string, unknown>).url === "string") {
+    return (value as Record<string, unknown>).url as string;
+  }
+  return null;
+}
+
+function findFirstNamedNode(node: unknown): Record<string, unknown> | null {
+  if (Array.isArray(node)) {
+    for (const item of node) {
+      const found = findFirstNamedNode(item);
+      if (found) return found;
+    }
+    return null;
+  }
+  if (node === null || typeof node !== "object") return null;
+
+  const record = node as Record<string, unknown>;
+  if (typeof record.name === "string" && record.name.trim()) return record;
+  if ("@graph" in record) return findFirstNamedNode(record["@graph"]);
+  return null;
+}
+
+/**
+ * Pulls basic listing fields (name/description/image) off the first JSON-LD node that declares a
+ * `name` — deliberately not filtered to a specific `@type` allowlist (schema.org has no dedicated
+ * "boat" type, and site owners rarely tag charter listings precisely as `Product`), so this trusts
+ * "has a name" as the signal that a node describes the thing the page is about. Returns `null` when
+ * no page-wide JSON-LD carries a name at all, which is a fact about the page, not a failure.
+ */
+export function extractJsonLdFields(html: string): JsonLdFields | null {
+  for (const match of html.matchAll(SCRIPT_PATTERN)) {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(match[1]);
+    } catch {
+      continue;
+    }
+    const node = findFirstNamedNode(parsed);
+    if (!node) continue;
+    return {
+      name: firstString(node.name),
+      description: firstString(node.description),
+      image: firstString(node.image),
+    };
+  }
+  return null;
 }

@@ -1006,7 +1006,7 @@
     "searchSources": {
       "title": "Search sources",
       "subtitle": "External sites the smart search can use as an additional source of listings.",
-      "wiringHint": "A new source is added as a draft and stays out of search until it's checked (\"Check\" — reachability, robots.txt, sitemap, structured data, a candidate-card preview) and approved. Enabling or disabling an already-approved, already-wired source (e.g. brilions.com) takes effect immediately, no code change needed. But approving a brand-new site does not by itself make the app crawl it — a provider still has to be implemented in code (see src/server/search/providers/) and registered in provider-registry.ts; until then the approved row only affects the ranking reliability bonus and the robots.txt cache.",
+      "wiringHint": "A new source is added as a draft and stays out of search until it's checked (\"Check\" — reachability, robots.txt, sitemap, structured data, a candidate-card preview) and approved. Approving a source with the \"Structured data\" or \"AI extraction\" strategy starts crawling it immediately — no deploy needed, through a generic provider with no site-specific code. The \"HTML parsing\" strategy still needs a provider actually implemented in code (see src/server/search/providers/, provider-registry.ts) — specific selectors still have to be written. Enabling or disabling an already-active source takes effect immediately.",
       "empty": "No sources yet.",
       "enable": "Enable",
       "disable": "Disable",

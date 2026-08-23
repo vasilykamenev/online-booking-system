@@ -1,15 +1,9 @@
 import "server-only";
 import { safeFetch } from "@/server/search/crawl/safe-fetch";
-import {
-  extractSitemapDirectives,
-  isAllowedByRobots,
-  parseRobotsTxt,
-} from "@/server/search/crawl/robots-rules";
-import {
-  countSitemapLocs,
-  looksLikeSitemap,
-  sampleSitemapLocs,
-} from "@/server/search/crawl/sitemap-rules";
+import { isAllowedByRobots } from "@/server/search/crawl/robots-rules";
+import { fetchRobotsInfo } from "@/server/search/crawl/robots";
+import { discoverSitemap } from "@/server/search/crawl/sitemap-discovery";
+import { sampleSitemapLocs } from "@/server/search/crawl/sitemap-rules";
 import { extractJsonLdTypes } from "@/lib/search/structured-data";
 import {
   classifyCandidatePage,
@@ -27,7 +21,8 @@ import type { SearchProcessingType } from "@/server/search/source-registry";
  * are a single per-domain cache keyed to whatever path a specific `ExternalSearchProvider` cares
  * about (see `providers/brilions/provider.ts`'s `resolveRobotsAllowed`, checked against `/yacht/`,
  * not `/`). Writing a root-path check into that same cache here would let a real provider trust a
- * verdict for a path it never asked about.
+ * verdict for a path it never asked about. (`providers/generic/provider.ts` is the exception where
+ * checking `/` genuinely is what the provider itself does — it caches its own check separately.)
  */
 
 export interface SourceValidationReport {
@@ -76,36 +71,9 @@ export interface CandidatePreview {
 
 /** A quick pre-registration probe, not a crawl — kept snappy for an admin waiting on a click. */
 const PROBE_TIMEOUTS = { connectTimeoutMs: 4_000, readTimeoutMs: 6_000 };
-/** Tried only when robots.txt declares no `Sitemap:` directive of its own. */
-const FALLBACK_SITEMAP_PATHS = ["/sitemap.xml", "/sitemap_index.xml"];
-/** Bounds how many sitemap URLs get fetched per validation run. */
-const MAX_SITEMAP_CANDIDATES = 3;
 /** Bounds how many candidate detail pages get sampled for the classification preview — this is a
  *  quick registration-time check, not a crawl of the catalog. */
 const MAX_CANDIDATE_SAMPLES = 3;
-
-interface SitemapProbeResult {
-  found: boolean;
-  url: string | null;
-  entryCount: number | null;
-  /** Kept out of the public report (unbounded size, no UI use) — only used internally to pick
-   *  candidate-page URLs for `previewCandidates`. */
-  xml: string | null;
-}
-
-async function probeSitemaps(origin: string, declaredUrls: string[]): Promise<SitemapProbeResult> {
-  const candidates = (
-    declaredUrls.length > 0 ? declaredUrls : FALLBACK_SITEMAP_PATHS.map((path) => `${origin}${path}`)
-  ).slice(0, MAX_SITEMAP_CANDIDATES);
-
-  for (const url of candidates) {
-    const result = await safeFetch(url, PROBE_TIMEOUTS);
-    if (result.ok && looksLikeSitemap(result.body)) {
-      return { found: true, url, entryCount: countSitemapLocs(result.body), xml: result.body };
-    }
-  }
-  return { found: false, url: null, entryCount: null, xml: null };
-}
 
 /**
  * Fetches and classifies a handful of candidate detail pages found in the sitemap (spec §9: "does
@@ -171,21 +139,17 @@ export async function validateSearchSource(baseUrl: string): Promise<SourceValid
   const origin = parsedUrl.origin;
   const pathname = parsedUrl.pathname || "/";
 
-  const [pageResult, robotsResult] = await Promise.all([
+  const [pageResult, robotsInfo] = await Promise.all([
     safeFetch(baseUrl, PROBE_TIMEOUTS),
-    safeFetch(`${origin}/robots.txt`, PROBE_TIMEOUTS),
+    fetchRobotsInfo(baseUrl, PROBE_TIMEOUTS),
   ]);
 
-  const robotsFound = robotsResult.ok;
-  const rules = robotsFound ? parseRobotsTxt(robotsResult.body) : { rules: [] };
-  const declaredSitemaps = robotsFound ? extractSitemapDirectives(robotsResult.body) : [];
-
-  const { xml: sitemapXml, ...sitemap } = await probeSitemaps(origin, declaredSitemaps);
+  const sitemap = await discoverSitemap(origin, robotsInfo.sitemapUrls, PROBE_TIMEOUTS);
   const structuredTypes = pageResult.ok ? extractJsonLdTypes(pageResult.body) : [];
   const structuredDataFound = structuredTypes.length > 0;
 
-  const sampleUrls = sitemapXml
-    ? sampleSitemapLocs(sitemapXml, MAX_CANDIDATE_SAMPLES, pageResult.ok ? pageResult.finalUrl : undefined)
+  const sampleUrls = sitemap
+    ? sampleSitemapLocs(sitemap.xml, MAX_CANDIDATE_SAMPLES, pageResult.ok ? pageResult.finalUrl : undefined)
     : [];
   const candidatePreview = await previewCandidates(sampleUrls);
 
@@ -195,11 +159,13 @@ export async function validateSearchSource(baseUrl: string): Promise<SourceValid
     finalUrl: pageResult.ok ? pageResult.finalUrl : null,
     failureReason: pageResult.ok ? null : pageResult.reason,
     robotsTxt: {
-      found: robotsFound,
-      allowsBasePath: isAllowedByRobots(rules, pathname),
-      sitemapUrls: declaredSitemaps,
+      found: robotsInfo.found,
+      allowsBasePath: isAllowedByRobots(robotsInfo.rules, pathname),
+      sitemapUrls: robotsInfo.sitemapUrls,
     },
-    sitemap,
+    sitemap: sitemap
+      ? { found: true, url: sitemap.url, entryCount: sitemap.entryCount }
+      : { found: false, url: null, entryCount: null },
     structuredData: { found: structuredDataFound, types: structuredTypes },
     suggestedProcessingType: suggestProcessingType(pageResult.ok, structuredDataFound, candidatePreview),
     candidatePreview,

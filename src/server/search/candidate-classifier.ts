@@ -21,13 +21,19 @@ export interface CandidateClassification {
     name: string | null;
     guests: number | null;
     cabins: number | null;
+    /** The page's own wording for the vessel type ("motor yacht", "gulet") — never mapped onto our
+     *  `vessel_type` enum here, since a generic provider has no site-specific vocabulary to map
+     *  from reliably (spec's "absent beats invented"); that mapping is a per-provider concern. */
+    vesselTypeRaw: string | null;
+    country: string | null;
+    city: string | null;
   };
 }
 
 export const emptyCandidateClassification: CandidateClassification = {
   looksLikeVesselListing: false,
   confidence: 0,
-  extracted: { name: null, guests: null, cabins: null },
+  extracted: { name: null, guests: null, cabins: null, vesselTypeRaw: null, country: null, city: null },
 };
 
 const CLASSIFY_TOOL = {
@@ -47,6 +53,13 @@ const CLASSIFY_TOOL = {
       name: { type: ["string", "null"], description: "The vessel's name/model, if stated." },
       guests: { type: ["number", "null"], description: "Max guest capacity, if explicitly stated." },
       cabins: { type: ["number", "null"], description: "Number of cabins, if explicitly stated." },
+      vesselTypeRaw: {
+        type: ["string", "null"],
+        description: "The page's own words for the vessel type (e.g. \"motor yacht\", \"gulet\", " +
+          "\"catamaran\"), verbatim — do not translate or normalize.",
+      },
+      country: { type: ["string", "null"], description: "Country the vessel is based in, if stated." },
+      city: { type: ["string", "null"], description: "City/marina the vessel is based in, if stated." },
       confidence: { type: "number", minimum: 0, maximum: 1 },
     },
     required: ["looksLikeVesselListing", "confidence"],
@@ -108,6 +121,9 @@ export async function classifyCandidatePage(html: string): Promise<CandidateClas
       name: string | null;
       guests: number | null;
       cabins: number | null;
+      vesselTypeRaw: string | null;
+      country: string | null;
+      city: string | null;
       confidence: number;
     }>;
 
@@ -119,6 +135,9 @@ export async function classifyCandidatePage(html: string): Promise<CandidateClas
         name: typeof input.name === "string" ? input.name : null,
         guests: typeof input.guests === "number" ? input.guests : null,
         cabins: typeof input.cabins === "number" ? input.cabins : null,
+        vesselTypeRaw: typeof input.vesselTypeRaw === "string" ? input.vesselTypeRaw : null,
+        country: typeof input.country === "string" ? input.country : null,
+        city: typeof input.city === "string" ? input.city : null,
       },
     };
   } catch {

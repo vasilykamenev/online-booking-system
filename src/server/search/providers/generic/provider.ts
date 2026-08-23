@@ -1,0 +1,285 @@
+import "server-only";
+import { createAdminClient } from "@/lib/supabase/admin";
+import type { SearchCriteria } from "@/lib/search/criteria";
+import type { VesselSearchResult } from "@/lib/search/result";
+import { matchesKnownCriteria } from "@/lib/search/match-criteria";
+import { extractJsonLdFields } from "@/lib/search/structured-data";
+import { extractPageSummary } from "@/lib/search/page-text";
+import { fetchWithCache } from "@/server/search/crawl/cached-fetch";
+import { fetchRobotsInfo, type RobotsInfo } from "@/server/search/crawl/robots";
+import { isAllowedByRobots } from "@/server/search/crawl/robots-rules";
+import { FALLBACK_SITEMAP_PATHS, MAX_SITEMAP_CANDIDATES } from "@/server/search/crawl/sitemap-discovery";
+import { looksLikeSitemap, sampleSitemapLocs } from "@/server/search/crawl/sitemap-rules";
+import { hashContent } from "@/server/search/crawl/page-cache";
+import { classifyCandidatePage, type CandidateClassification } from "@/server/search/candidate-classifier";
+import { selectGenericCandidates } from "@/server/search/providers/generic/select-candidates";
+import { normalizeGenericResult } from "@/server/search/providers/generic/normalize";
+import type { SearchSource } from "@/server/search/source-registry";
+import {
+  emptyExternalStats,
+  type ExternalSearchContext,
+  type ExternalSearchOutcome,
+  type ExternalSearchProvider,
+  type ExternalSearchStats,
+} from "@/server/search/providers";
+
+/**
+ * `ExternalSearchProvider` factory for any registered source whose `processing_type` is
+ * `AI_EXTRACTION` or `STRUCTURED_DATA` and has no purpose-built implementation registered in
+ * `PROVIDERS_BY_DOMAIN` (`provider-registry.ts`) — the piece that makes `/admin/search-sources`
+ * registration actually *real-time*: approving a source is enough to start searching it, no
+ * provider code or deploy required. See `src/server/search/README.md`.
+ *
+ * ## Why this can't pre-filter by location like `providers/brilions/`
+ *
+ * brilions' provider only ever fetches pages it has a specific reason to believe match — a
+ * hand-built city-slug dictionary lets it skip everything outside the requested location before
+ * fetching a single page. A generic provider has no such dictionary for an arbitrary site: there is
+ * no reliable, site-agnostic way to know what a sitemap URL's slug means. So candidate selection
+ * here (`select-candidates.ts`) is a location-blind, evenly-spaced sample of the sitemap, and
+ * relevance is judged **after** fetching — `matchesKnownCriteria` for capacity/type, same as every
+ * other provider — never before.
+ *
+ * ## Why this leans on AI far more than brilions
+ *
+ * Without site-specific selectors, there's no deterministic way to read a page's fields. The best
+ * available signal, tried first and free, is the page's own JSON-LD (`extractJsonLdFields`); every
+ * other page falls back to `classifyCandidatePage` — one Anthropic call. That makes this provider's
+ * real per-search throughput far lower than brilions' — a handful of pages within
+ * `context.timeoutMs`, not dozens — since most of the time budget goes to the AI call
+ * (`AI_CALL_TIMEOUT_MS`, up to 8s) rather than the fetch itself. Acceptable for a v1 built to remove
+ * the "needs a deploy" blocker, not to match a hand-tuned provider's coverage.
+ */
+
+const PAGE_CACHE_MS = 24 * 60 * 60 * 1000;
+const SITEMAP_CACHE_MS = 24 * 60 * 60 * 1000; // Same "changes by the week" assumption as brilions.
+// How many raw sitemap entries are even worth reading into memory before `selectGenericCandidates`
+// picks an even sample from them — a safety cap against a pathologically large sitemap, not the
+// real fetch budget (that's `MAX_CANDIDATE_POOL` below).
+const RAW_ENTRY_CAP = 500;
+// Far smaller than brilions' 60 — most of the time budget here goes to AI calls, not fetches, so
+// queuing more candidates than could plausibly be reached before `context.timeoutMs` just wastes
+// the sampling step's own work.
+const MAX_CANDIDATE_POOL = 20;
+// Lower than brilions' 5 — each worker may be waiting on an up-to-8s AI call, not just a page
+// fetch, so fewer of them keep concurrent Anthropic spend (and load on the target site) in check.
+const FETCH_CONCURRENCY = 3;
+
+/**
+ * In-process cache of AI classification, keyed by page-content hash — same pattern and same reason
+ * as brilions' `amenitiesCache` (survives one warm process, cuts repeat Anthropic spend for
+ * byte-identical pages seen again within it). Module-level, not inside `createGenericProvider`'s
+ * closure: that factory runs fresh for every active generic source on every request
+ * (`provider-registry.ts`), so a cache scoped to its closure would never actually warm up.
+ */
+const classificationCache = new Map<string, CandidateClassification>();
+
+async function classifyCached(
+  html: string,
+): Promise<{ classification: CandidateClassification; usedAi: boolean }> {
+  const key = hashContent(html);
+  const cached = classificationCache.get(key);
+  if (cached) return { classification: cached, usedAi: false };
+
+  const classification = await classifyCandidatePage(html);
+  classificationCache.set(key, classification);
+  return { classification, usedAi: true };
+}
+
+/**
+ * Whether this source's robots.txt currently permits its own base path — cached on
+ * `search_sources`, same pattern as `providers/brilions/provider.ts`'s `resolveRobotsAllowed`, but
+ * checked against `/` rather than a site-specific detail path: unlike brilions, there is no known
+ * path pattern to check instead, and `/` is genuinely representative of what this provider fetches.
+ * `source.robotsAllows` is trusted directly rather than re-queried — unlike brilions (a static
+ * provider with no source row of its own to read), this factory already received a fresh row from
+ * `listEnabledSources()` this same request.
+ */
+async function resolveRobotsAllowed(source: SearchSource, robotsInfo: RobotsInfo): Promise<boolean> {
+  if (source.robotsAllows !== null) return source.robotsAllows;
+
+  const allowed = robotsInfo.found ? isAllowedByRobots(robotsInfo.rules, "/") : false;
+  await createAdminClient()
+    .from("search_sources")
+    .update({ robots_allows: allowed, last_checked_at: new Date().toISOString() })
+    .eq("id", source.id);
+  return allowed;
+}
+
+/** Same declared-sitemap-then-fallback-paths search as `crawl/sitemap-discovery.ts`'s
+ *  `discoverSitemap`, but through `fetchWithCache` — a live search repeats this on every request,
+ *  unlike the one-off registration preview `discoverSitemap` was written for, so it needs the same
+ *  24h page cache candidate detail pages already get. */
+async function loadCachedSitemap(
+  origin: string,
+  robotsInfo: RobotsInfo,
+): Promise<{ url: string; xml: string } | null> {
+  const candidates = (
+    robotsInfo.sitemapUrls.length > 0
+      ? robotsInfo.sitemapUrls
+      : FALLBACK_SITEMAP_PATHS.map((path) => `${origin}${path}`)
+  ).slice(0, MAX_SITEMAP_CANDIDATES);
+
+  for (const url of candidates) {
+    const fetched = await fetchWithCache(url, SITEMAP_CACHE_MS);
+    if (fetched.ok && fetched.html && looksLikeSitemap(fetched.html)) {
+      return { url, xml: fetched.html };
+    }
+  }
+  return null;
+}
+
+interface FetchedCandidate {
+  result: VesselSearchResult | null;
+  usedAi: boolean;
+}
+
+async function fetchAndNormalize(url: string, source: SearchSource): Promise<FetchedCandidate> {
+  const page = await fetchWithCache(url, PAGE_CACHE_MS);
+  if (!page.ok || !page.html) return { result: null, usedAi: false };
+
+  const retrievedAt = new Date().toISOString();
+
+  // JSON-LD first (spec §11: structured data before AI) — free, and more reliable than a model
+  // reading prose, when the page actually publishes it.
+  const structured = extractJsonLdFields(page.html);
+  if (structured?.name) {
+    const result = normalizeGenericResult({
+      sourceUrl: url,
+      sourceName: source.name,
+      sourceDomain: source.domain,
+      retrievedAt,
+      fields: {
+        name: structured.name,
+        description: structured.description,
+        image: structured.image,
+        guests: null,
+        cabins: null,
+        vesselTypeRaw: null,
+        country: null,
+        city: null,
+      },
+      aiConfidence: null,
+    });
+    return { result, usedAi: false };
+  }
+
+  const { classification, usedAi } = await classifyCached(page.html);
+  if (!classification.looksLikeVesselListing) return { result: null, usedAi };
+
+  // `og:image` is read deterministically rather than asked of the model — an AI-stated image URL
+  // risks being invented/malformed in a way a `<meta>` tag simply can't be.
+  const summary = extractPageSummary(page.html);
+  const result = normalizeGenericResult({
+    sourceUrl: url,
+    sourceName: source.name,
+    sourceDomain: source.domain,
+    retrievedAt,
+    fields: {
+      name: classification.extracted.name ?? summary.heading,
+      description: summary.description,
+      image: summary.image,
+      guests: classification.extracted.guests,
+      cabins: classification.extracted.cabins,
+      vesselTypeRaw: classification.extracted.vesselTypeRaw,
+      country: classification.extracted.country,
+      city: classification.extracted.city,
+    },
+    aiConfidence: classification.confidence,
+  });
+  return { result, usedAi };
+}
+
+/**
+ * Fetches `urls` with up to `FETCH_CONCURRENCY` requests in flight, stopping before starting the
+ * next one once `deadline` passes — same fixed-size-worker-pool shape as
+ * `providers/brilions/provider.ts`'s `fetchCandidates`, for the same reason: a batch would let one
+ * slow page (a cold fetch plus an AI call) stall every other worker in its batch.
+ */
+async function fetchCandidates(
+  urls: string[],
+  criteria: SearchCriteria,
+  source: SearchSource,
+  context: ExternalSearchContext,
+  deadline: number,
+  stats: ExternalSearchStats,
+  errors: string[],
+): Promise<VesselSearchResult[]> {
+  const results: VesselSearchResult[] = [];
+  let nextIndex = 0;
+  let stoppedForDeadline = false;
+
+  async function worker(): Promise<void> {
+    for (;;) {
+      if (context.signal?.aborted || Date.now() > deadline) {
+        stoppedForDeadline = true;
+        return;
+      }
+      const index = nextIndex++;
+      if (index >= urls.length) return;
+      const url = urls[index];
+
+      try {
+        const { result, usedAi } = await fetchAndNormalize(url, source);
+        stats.pagesVisited += 1;
+        if (usedAi) stats.aiCalls += 1;
+        if (result) {
+          stats.offersExtracted += 1;
+          if (matchesKnownCriteria(result, criteria)) results.push(result);
+        }
+      } catch (error) {
+        errors.push(`${source.domain}: ${url}: ${String(error)}`);
+      }
+    }
+  }
+
+  const workerCount = Math.min(FETCH_CONCURRENCY, urls.length);
+  await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+  if (stoppedForDeadline) errors.push(`${source.domain}: stopped early — time budget exhausted`);
+
+  return results;
+}
+
+function buildRunSearch(source: SearchSource) {
+  return async function runSearch(
+    criteria: SearchCriteria,
+    context: ExternalSearchContext,
+  ): Promise<ExternalSearchOutcome> {
+    const stats: ExternalSearchStats = { ...emptyExternalStats };
+    const errors: string[] = [];
+    const deadline = Date.now() + context.timeoutMs;
+
+    const robotsInfo = await fetchRobotsInfo(source.baseUrl);
+    const allowed = await resolveRobotsAllowed(source, robotsInfo);
+    if (!allowed) {
+      errors.push(`${source.domain}: robots.txt disallows / — skipping`);
+      return { results: [], stats, errors };
+    }
+
+    const origin = new URL(source.baseUrl).origin;
+    const sitemap = await loadCachedSitemap(origin, robotsInfo);
+    if (!sitemap) {
+      errors.push(`${source.domain}: could not find or parse a sitemap`);
+      return { results: [], stats, errors };
+    }
+    stats.sourcesVisited = 1;
+
+    const allEntries = sampleSitemapLocs(sitemap.xml, RAW_ENTRY_CAP, source.baseUrl);
+    const toFetch = selectGenericCandidates(allEntries, MAX_CANDIDATE_POOL);
+    stats.pagesRejected = allEntries.length - toFetch.length;
+
+    const results = await fetchCandidates(toFetch, criteria, source, context, deadline, stats, errors);
+    // Candidates queued but never reached because the deadline hit — on top of the ones the
+    // sampling step itself already excluded above. Matches `pagesRejected`'s meaning in
+    // `providers/brilions/provider.ts`: it does not separately track "fetched but not a listing" —
+    // that's simply the gap between `pagesVisited` and `offersExtracted`.
+    stats.pagesRejected += toFetch.length - stats.pagesVisited;
+
+    return { results, stats, errors };
+  };
+}
+
+export function createGenericProvider(source: SearchSource): ExternalSearchProvider {
+  return { id: `generic:${source.domain}`, search: buildRunSearch(source) };
+}

@@ -8,6 +8,7 @@ describe("extractPageSummary", () => {
         <head>
           <title>Blue Paradise Charter</title>
           <meta name="description" content="Yacht charters in Antalya" />
+          <meta property="og:image" content="https://example.com/photo.jpg" />
         </head>
         <body>
           <nav>Home | About | Contact</nav>
@@ -22,6 +23,7 @@ describe("extractPageSummary", () => {
     expect(summary.title).toBe("Blue Paradise Charter");
     expect(summary.description).toBe("Yacht charters in Antalya");
     expect(summary.heading).toBe("Blue Paradise Gulet");
+    expect(summary.image).toBe("https://example.com/photo.jpg");
     expect(summary.bodyText).toContain("24-meter gulet with 6 cabins");
     expect(summary.bodyText).not.toContain("tracking");
     expect(summary.bodyText).not.toContain("Copyright");
@@ -38,6 +40,7 @@ describe("extractPageSummary", () => {
     expect(summary.title).toBeNull();
     expect(summary.description).toBeNull();
     expect(summary.heading).toBeNull();
+    expect(summary.image).toBeNull();
     expect(summary.bodyText).toBe("just text");
   });
 

@@ -20,7 +20,7 @@ import {
   type AmenitiesExtraction,
 } from "@/server/search/providers/brilions/amenities-extraction";
 import { normalizeBrilionsResult } from "@/server/search/providers/brilions/normalize";
-import { matchesKnownCriteria } from "@/server/search/providers/brilions/match-criteria";
+import { matchesKnownCriteria } from "@/lib/search/match-criteria";
 import { matchingCitySlugs, selectCandidates } from "@/server/search/providers/brilions/select-candidates";
 
 /**
