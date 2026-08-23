@@ -1008,6 +1008,7 @@
       "subtitle": "External sites the smart search can use as an additional source of listings.",
       "wiringHint": "A new source is added as a draft and stays out of search until it's checked (\"Check\" — reachability, robots.txt, sitemap, structured data, a candidate-card preview) and approved. Approving a source with the \"Structured data\" or \"AI extraction\" strategy starts crawling it immediately — no deploy needed, through a generic provider with no site-specific code. The \"HTML parsing\" strategy still needs a provider actually implemented in code (see src/server/search/providers/, provider-registry.ts) — specific selectors still have to be written. Enabling or disabling an already-active source takes effect immediately.",
       "empty": "No sources yet.",
+      "edit": "Edit",
       "enable": "Enable",
       "disable": "Disable",
       "enabled": "Source enabled",
@@ -1035,6 +1036,11 @@
         "unknown": "Not checked yet",
         "allowed": "Allowed",
         "disallowed": "Disallowed"
+      },
+      "notFound": {
+        "title": "Source not found",
+        "description": "The link may be outdated, or the source was deleted.",
+        "cta": "Back to all sources"
       },
       "sourceType": {
         "WEBSITE": "Website",
@@ -1076,6 +1082,8 @@
         }
       },
       "form": {
+        "editTitle": "Edit source",
+        "editSubtitle": "Update the source's registration details.",
         "name": "Name",
         "namePlaceholder": "e.g. Meridian Beyond",
         "domain": "Domain",
@@ -1089,6 +1097,7 @@
         "notes": "Notes",
         "notesPlaceholder": "Source quirks: no pricing, specific regions only, etc.",
         "add": "Add source",
+        "save": "Save",
         "errors": {
           "invalid": "Check the fields you filled in",
           "unauthenticated": "Sign in to add a source",

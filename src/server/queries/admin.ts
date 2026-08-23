@@ -184,6 +184,41 @@ export async function getAllSearchSourcesAdmin(): Promise<AdminSearchSource[]> {
   }));
 }
 
+export async function getSearchSourceById(id: string): Promise<AdminSearchSource | null> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("search_sources")
+    .select(
+      "id, name, domain, base_url, enabled, status, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, notes, created_at",
+    )
+    .eq("id", id)
+    .maybeSingle();
+
+  if (error) {
+    if (error.code === "22P02") return null; // Malformed UUID in the URL.
+    throw error;
+  }
+  if (!data) return null;
+
+  return {
+    id: data.id,
+    name: data.name,
+    domain: data.domain,
+    baseUrl: data.base_url,
+    enabled: data.enabled,
+    status: data.status,
+    sourceType: data.source_type,
+    processingType: data.processing_type,
+    priority: data.priority,
+    reliabilityScore: data.reliability_score,
+    robotsAllows: data.robots_allows,
+    lastCheckedAt: data.last_checked_at,
+    notes: data.notes,
+    createdAt: data.created_at,
+  };
+}
+
 export interface AdminAuditLogEntry {
   id: string;
   adminName: string | null;

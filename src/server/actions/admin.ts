@@ -339,6 +339,52 @@ export async function createSearchSource(
   return {};
 }
 
+export async function updateSearchSource(
+  locale: Locale,
+  sourceId: string,
+  _prevState: SearchSourceActionState,
+  formData: FormData,
+): Promise<SearchSourceActionState> {
+  const parsed = searchSourceSchema.safeParse({
+    name: formData.get("name"),
+    domain: formData.get("domain"),
+    baseUrl: formData.get("baseUrl"),
+    sourceType: formData.get("sourceType"),
+    processingType: formData.get("processingType"),
+    priority: formData.get("priority"),
+    notes: formData.get("notes"),
+  });
+  if (!parsed.success) return { error: "invalid" };
+
+  const supabase = await createClient();
+  const admin = await requireAdmin(supabase);
+  if ("error" in admin) return { error: admin.error };
+
+  // Status/enabled are deliberately not touched here — those go through
+  // approveSearchSource/rejectSearchSource/setSearchSourceEnabled, which is where the audit trail
+  // for the review lifecycle lives. Editing the registration details doesn't reset a review.
+  const { error } = await supabase
+    .from("search_sources")
+    .update({
+      name: parsed.data.name,
+      domain: parsed.data.domain,
+      base_url: parsed.data.baseUrl,
+      source_type: parsed.data.sourceType,
+      processing_type: parsed.data.processingType,
+      priority: parsed.data.priority,
+      notes: parsed.data.notes || null,
+    })
+    .eq("id", sourceId);
+  if (error) return { error: error.code === "23505" ? "domainTaken" : "generic" };
+
+  await logAudit(supabase, admin.id, "update_search_source", "search_sources", sourceId, {
+    domain: parsed.data.domain,
+  });
+
+  revalidatePath(`/${locale}/admin/search-sources`);
+  return redirect({ href: "/admin/search-sources", locale });
+}
+
 export interface SetSearchSourceStatusResult {
   error?: "unauthenticated" | "forbidden" | "generic";
 }

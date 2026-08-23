@@ -6,6 +6,7 @@ import type { Locale } from "@/i18n/routing";
 import { useRouter } from "@/i18n/navigation";
 import {
   createSearchSource,
+  updateSearchSource,
   validateSearchSourceCandidate,
   type SearchSourceActionState,
   type SearchSourceValidationState,
@@ -28,7 +29,25 @@ import {
 
 const initialState: SearchSourceActionState = {};
 
-export function SearchSourceForm() {
+export interface SearchSourceFormDefaultValues {
+  name: string;
+  domain: string;
+  baseUrl: string;
+  sourceType: (typeof searchSourceTypeValues)[number];
+  processingType: (typeof searchProcessingTypeValues)[number];
+  priority: number;
+  notes: string;
+}
+
+export function SearchSourceForm({
+  mode = "create",
+  sourceId,
+  defaultValues,
+}: {
+  mode?: "create" | "edit";
+  sourceId?: string;
+  defaultValues?: SearchSourceFormDefaultValues;
+}) {
   const t = useTranslations("admin.searchSources.form");
   const tProcessing = useTranslations("admin.searchSources.processingType");
   const tProcessingHint = useTranslations("admin.searchSources.processingTypeHint");
@@ -38,12 +57,14 @@ export function SearchSourceForm() {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const prevStateRef = useRef(initialState);
-  const [state, formAction, isPending] = useActionState(
-    createSearchSource.bind(null, locale),
-    initialState,
+  const action =
+    mode === "create"
+      ? createSearchSource.bind(null, locale)
+      : updateSearchSource.bind(null, locale, sourceId!);
+  const [state, formAction, isPending] = useActionState(action, initialState);
+  const [processingType, setProcessingType] = useState<(typeof searchProcessingTypeValues)[number]>(
+    defaultValues?.processingType ?? "HTML",
   );
-  const [processingType, setProcessingType] =
-    useState<(typeof searchProcessingTypeValues)[number]>("HTML");
   const [validation, setValidation] = useState<SearchSourceValidationState | null>(null);
   const [isValidating, startValidation] = useTransition();
 
@@ -54,11 +75,13 @@ export function SearchSourceForm() {
       setValidation(await validateSearchSourceCandidate(baseUrl));
     });
   }
-  // Tracks which `state` the processingType hint was last adjusted for, so a successful submit
+  // Tracks which `state` the processingType hint was last adjusted for, so a successful create
   // can reset it back to the default in the same render — setState-in-render is the React-endorsed
-  // way to do this, unlike setState-in-effect, which would cause an extra cascading render.
+  // way to do this, unlike setState-in-effect, which would cause an extra cascading render. Only
+  // relevant in create mode: a successful edit navigates away via `redirect()` in the server
+  // action, so `state` never comes back with a non-error value to react to.
   const [adjustedForState, setAdjustedForState] = useState(state);
-  if (state !== adjustedForState) {
+  if (mode === "create" && state !== adjustedForState) {
     setAdjustedForState(state);
     if (!state.error) {
       setProcessingType("HTML");
@@ -67,24 +90,36 @@ export function SearchSourceForm() {
   }
 
   useEffect(() => {
-    if (state !== prevStateRef.current) {
+    if (mode === "create" && state !== prevStateRef.current) {
       prevStateRef.current = state;
       if (!state.error) {
         formRef.current?.reset();
         router.refresh();
       }
     }
-  }, [state, router]);
+  }, [mode, state, router]);
 
   return (
     <form ref={formRef} action={formAction} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
       <div className="flex flex-col gap-2">
         <Label htmlFor="name">{t("name")}</Label>
-        <Input id="name" name="name" placeholder={t("namePlaceholder")} required />
+        <Input
+          id="name"
+          name="name"
+          placeholder={t("namePlaceholder")}
+          defaultValue={defaultValues?.name}
+          required
+        />
       </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor="domain">{t("domain")}</Label>
-        <Input id="domain" name="domain" placeholder={t("domainPlaceholder")} required />
+        <Input
+          id="domain"
+          name="domain"
+          placeholder={t("domainPlaceholder")}
+          defaultValue={defaultValues?.domain}
+          required
+        />
       </div>
       <div className="flex flex-col gap-2 sm:col-span-2">
         <Label htmlFor="baseUrl">{t("baseUrl")}</Label>
@@ -94,6 +129,7 @@ export function SearchSourceForm() {
             name="baseUrl"
             type="url"
             placeholder={t("baseUrlPlaceholder")}
+            defaultValue={defaultValues?.baseUrl}
             required
             className="flex-1"
           />
@@ -236,7 +272,7 @@ export function SearchSourceForm() {
 
       <div className="flex flex-col gap-2">
         <Label htmlFor="sourceType">{t("sourceType")}</Label>
-        <Select name="sourceType" defaultValue={searchSourceTypeValues[0]}>
+        <Select name="sourceType" defaultValue={defaultValues?.sourceType ?? searchSourceTypeValues[0]}>
           <SelectTrigger id="sourceType" className="w-full">
             <SelectValue />
           </SelectTrigger>
@@ -275,12 +311,25 @@ export function SearchSourceForm() {
       </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor="priority">{t("priority")}</Label>
-        <Input id="priority" name="priority" type="number" min={0} max={1000} defaultValue={50} />
+        <Input
+          id="priority"
+          name="priority"
+          type="number"
+          min={0}
+          max={1000}
+          defaultValue={defaultValues?.priority ?? 50}
+        />
         <p className="text-xs font-light text-muted-foreground">{t("priorityHint")}</p>
       </div>
       <div className="flex flex-col gap-2 sm:col-span-2">
         <Label htmlFor="notes">{t("notes")}</Label>
-        <Textarea id="notes" name="notes" rows={2} placeholder={t("notesPlaceholder")} />
+        <Textarea
+          id="notes"
+          name="notes"
+          rows={2}
+          placeholder={t("notesPlaceholder")}
+          defaultValue={defaultValues?.notes}
+        />
       </div>
 
       {state.error && (
@@ -292,7 +341,7 @@ export function SearchSourceForm() {
         disabled={isPending}
         className="rounded-full sm:col-span-2 sm:w-fit"
       >
-        {t("add")}
+        {mode === "create" ? t("add") : t("save")}
       </Button>
     </form>
   );

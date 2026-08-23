@@ -1,9 +1,11 @@
 import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Locale } from "@/i18n/routing";
+import { Link } from "@/i18n/navigation";
 import { getAllSearchSourcesAdmin } from "@/server/queries/admin";
 import { buildTitle } from "@/lib/site";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import {
   Table,
   TableBody,
@@ -123,6 +125,9 @@ export default async function AdminSearchSourcesPage({
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex items-center justify-end gap-1">
+                      <Button asChild variant="outline" size="sm" className="rounded-full">
+                        <Link href={`/admin/search-sources/${source.id}/edit`}>{t("edit")}</Link>
+                      </Button>
                       {source.status === "active" ? (
                         <SearchSourceToggleButton sourceId={source.id} enabled={source.enabled} />
                       ) : (
