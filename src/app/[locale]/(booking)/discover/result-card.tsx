@@ -25,6 +25,15 @@ export function GlobalResultCard({ result, index = 0 }: { result: VesselSearchRe
   const image = result.images[0];
   const isInternal = result.origin === "INTERNAL";
   const place = [result.location.city, result.location.country].filter(Boolean).join(", ");
+  // External photos are proxied through our own origin (`api/external-image`) rather than passed
+  // to `next/image` directly — a raw external `src` would need its host added to
+  // `next.config.ts`'s `images.remotePatterns` before every newly approved search source, which is
+  // exactly the deploy-per-source dependency `/admin/search-sources` registration is meant to avoid.
+  const imageSrc = image
+    ? isInternal
+      ? image.url
+      : `/api/external-image?url=${encodeURIComponent(image.url)}`
+    : null;
 
   return (
     <motion.article
@@ -35,10 +44,10 @@ export function GlobalResultCard({ result, index = 0 }: { result: VesselSearchRe
       className="group flex flex-col overflow-hidden rounded-2xl border border-border bg-card shadow-soft transition-[box-shadow,border-color] duration-300 hover:border-primary/25 hover:shadow-hover"
     >
       <div className="relative h-48 overflow-hidden bg-muted">
-        {image ? (
+        {imageSrc ? (
           <Image
-            src={image.url}
-            alt={image.alt ?? result.name ?? ""}
+            src={imageSrc}
+            alt={image?.alt ?? result.name ?? ""}
             fill
             sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
             className="object-cover transition-transform duration-500 ease-out group-hover:scale-105"

@@ -23,9 +23,26 @@ export interface SafeFetchOptions {
   userAgent?: string;
 }
 
-export type SafeFetchResult =
-  | { ok: true; status: number; finalUrl: string; body: string }
-  | { ok: false; reason: "unsupported-scheme" | "private-address" | "dns-error" | "too-large" | "too-many-redirects" | "timeout" | "http-error" | "network-error"; status?: number; detail?: string };
+type SafeFetchFailure = {
+  ok: false;
+  reason:
+    | "unsupported-scheme"
+    | "private-address"
+    | "dns-error"
+    | "too-large"
+    | "too-many-redirects"
+    | "timeout"
+    | "http-error"
+    | "network-error";
+  status?: number;
+  detail?: string;
+};
+
+export type SafeFetchResult = { ok: true; status: number; finalUrl: string; body: string } | SafeFetchFailure;
+
+export type SafeFetchBinaryResult =
+  | { ok: true; status: number; finalUrl: string; contentType: string | null; body: Buffer }
+  | SafeFetchFailure;
 
 const DEFAULT_OPTIONS: Required<SafeFetchOptions> = {
   connectTimeoutMs: 5_000,
@@ -53,33 +70,16 @@ async function assertPublicHost(hostname: string): Promise<{ ok: true } | { ok: 
   return { ok: true };
 }
 
-/** Reads a response body up to `maxBytes`, aborting the stream rather than buffering past the cap. */
-async function readBodyCapped(response: Response, maxBytes: number): Promise<string | null> {
-  const reader = response.body?.getReader();
-  if (!reader) return await response.text();
-
-  const chunks: Uint8Array[] = [];
-  let received = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    received += value.byteLength;
-    if (received > maxBytes) {
-      await reader.cancel();
-      return null;
-    }
-    chunks.push(value);
-  }
-  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk))).toString("utf-8");
-}
+type FetchValidatedResult =
+  | { ok: true; response: Response; finalUrl: string }
+  | SafeFetchFailure;
 
 /**
- * Fetches one URL with SSRF protection, a manual (re-validated) redirect chain, and bounded time
- * and size. Never throws — every failure mode is a typed `{ ok: false }` result, since a single
- * unreachable or hostile page must never crash the search that triggered it.
+ * The SSRF-safe connect + manual (re-validated) redirect chain, shared by the text (`safeFetch`)
+ * and binary (`safeFetchBinary`) readers below — everything up to but not including consuming the
+ * response body, since the two callers need to read it differently (decoded text vs. raw bytes).
  */
-export async function safeFetch(url: string, options: SafeFetchOptions = {}): Promise<SafeFetchResult> {
-  const opts = { ...DEFAULT_OPTIONS, ...options };
+async function fetchValidated(url: string, opts: Required<SafeFetchOptions>): Promise<FetchValidatedResult> {
   let currentUrl = url;
 
   for (let redirectCount = 0; redirectCount <= opts.maxRedirects; redirectCount++) {
@@ -104,7 +104,7 @@ export async function safeFetch(url: string, options: SafeFetchOptions = {}): Pr
       response = await fetch(parsed.toString(), {
         signal: controller.signal,
         redirect: "manual", // Redirects are followed by hand, below, so each hop gets re-validated.
-        headers: { "User-Agent": opts.userAgent, Accept: "text/html,application/xhtml+xml" },
+        headers: { "User-Agent": opts.userAgent, Accept: "text/html,application/xhtml+xml,image/*" },
       });
     } catch (error) {
       clearTimeout(connectTimer);
@@ -120,17 +120,74 @@ export async function safeFetch(url: string, options: SafeFetchOptions = {}): Pr
       continue; // Loop re-validates the new host before ever fetching it.
     }
 
-    if (!response.ok) {
-      clearTimeout(connectTimer);
-      return { ok: false, reason: "http-error", status: response.status };
-    }
-
-    const body = await readBodyCapped(response, opts.maxBytes);
     clearTimeout(connectTimer);
-    if (body === null) return { ok: false, reason: "too-large" };
+    if (!response.ok) return { ok: false, reason: "http-error", status: response.status };
 
-    return { ok: true, status: response.status, finalUrl: parsed.toString(), body };
+    return { ok: true, response, finalUrl: parsed.toString() };
   }
 
   return { ok: false, reason: "too-many-redirects" };
+}
+
+/** Reads a response body up to `maxBytes` as raw bytes, aborting the stream rather than buffering
+ *  past the cap. Returns `null` on overflow, same contract for both readers below. */
+async function readBodyCappedBuffer(response: Response, maxBytes: number): Promise<Buffer | null> {
+  const reader = response.body?.getReader();
+  if (!reader) return Buffer.from(await response.arrayBuffer());
+
+  const chunks: Uint8Array[] = [];
+  let received = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    received += value.byteLength;
+    if (received > maxBytes) {
+      await reader.cancel();
+      return null;
+    }
+    chunks.push(value);
+  }
+  return Buffer.concat(chunks.map((chunk) => Buffer.from(chunk)));
+}
+
+/**
+ * Fetches one URL with SSRF protection, a manual (re-validated) redirect chain, and bounded time
+ * and size, decoding the body as UTF-8 text. Never throws — every failure mode is a typed
+ * `{ ok: false }` result, since a single unreachable or hostile page must never crash the search
+ * that triggered it.
+ */
+export async function safeFetch(url: string, options: SafeFetchOptions = {}): Promise<SafeFetchResult> {
+  const opts = { ...DEFAULT_OPTIONS, ...options };
+  const validated = await fetchValidated(url, opts);
+  if (!validated.ok) return validated;
+
+  const body = await readBodyCappedBuffer(validated.response, opts.maxBytes);
+  if (body === null) return { ok: false, reason: "too-large" };
+
+  return { ok: true, status: validated.response.status, finalUrl: validated.finalUrl, body: body.toString("utf-8") };
+}
+
+/**
+ * Same SSRF-safe fetch as `safeFetch`, but keeps the body as raw bytes instead of decoding it as
+ * text — for binary content (e.g. `api/external-image`'s proxied vessel photos), where UTF-8
+ * decoding would corrupt the data.
+ */
+export async function safeFetchBinary(
+  url: string,
+  options: SafeFetchOptions = {},
+): Promise<SafeFetchBinaryResult> {
+  const opts = { ...DEFAULT_OPTIONS, ...options };
+  const validated = await fetchValidated(url, opts);
+  if (!validated.ok) return validated;
+
+  const body = await readBodyCappedBuffer(validated.response, opts.maxBytes);
+  if (body === null) return { ok: false, reason: "too-large" };
+
+  return {
+    ok: true,
+    status: validated.response.status,
+    finalUrl: validated.finalUrl,
+    contentType: validated.response.headers.get("content-type"),
+    body,
+  };
 }
