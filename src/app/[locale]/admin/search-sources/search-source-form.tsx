@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useRef, useState } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { Locale } from "@/i18n/routing";
 import { useRouter } from "@/i18n/navigation";
@@ -26,6 +26,7 @@ const initialState: SearchSourceActionState = {};
 export function SearchSourceForm() {
   const t = useTranslations("admin.searchSources.form");
   const tProcessing = useTranslations("admin.searchSources.processingType");
+  const tProcessingHint = useTranslations("admin.searchSources.processingTypeHint");
   const tSourceType = useTranslations("admin.searchSources.sourceType");
   const locale = useLocale() as Locale;
   const router = useRouter();
@@ -35,6 +36,16 @@ export function SearchSourceForm() {
     createSearchSource.bind(null, locale),
     initialState,
   );
+  const [processingType, setProcessingType] =
+    useState<(typeof searchProcessingTypeValues)[number]>("HTML");
+  // Tracks which `state` the processingType hint was last adjusted for, so a successful submit
+  // can reset it back to the default in the same render — setState-in-render is the React-endorsed
+  // way to do this, unlike setState-in-effect, which would cause an extra cascading render.
+  const [adjustedForState, setAdjustedForState] = useState(state);
+  if (state !== adjustedForState) {
+    setAdjustedForState(state);
+    if (!state.error) setProcessingType("HTML");
+  }
 
   useEffect(() => {
     if (state !== prevStateRef.current) {
@@ -83,7 +94,13 @@ export function SearchSourceForm() {
       </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor="processingType">{t("processingType")}</Label>
-        <Select name="processingType" defaultValue="HTML">
+        <Select
+          name="processingType"
+          value={processingType}
+          onValueChange={(value) =>
+            setProcessingType(value as (typeof searchProcessingTypeValues)[number])
+          }
+        >
           <SelectTrigger id="processingType" className="w-full">
             <SelectValue />
           </SelectTrigger>
@@ -95,6 +112,9 @@ export function SearchSourceForm() {
             ))}
           </SelectContent>
         </Select>
+        <p className="text-xs font-light text-muted-foreground">
+          {tProcessingHint(processingType)}
+        </p>
       </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor="priority">{t("priority")}</Label>

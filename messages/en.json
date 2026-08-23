@@ -1047,6 +1047,13 @@
         "AI_EXTRACTION": "AI extraction",
         "HYBRID": "Hybrid (HTML + AI)"
       },
+      "processingTypeHint": {
+        "API": "Reads structured data straight from the source's own API — fastest and most reliable, when the source offers one.",
+        "HTML": "Reads fixed CSS/DOM selectors on the page. Fast and free, but breaks if the source redesigns its markup.",
+        "STRUCTURED_DATA": "Reads embedded metadata (JSON-LD, schema.org) instead of raw markup — steadier than HTML parsing, only works if the source publishes it.",
+        "AI_EXTRACTION": "Sends the page text to an AI model to pull out the data. Handles messy, free-form pages, but costs more and runs slower per page.",
+        "HYBRID": "Fixed selectors for fields that are always in the same place, AI for the rest (e.g. a free-text amenities list). What the Brilions source uses."
+      },
       "form": {
         "name": "Name",
         "namePlaceholder": "e.g. Meridian Beyond",
