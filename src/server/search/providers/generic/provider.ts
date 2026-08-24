@@ -152,12 +152,17 @@ async function fetchAndNormalize(
   if (source.selectorConfig) {
     const bySelectors = extractBySelectors(page.html, source.selectorConfig);
     if (bySelectors) {
+      // `og:image` fallback when the config has no (or a non-matching) `image` selector — every
+      // other tier below gets a photo "for free" this way (JSON-LD's own `image`, or
+      // `extractPageSummary`'s `og:image` read in the AI tier), and an admin who only wrote
+      // selectors for name/guests/cabins shouldn't lose photos entirely as a result.
+      const image = bySelectors.image ?? extractPageSummary(page.html).image;
       const result = normalizeGenericResult({
         sourceUrl: url,
         sourceName: source.name,
         sourceDomain: source.domain,
         retrievedAt,
-        fields: bySelectors,
+        fields: { ...bySelectors, image },
         aiConfidence: null,
       });
       return { result, usedAi: false };
