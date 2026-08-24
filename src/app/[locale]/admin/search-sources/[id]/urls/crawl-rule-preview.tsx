@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { Search } from "lucide-react";
+import { ChevronLeft, ChevronRight, Search } from "lucide-react";
 import { useTranslations } from "next-intl";
 import { previewSourceCrawlRules, type CrawlRulePreviewState } from "@/server/actions/admin";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +9,11 @@ import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CLASSIFICATION_BADGE_VARIANT } from "./classification-badge";
 import { CreateRulesFromRobotsButton } from "./create-rules-from-robots-button";
+
+/** Rows per page in the client-side paginator below — `entries` itself holds every URL the run
+ *  discovered (up to `full-sitemap-discovery.ts`'s own resource limit), not a display-capped
+ *  subset, so paging through it never needs another server round-trip. */
+const PAGE_SIZE = 100;
 
 /**
  * Live "what would happen" check for the crawl-rules page: fetches robots.txt and does a full
@@ -21,14 +26,23 @@ export function CrawlRulePreview({ sourceId }: { sourceId: string }) {
   const tClassification = useTranslations("admin.searchSources.classification");
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<CrawlRulePreviewState | null>(null);
+  const [page, setPage] = useState(0);
 
   function handleClick() {
     startTransition(async () => {
-      setResult(await previewSourceCrawlRules(sourceId));
+      const preview = await previewSourceCrawlRules(sourceId);
+      setResult(preview);
+      setPage(0);
     });
   }
 
   const disallowCount = result?.robots?.rules.filter((rule) => !rule.allow).length ?? 0;
+  const entries = result?.urls?.entries ?? [];
+  const totalPages = Math.max(1, Math.ceil(entries.length / PAGE_SIZE));
+  const currentPage = Math.min(page, totalPages - 1);
+  const pageEntries = entries.slice(currentPage * PAGE_SIZE, (currentPage + 1) * PAGE_SIZE);
+  const rangeFrom = entries.length === 0 ? 0 : currentPage * PAGE_SIZE + 1;
+  const rangeTo = Math.min((currentPage + 1) * PAGE_SIZE, entries.length);
 
   return (
     <div>
@@ -74,19 +88,47 @@ export function CrawlRulePreview({ sourceId }: { sourceId: string }) {
 
       {result?.urls && (
         <div className="mt-4">
-          <p className="text-xs font-light text-muted-foreground">
-            {t("preview.countLine", {
-              shown: result.urls.entries.length,
-              total: result.urls.totalDiscovered,
-            })}
-            {result.urls.truncated && ` — ${t("preview.truncated")}`}
-          </p>
-          {result.urls.entries.length === 0 ? (
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <p className="text-xs font-light text-muted-foreground">
+              {t("preview.countLine", { from: rangeFrom, to: rangeTo, total: entries.length })}
+              {result.urls.truncated && ` — ${t("preview.truncated")}`}
+            </p>
+            {totalPages > 1 && (
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="size-8 rounded-full"
+                  aria-label={t("preview.prevPage")}
+                  disabled={currentPage === 0}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                >
+                  <ChevronLeft className="size-4" strokeWidth={1.5} />
+                </Button>
+                <p className="text-xs font-light text-muted-foreground">
+                  {t("preview.pageIndicator", { page: currentPage + 1, totalPages })}
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  className="size-8 rounded-full"
+                  aria-label={t("preview.nextPage")}
+                  disabled={currentPage >= totalPages - 1}
+                  onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))}
+                >
+                  <ChevronRight className="size-4" strokeWidth={1.5} />
+                </Button>
+              </div>
+            )}
+          </div>
+          {entries.length === 0 ? (
             <p className="mt-2 rounded-2xl border border-dashed border-border p-6 text-center text-sm font-light text-muted-foreground">
               {t("preview.empty")}
             </p>
           ) : (
-            <div className="mt-2 max-h-96 overflow-y-auto overflow-x-auto rounded-2xl border border-border bg-card shadow-soft">
+            <div className="mt-2 max-h-[32rem] overflow-y-auto overflow-x-auto rounded-2xl border border-border bg-card shadow-soft">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -96,7 +138,7 @@ export function CrawlRulePreview({ sourceId }: { sourceId: string }) {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {result.urls.entries.map((entry) => (
+                  {pageEntries.map((entry) => (
                     <TableRow key={entry.url}>
                       <TableCell className="max-w-md truncate font-mono text-xs" title={entry.url}>
                         {entry.url}

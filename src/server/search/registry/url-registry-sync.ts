@@ -191,12 +191,6 @@ export async function reclassifyStoredUrls(supabase: SupabaseServerClient, sourc
   return rows.length;
 }
 
-/** Caps how many classified URLs a live preview returns to the admin UI — this is a read that
- *  renders in a browser tab, not a sync, so a `MAX_URLS_TOTAL`-sized (up to 3000) response would be
- *  both slow to render and unnecessary: an admin tuning rules needs to see whether they *work*, not
- *  every single matched URL. */
-const PREVIEW_URL_LIMIT = 200;
-
 export interface PreviewedUrl {
   url: string;
   classification: UrlClassification;
@@ -210,10 +204,13 @@ export interface CrawlPreviewResult {
     sitemapUrls: string[];
   };
   urls: {
+    /** Every classified URL from this run, up to `full-sitemap-discovery.ts`'s own
+     *  `MAX_URLS_TOTAL` (spec §5.2) — not further capped for display. The admin UI paginates this
+     *  client-side rather than the server dropping rows, so "show me all of it" actually means all
+     *  of it, not the first N. */
     entries: PreviewedUrl[];
-    /** Total classified URLs discovered this run, before the `PREVIEW_URL_LIMIT` cut — lets the UI
-     *  say "showing 200 of 640" instead of silently truncating. */
-    totalDiscovered: number;
+    /** True only when the sitemap walk itself hit a resource limit (depth/sitemap-count/URL-count,
+     *  spec §5.2) — not a display concern, since `entries` is never further truncated. */
     truncated: boolean;
   };
 }
@@ -251,9 +248,8 @@ export async function previewSourceCrawlClassification(
       sitemapUrls: robotsInfo.sitemapUrls,
     },
     urls: {
-      entries: entries.slice(0, PREVIEW_URL_LIMIT),
-      totalDiscovered: entries.length,
-      truncated: discovery.truncated || entries.length > PREVIEW_URL_LIMIT,
+      entries,
+      truncated: discovery.truncated,
     },
   };
 }

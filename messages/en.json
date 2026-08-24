@@ -1242,9 +1242,12 @@
           "hint": "Live fetch of the site's robots.txt and sitemap.xml, classifying every discovered URL with the currently saved rules — nothing is written to the database. Useful before saving a new rule (especially a regex) or while a source hasn't been synced yet.",
           "run": "Check site",
           "loading": "Checking…",
-          "countLine": "Showing {shown} of {total} discovered URLs",
+          "countLine": "Showing {from}–{to} of {total} discovered URLs",
           "truncated": "list cut off by the crawl limits (docs/CLAUDE_SITEMAP_AI_CRAWLER_RULE.md §5.2)",
           "empty": "No URLs found in the site's sitemap.xml.",
+          "prevPage": "Previous page",
+          "nextPage": "Next page",
+          "pageIndicator": "Page {page} of {totalPages}",
           "columns": {
             "url": "URL"
           },
