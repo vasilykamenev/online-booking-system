@@ -2,6 +2,7 @@ import "server-only";
 import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
+import { selectorConfigSchema, type SelectorConfig } from "@/lib/validation/admin";
 
 /**
  * `SourceRegistryService` (spec §8).
@@ -31,6 +32,9 @@ export interface SearchSource {
   /** Null means "not checked yet", which the crawler must treat as "check first", not "allowed". */
   robotsAllows: boolean | null;
   lastCheckedAt: string | null;
+  /** Null means the generic provider still can't attempt `HTML`/`HYBRID` for this source — see
+   *  `provider-registry.ts`'s `isGenericEligible`. */
+  selectorConfig: SelectorConfig | null;
 }
 
 /**
@@ -44,7 +48,7 @@ export const listEnabledSources = cache(async (): Promise<SearchSource[]> => {
   const { data, error } = await supabase
     .from("search_sources")
     .select(
-      "id, name, domain, base_url, enabled, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at",
+      "id, name, domain, base_url, enabled, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, selector_config",
     )
     .eq("enabled", true)
     // Belt-and-suspenders: `enabled` should only ever be true alongside status = 'active' (that's
@@ -57,19 +61,26 @@ export const listEnabledSources = cache(async (): Promise<SearchSource[]> => {
   // useful on its own, and an unreachable registry only costs us the external half.
   if (error) return [];
 
-  return (data ?? []).map((row) => ({
-    id: row.id,
-    name: row.name,
-    domain: row.domain,
-    baseUrl: row.base_url,
-    enabled: row.enabled,
-    sourceType: row.source_type,
-    processingType: row.processing_type,
-    priority: row.priority,
-    reliabilityScore: row.reliability_score,
-    robotsAllows: row.robots_allows,
-    lastCheckedAt: row.last_checked_at,
-  }));
+  return (data ?? []).map((row) => {
+    // A read failure must not break search (same principle as the outer `if (error) return []`
+    // above): a malformed `selector_config` degrades this one source back to "generic path
+    // unavailable" rather than failing the whole registry read.
+    const parsedSelectorConfig = selectorConfigSchema.safeParse(row.selector_config);
+    return {
+      id: row.id,
+      name: row.name,
+      domain: row.domain,
+      baseUrl: row.base_url,
+      enabled: row.enabled,
+      sourceType: row.source_type,
+      processingType: row.processing_type,
+      priority: row.priority,
+      reliabilityScore: row.reliability_score,
+      robotsAllows: row.robots_allows,
+      lastCheckedAt: row.last_checked_at,
+      selectorConfig: parsedSelectorConfig.success ? parsedSelectorConfig.data : null,
+    };
+  });
 });
 
 /** Domain → reliability, the shape `SearchRankingService` expects (spec §18). */

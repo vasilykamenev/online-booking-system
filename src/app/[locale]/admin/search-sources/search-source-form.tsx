@@ -37,7 +37,11 @@ export interface SearchSourceFormDefaultValues {
   processingType: (typeof searchProcessingTypeValues)[number];
   priority: number;
   notes: string;
+  /** Raw JSON text, or "" — mirrors the form field's own shape, not the parsed `SelectorConfig`. */
+  selectorConfig: string;
 }
+
+const GENERIC_SELECTOR_TYPES = new Set<(typeof searchProcessingTypeValues)[number]>(["HTML", "HYBRID"]);
 
 export function SearchSourceForm({
   mode = "create",
@@ -65,6 +69,7 @@ export function SearchSourceForm({
   const [processingType, setProcessingType] = useState<(typeof searchProcessingTypeValues)[number]>(
     defaultValues?.processingType ?? "HTML",
   );
+  const [selectorConfigText, setSelectorConfigText] = useState(defaultValues?.selectorConfig ?? "");
   const [validation, setValidation] = useState<SearchSourceValidationState | null>(null);
   const [isValidating, startValidation] = useTransition();
 
@@ -85,6 +90,7 @@ export function SearchSourceForm({
     setAdjustedForState(state);
     if (!state.error) {
       setProcessingType("HTML");
+      setSelectorConfigText("");
       setValidation(null);
     }
   }
@@ -203,6 +209,25 @@ export function SearchSourceForm({
                   </Button>
                 </div>
               )}
+              {validation.report.suggestedSelectorConfig && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <span>{tValidation("suggestedSelectors")}</span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="rounded-full"
+                    onClick={() => {
+                      setProcessingType((current) => (GENERIC_SELECTOR_TYPES.has(current) ? current : "HTML"));
+                      setSelectorConfigText(
+                        JSON.stringify(validation.report!.suggestedSelectorConfig, null, 2),
+                      );
+                    }}
+                  >
+                    {tValidation("apply")}
+                  </Button>
+                </div>
+              )}
 
               <div className="mt-2 flex flex-col gap-1.5 border-t border-border pt-2">
                 <p className="font-medium">{tValidation("candidatePreview.title")}</p>
@@ -309,6 +334,21 @@ export function SearchSourceForm({
           {tProcessingHint(processingType)}
         </p>
       </div>
+      {GENERIC_SELECTOR_TYPES.has(processingType) && (
+        <div className="flex flex-col gap-2 sm:col-span-2">
+          <Label htmlFor="selectorConfig">{t("selectorConfig")}</Label>
+          <Textarea
+            id="selectorConfig"
+            name="selectorConfig"
+            rows={6}
+            className="font-mono text-xs"
+            placeholder={t("selectorConfigPlaceholder")}
+            value={selectorConfigText}
+            onChange={(event) => setSelectorConfigText(event.target.value)}
+          />
+          <p className="text-xs font-light text-muted-foreground">{t("selectorConfigHint")}</p>
+        </div>
+      )}
       <div className="flex flex-col gap-2">
         <Label htmlFor="priority">{t("priority")}</Label>
         <Input

@@ -7,6 +7,7 @@ import type { Locale } from "@/i18n/routing";
 import { pickLocalized } from "@/lib/supabase/localized";
 import { throwIfSupabaseError } from "@/lib/supabase/errors";
 import { DEFAULT_PLATFORM_COMMISSION_RATE } from "@/lib/pricing/commission";
+import { selectorConfigSchema, type SelectorConfig } from "@/lib/validation/admin";
 import type { LocalizedText } from "./vessels";
 
 /** Accepts an existing client (e.g. the admin/service-role one already in scope
@@ -148,8 +149,20 @@ export interface AdminSearchSource {
   reliabilityScore: number | null;
   robotsAllows: boolean | null;
   lastCheckedAt: string | null;
+  selectorConfig: SelectorConfig | null;
   notes: string | null;
   createdAt: string;
+}
+
+const SEARCH_SOURCE_COLUMNS =
+  "id, name, domain, base_url, enabled, status, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, selector_config, notes, created_at";
+
+/** Parses `selector_config` the same defensively-null-on-failure way `listEnabledSources`
+ *  (`source-registry.ts`) does — an admin-authored value should always be valid (the form validates
+ *  it before saving), but the admin UI must not crash on a row saved before this validation existed. */
+function parseAdminSelectorConfig(raw: unknown): SelectorConfig | null {
+  const result = selectorConfigSchema.safeParse(raw);
+  return result.success ? result.data : null;
 }
 
 /** Every row, enabled or not — unlike `listEnabledSources` (spec §8's search-time read), the admin
@@ -159,9 +172,7 @@ export async function getAllSearchSourcesAdmin(): Promise<AdminSearchSource[]> {
 
   const { data, error } = await supabase
     .from("search_sources")
-    .select(
-      "id, name, domain, base_url, enabled, status, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, notes, created_at",
-    )
+    .select(SEARCH_SOURCE_COLUMNS)
     .order("priority", { ascending: false });
 
   throwIfSupabaseError(error);
@@ -179,6 +190,7 @@ export async function getAllSearchSourcesAdmin(): Promise<AdminSearchSource[]> {
     reliabilityScore: row.reliability_score,
     robotsAllows: row.robots_allows,
     lastCheckedAt: row.last_checked_at,
+    selectorConfig: parseAdminSelectorConfig(row.selector_config),
     notes: row.notes,
     createdAt: row.created_at,
   }));
@@ -189,9 +201,7 @@ export async function getSearchSourceById(id: string): Promise<AdminSearchSource
 
   const { data, error } = await supabase
     .from("search_sources")
-    .select(
-      "id, name, domain, base_url, enabled, status, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, notes, created_at",
-    )
+    .select(SEARCH_SOURCE_COLUMNS)
     .eq("id", id)
     .maybeSingle();
 
@@ -214,6 +224,7 @@ export async function getSearchSourceById(id: string): Promise<AdminSearchSource
     reliabilityScore: data.reliability_score,
     robotsAllows: data.robots_allows,
     lastCheckedAt: data.last_checked_at,
+    selectorConfig: parseAdminSelectorConfig(data.selector_config),
     notes: data.notes,
     createdAt: data.created_at,
   };

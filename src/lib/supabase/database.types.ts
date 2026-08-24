@@ -838,6 +838,7 @@ export type Database = {
           processing_type: Database["public"]["Enums"]["search_processing_type"]
           reliability_score: number | null
           robots_allows: boolean | null
+          selector_config: Json | null
           source_type: Database["public"]["Enums"]["search_source_type"]
           status: Database["public"]["Enums"]["search_source_status"]
           updated_at: string
@@ -855,6 +856,7 @@ export type Database = {
           processing_type?: Database["public"]["Enums"]["search_processing_type"]
           reliability_score?: number | null
           robots_allows?: boolean | null
+          selector_config?: Json | null
           source_type?: Database["public"]["Enums"]["search_source_type"]
           status?: Database["public"]["Enums"]["search_source_status"]
           updated_at?: string
@@ -872,6 +874,7 @@ export type Database = {
           processing_type?: Database["public"]["Enums"]["search_processing_type"]
           reliability_score?: number | null
           robots_allows?: boolean | null
+          selector_config?: Json | null
           source_type?: Database["public"]["Enums"]["search_source_type"]
           status?: Database["public"]["Enums"]["search_source_status"]
           updated_at?: string

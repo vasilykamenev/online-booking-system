@@ -7,12 +7,16 @@ Registry`) — что означает каждое из пяти значени
 
 Файлы, о которых идёт речь:
 
-- `supabase/migrations/20260821140001_global_search.sql` — DDL enum'а `search_processing_type` и таблицы `search_sources`.
+- `supabase/migrations/20260821140001_global_search.sql`, `20260824090001_search_source_selector_config.sql` — DDL enum'а `search_processing_type`, таблицы `search_sources` и колонки `selector_config`.
 - `src/server/search/source-registry.ts` — чтение реестра источников (`listEnabledSources`).
-- `src/server/search/provider-registry.ts` — связка «домен реестра ↔ реализованный провайдер».
+- `src/server/search/provider-registry.ts` — связка «домен реестра ↔ реализованный провайдер» + `isGenericEligible`.
 - `src/server/search/providers.ts` — интерфейс `ExternalSearchProvider`, который обязан реализовать любой провайдер, независимо от заявленной стратегии.
-- `src/server/search/providers/brilions/` — единственная реализация, `processingType = HYBRID`.
-- `src/app/[locale]/admin/search-sources/` — админка, где стратегия выбирается при добавлении источника.
+- `src/server/search/providers/brilions/` — единственный домен-специфичный провайдер, `processingType = HYBRID`.
+- `src/server/search/providers/generic/provider.ts` — провайдер без домен-специфичного кода: селекторы → JSON-LD → (если разрешено) AI, для любого источника, которого `isGenericEligible` принимает.
+- `src/server/search/providers/generic/extract-by-selectors.ts` — чистый экстрактор по `selectorConfig` (§1.1).
+- `src/server/search/selector-suggestion.ts` — AI-подсказка `selectorConfig` по образцу страницы, вызывается из `source-validation.ts` при проверке источника.
+- `src/lib/validation/admin.ts` — `selectorConfigSchema`/`parseSelectorConfig`.
+- `src/app/[locale]/admin/search-sources/` — админка, где стратегия и `selectorConfig` задаются при добавлении источника.
 - `src/server/search/README.md` — журнал живых проверок и найденных в проде багов; здесь не дублируется целиком, только релевантные места.
 
 ---
@@ -34,62 +38,143 @@ create type public.search_processing_type as enum (
 запускает разный обработчик автоматически — сегодня оно **чисто описательное
 и никем не диспетчеризуется во время выполнения**.
 
+> **Обновление:** с добавлением `providers/generic/provider.ts` и
+> `selectorConfig` это уже не совсем так — см. §1.1. Выбор провайдера
+> всё ещё идёт в основном по домену, но для источника без домен-специфичного
+> провайдера `processingType` (и, для `HTML`/`HYBRID`, `selectorConfig`)
+> теперь тоже читается рантаймом и реально на него влияет.
+
 Убедиться в этом можно по `provider-registry.ts`:
 
 ```ts
 const PROVIDERS_BY_DOMAIN: Record<string, ExternalSearchProvider> = {
   "brilions.com": brilionsProvider,
 };
+
+function isGenericEligible(source: SearchSource): boolean {
+  switch (source.processingType) {
+    case "AI_EXTRACTION":
+    case "STRUCTURED_DATA":
+      return true;
+    case "HTML":
+    case "HYBRID":
+      return source.selectorConfig !== null;
+    case "API":
+      return false;
+  }
+}
+
+export async function getActiveExternalProviders(): Promise<ExternalSearchProvider[]> {
+  const sources = await listEnabledSources();
+  return sources
+    .map((source) => {
+      const specific = PROVIDERS_BY_DOMAIN[source.domain];
+      if (specific) return specific;
+      if (isGenericEligible(source)) return createGenericProvider(source);
+      return null;
+    })
+    .filter((provider) => provider !== null);
+}
 ```
 
-Выбор провайдера идёт **по домену**, а не по `processingType`. Значение поля
-в форме админки — это то, что человек-разработчик объявляет о том, как
-устроен провайдер, который ему предстоит написать и зарегистрировать здесь
-вручную. Если добавить в реестр строку с `processingType: "API"` для сайта,
-для которого ещё не существует кода в `providers/`, поиск не сломается и не
-попытается угадать — `getActiveExternalProviders()` просто не найдёт этот
-домен в карте и не вызовет его вообще (запись повлияет только на бонус в
-ранжировании через `getSourceReliability()` и на кэш `robots_allows`). Именно
-это объясняет `wiringHint` в самой админке:
-
-> «Включение/выключение уже подключённого источника применяется сразу — без
-> изменения кода. Но добавление совсем нового сайта здесь само по себе его не
-> сканирует: для него нужно реализовать провайдера в коде и зарегистрировать
-> в `provider-registry.ts`».
+Выбор провайдера идёт **по домену в первую очередь**: домен с
+домен-специфичным провайдером (сейчас — только `brilions.com`) всегда
+получает его, **независимо от того, что выбрано в поле `processingType`** —
+поле в этом случае по-прежнему чисто декларативное. Но для любого домена
+*без* домен-специфичного провайдера `processingType` больше не игнорируется:
+`AI_EXTRACTION` и `STRUCTURED_DATA` запускают `createGenericProvider(source)`
+(§1.1) сразу, без единой строчки нового кода; `HTML` и `HYBRID` запускают его
+тоже, но только когда админ заполнил `selectorConfig` в форме (вручную или
+через AI-подсказку, §1.2) — без него они остаются незадействованными, как и
+`API`, для которого генерализация сознательно не сделана (слишком разные
+схемы авторизации/пагинации без единого реального примера). Ни один из пяти
+вариантов не приводит к падению поиска — это проверяет
+`provider-registry.test.ts`.
 
 ```mermaid
 flowchart TD
-    Admin["/admin/search-sources\nформа: имя, домен, processingType"] --> Row["Строка в search_sources\n(processing_type — просто колонка)"]
+    Admin["/admin/search-sources\nформа: имя, домен, processingType, selectorConfig"] --> Row["Строка в search_sources"]
     Row --> Registry["listEnabledSources()\nenabled = true, ORDER BY priority"]
     Registry --> Lookup{"provider-registry.ts:\nPROVIDERS_BY_DOMAIN[domain]\nсуществует?"}
-    Lookup -- "нет" --> Skip["Источник не опрашивается.\nВлияет только на reliability-бонус\nв ранжировании и на кэш robots.txt"]
-    Lookup -- "да" --> Provider["ExternalSearchProvider.search()\n(вся стратегия — внутри этой функции,\nprocessingType read вообще нигде код не читает)"]
+    Lookup -- "да" --> Provider["Домен-специфичный ExternalSearchProvider.search()\n(processingType игнорируется)"]
+    Lookup -- "нет" --> Generic{"isGenericEligible(source)?\nAI_EXTRACTION/STRUCTURED_DATA: всегда\nHTML/HYBRID: нужен selectorConfig\nAPI: никогда"}
+    Generic -- "да" --> GenericProvider["createGenericProvider(source).search()\nселекторы → JSON-LD → (если разрешено) AI"]
+    Generic -- "нет" --> Skip["Источник не опрашивается.\nВлияет только на reliability-бонус\nв ранжировании и на кэш robots.txt"]
 
     style Lookup fill:#1f6f8b,color:#fff
+    style Generic fill:#1f6f8b,color:#fff
     style Provider fill:#2f7d4f,color:#fff
+    style GenericProvider fill:#2f7d4f,color:#fff
     style Skip fill:#7a5230,color:#fff
 ```
+
+### 1.1 Универсальный провайдер (`providers/generic/provider.ts`)
+
+Для любого включённого источника без домен-специфичной реализации, которого
+`isGenericEligible` принимает, `createGenericProvider(source)` собирает
+`ExternalSearchProvider` на лету: обходит сайтмап источника (те же
+`crawl/`-утилиты §4), на каждой странице пробует извлечение в три тира по
+порядку:
+
+1. **Селекторы** (`extract-by-selectors.ts`), если у источника задан
+   `selectorConfig` — самый дешёвый и точный вариант, админ явно указал, где
+   искать поля. `name` не резолвился → тир считается неудачным, идём дальше.
+2. **JSON-LD** (`extractJsonLdFields`) — бесплатно и детерминированно, когда
+   источник его публикует.
+3. **AI-классификация** (`classifyCandidatePage`, один вызов Claude на
+   страницу с кэшем по хэшу контента) — **только если `allowAi`**.
+   `allowAi = source.processingType !== "HTML"`: чистый `HTML` обязан
+   оставаться бесплатным и детерминированным (это его смысл в таблице §2), и
+   если ни селекторы, ни JSON-LD не дали результата — просто не даёт
+   результата по этой странице, не тратя AI-вызов. `HYBRID` (и
+   `AI_EXTRACTION`/`STRUCTURED_DATA`, которые сюда доходят всегда, поскольку
+   `allowAi` истинно для них) идут в AI как раньше.
+
+**Важно:** для `AI_EXTRACTION` и `STRUCTURED_DATA` без `selectorConfig`
+провайдер по-прежнему ведёт себя **идентично** — тиры 2 и 3 не зависят от
+того, какое из этих двух значений выбрано. Различие между ними в форме
+админки остаётся подсказкой/декларацией человеку, а не переключателем кода
+внутри `provider.ts` — в отличие от `HTML`/`API`, для которых `processingType`
+уже определяет, **дойдёт ли** до этого кода вообще.
+
+### 1.2 AI-подсказка селекторов (`selector-suggestion.ts`)
+
+При клике «Проверить источник» в админке (`source-validation.ts`) для каждой
+сэмплированной кандидатской страницы, у которой нет JSON-LD и
+`classifyCandidatePage` уже распознал её как карточку судна (confidence
+≥ 0.5), дополнительно вызывается `suggestSelectors(html)` — один запрос к
+Claude Haiku с очищенным от `script/style/svg` HTML той же уже загруженной
+страницы (без лишнего похода на сайт), который предлагает CSS-селекторы для
+полей `GenericExtractedFields`. Результат — `suggestedSelectorConfig` в
+отчёте проверки, кнопка «Применить» в форме подставляет его в JSON-textarea
+`selectorConfig`, как уже сделано для `suggestedProcessingType`. Это только
+подсказка: ничего не сохраняется и не применяется без явного клика админа, и
+никогда не бросает исключение — при отсутствии ключа/таймауте/невалидном
+ответе просто нет подсказки.
 
 ---
 
 ## 2. Пять стратегий: что каждая означает и что готово
 
-| Стратегия | Что означает для реализации провайдера | Плюсы / минусы | Статус |
-|---|---|---|---|
-| `API` | Источник отдаёт JSON/XML через собственный API — провайдер делает типизированный HTTP-запрос, без парсинга разметки | Быстро, устойчиво к редизайну сайта; требует у источника открытого API и часто ключа доступа | Не реализовано ни для одного источника |
-| `HTML` | Провайдер парсит HTML по CSS/DOM-селекторам (в проекте — `cheerio`) | Работает на любом сайте без API; ломается при смене вёрстки источника — требует ручного сопровождения селекторов | Реализовано частично — половина стратегии brilions (`extract.ts`) |
-| `STRUCTURED_DATA` | Провайдер читает встроенную микроразметку страницы (JSON-LD, `schema.org`, Open Graph) вместо сырого DOM | Надёжнее HTML-парсинга (структура задаётся самим источником), но работает только если источник её публикует | Не реализовано как отдельная стратегия; brilions частично использует `og:image`/`og:description` — то есть уже трогает structured-data-подобные поля, но не оформлено как отдельный провайдер |
-| `AI_EXTRACTION` | Текст страницы целиком передаётся модели (Claude, `AI_MODELS.extraction`) с просьбой извлечь данные | Переживает изменение вёрстки, справляется с произвольным свободным текстом; дороже и медленнее HTML/API на страницу, менее детерминирован | Реализовано частично — вторая половина стратегии brilions (`ai-extract.ts`), только для текста об экипаже/удобствах, не для всей страницы |
-| `HYBRID` | Комбинация: детерминированный разбор (`HTML` или `STRUCTURED_DATA`) для полей на строго определённом месте разметки + `AI_EXTRACTION` для свободного текста, который не разложить по селекторам | Берёт скорость/надёжность детерминированного пути там, где это возможно, и гибкость ИИ там, где данные неструктурированы | **Единственная реально реализованная стратегия** — `brilionsProvider` |
+| Стратегия | Что означает для реализации провайдера | Плюсы / минусы | Статус | Диспетчеризуется ли рантаймом |
+|---|---|---|---|---|
+| `API` | Источник отдаёт JSON/XML через собственный API — провайдер делает типизированный HTTP-запрос, без парсинга разметки | Быстро, устойчиво к редизайну сайта; требует у источника открытого API и часто ключа доступа | Не реализовано ни для одного источника; сознательно не обобщается (см. §1) | Нет — нужен домен-специфичный провайдер в `PROVIDERS_BY_DOMAIN` |
+| `HTML` | Провайдер парсит HTML по CSS/DOM-селекторам (в проекте — `cheerio`) | Работает на любом сайте без API; ломается при смене вёрстки источника — требует сопровождения селекторов | Реализовано и для brilions (домен-специфичные селекторы, `extract.ts`), и для любого нового источника через `selectorConfig` + `extract-by-selectors.ts` (§1.1) | **Да, если задан `selectorConfig`** — иначе нет (только через `PROVIDERS_BY_DOMAIN`) |
+| `STRUCTURED_DATA` | Провайдер читает встроенную микроразметку страницы (JSON-LD, `schema.org`, Open Graph) вместо сырого DOM | Надёжнее HTML-парсинга (структура задаётся самим источником), но работает только если источник её публикует | Реализовано для любого нового источника — `providers/generic/provider.ts` (§1.1) | **Да, всегда** — `isGenericEligible` в `provider-registry.ts` |
+| `AI_EXTRACTION` | Текст страницы целиком передаётся модели (Claude) с просьбой извлечь данные | Переживает изменение вёрстки, справляется с произвольным свободным текстом; дороже и медленнее HTML/API на страницу, менее детерминирован | Реализовано и для brilions (`ai-extract.ts`, только для текста об экипаже/удобствах), и для любого нового источника через generic-провайдер (§1.1) | **Да, всегда** — тот же `isGenericEligible`; на generic-провайдере ведёт себя идентично `STRUCTURED_DATA`, если `selectorConfig` не задан (см. §1.1) |
+| `HYBRID` | Комбинация: детерминированный разбор (`selectorConfig`) для полей на строго определённом месте разметки + `AI_EXTRACTION` для свободного текста, который не разложить по селекторам | Берёт скорость/надёжность детерминированного пути там, где это возможно, и гибкость ИИ там, где данные неструктурированы | Домен-специфичный пример — `brilionsProvider`; для любого нового источника — через `selectorConfig` (селекторы) + AI-фолбэк generic-провайдера (§1.1) | **Да, если задан `selectorConfig`** — так же, как `HTML`, но с разрешённым AI-фолбэком (`allowAi=true`) |
 
-Важное следствие: если сегодня выбрать в форме `API`, `STRUCTURED_DATA` или
-чистый `AI_EXTRACTION` для нового источника, это будет **корректно с точки
-зрения БД и валидации** (`searchProcessingTypeValues` в
-`src/lib/validation/admin.ts` принимает все пять), но результат будет тем же,
-что и без строки вовсе, пока кто-то не напишет `ExternalSearchProvider` под
-этот домен и не пропишет его в `PROVIDERS_BY_DOMAIN`. Поле — это, по сути,
-задокументированное намерение и подсказка следующему разработчику, какой
-подход выбрать при реализации, а не переключатель поведения.
+Важное следствие: если сегодня выбрать в форме `API` для нового источника,
+это будет **корректно с точки зрения БД и валидации**
+(`searchProcessingTypeValues` в `src/lib/validation/admin.ts` принимает все
+пять), но результат будет тем же, что и без строки вовсе, пока кто-то не
+напишет `ExternalSearchProvider` под этот домен и не пропишет его в
+`PROVIDERS_BY_DOMAIN`. `HTML`/`HYBRID` без `selectorConfig` ведут себя так
+же — но стоит заполнить конфиг (вручную или через AI-подсказку §1.2), и они
+сразу начинают сканироваться через generic-провайдер. `STRUCTURED_DATA` и
+`AI_EXTRACTION` работают через generic-провайдер вообще без дополнительной
+настройки. `provider-registry.test.ts` фиксирует это поведение для всех
+комбинаций.
 
 ---
 
@@ -227,15 +312,25 @@ sequenceDiagram
 
 `robots_allows = null` в БД трактуется кодом как «ещё не проверено» и
 обязывает перепроверить — не как «разрешено» (см. комментарий
-`source-registry.ts:30`). Это единственное поле реестра, которое реально
-управляет поведением рантайма напрямую (наравне с `enabled`), в отличие от
-`processingType`.
+`source-registry.ts:30`). Наравне с `enabled` это поле реестра реально
+управляет поведением рантайма напрямую — и с добавлением generic-провайдера
+(§1.1) `processingType` тоже вошёл в эту категорию для четырёх из пяти
+значений (`AI_EXTRACTION`, `STRUCTURED_DATA` — всегда; `HTML`, `HYBRID` —
+когда заполнен `selector_config`, который сам по себе тоже стал полем,
+управляющим рантаймом напрямую); только `API` остаётся чисто декларативным,
+пока нет домен-специфичного провайдера.
 
 ---
 
 ## 5. Что нужно, чтобы добавить источник с новой стратегией
 
-Явно по коду и `wiringHint`, шаги для нового провайдера:
+Для `AI_EXTRACTION` и `STRUCTURED_DATA` шаги 2–3 ниже не нужны вовсе — строка
+в реестре достаточна, generic-провайдер (§1.1) подхватывает такой источник
+сам. Для `HTML` и `HYBRID` шаги 2–3 тоже не нужны, если заполнить
+`selectorConfig` в форме (вручную или через AI-подсказку §1.2) — тогда их
+тоже подхватывает generic-провайдер. Только для `API`, и для `HTML`/`HYBRID`
+без `selectorConfig`, на новом домене нужен домен-специфичный провайдер —
+шаги по коду и `wiringHint`:
 
 1. Добавить строку в `search_sources` (через `/admin/search-sources` или SQL) —
    имя, домен, `baseUrl`, `sourceType`, желаемый `processingType` (это поле —

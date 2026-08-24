@@ -14,6 +14,7 @@ import { hashContent } from "@/server/search/crawl/page-cache";
 import { classifyCandidatePage, type CandidateClassification } from "@/server/search/candidate-classifier";
 import { selectGenericCandidates } from "@/server/search/providers/generic/select-candidates";
 import { normalizeGenericResult } from "@/server/search/providers/generic/normalize";
+import { extractBySelectors } from "@/server/search/providers/generic/extract-by-selectors";
 import type { SearchSource } from "@/server/search/source-registry";
 import {
   emptyExternalStats,
@@ -24,11 +25,12 @@ import {
 } from "@/server/search/providers";
 
 /**
- * `ExternalSearchProvider` factory for any registered source whose `processing_type` is
- * `AI_EXTRACTION` or `STRUCTURED_DATA` and has no purpose-built implementation registered in
- * `PROVIDERS_BY_DOMAIN` (`provider-registry.ts`) — the piece that makes `/admin/search-sources`
- * registration actually *real-time*: approving a source is enough to start searching it, no
- * provider code or deploy required. See `src/server/search/README.md`.
+ * `ExternalSearchProvider` factory for any registered source with no purpose-built implementation
+ * registered in `PROVIDERS_BY_DOMAIN` (`provider-registry.ts`) that `isGenericEligible` there
+ * accepts — `AI_EXTRACTION`/`STRUCTURED_DATA` always, `HTML`/`HYBRID` once an admin has filled in
+ * `selectorConfig` (docs/search-source-processing-strategies.md §1.1). This is the piece that makes
+ * `/admin/search-sources` registration actually *real-time*: approving a source is enough to start
+ * searching it, no provider code or deploy required. See `src/server/search/README.md`.
  *
  * ## Why this can't pre-filter by location like `providers/brilions/`
  *
@@ -134,13 +136,35 @@ interface FetchedCandidate {
   usedAi: boolean;
 }
 
-async function fetchAndNormalize(url: string, source: SearchSource): Promise<FetchedCandidate> {
+async function fetchAndNormalize(
+  url: string,
+  source: SearchSource,
+  allowAi: boolean,
+): Promise<FetchedCandidate> {
   const page = await fetchWithCache(url, PAGE_CACHE_MS);
   if (!page.ok || !page.html) return { result: null, usedAi: false };
 
   const retrievedAt = new Date().toISOString();
 
-  // JSON-LD first (spec §11: structured data before AI) — free, and more reliable than a model
+  // Selectors first, when configured (tier 0, cheapest and most precise — an admin told us exactly
+  // where this source's fields live) — before JSON-LD, since a hand-picked selector for a page that
+  // also happens to publish JSON-LD should still win.
+  if (source.selectorConfig) {
+    const bySelectors = extractBySelectors(page.html, source.selectorConfig);
+    if (bySelectors) {
+      const result = normalizeGenericResult({
+        sourceUrl: url,
+        sourceName: source.name,
+        sourceDomain: source.domain,
+        retrievedAt,
+        fields: bySelectors,
+        aiConfidence: null,
+      });
+      return { result, usedAi: false };
+    }
+  }
+
+  // JSON-LD next (spec §11: structured data before AI) — free, and more reliable than a model
   // reading prose, when the page actually publishes it.
   const structured = extractJsonLdFields(page.html);
   if (structured?.name) {
@@ -163,6 +187,13 @@ async function fetchAndNormalize(url: string, source: SearchSource): Promise<Fet
     });
     return { result, usedAi: false };
   }
+
+  // Pure `HTML` promises a fast, free, deterministic strategy (docs/search-source-processing-strategies.md
+  // §2) — spending an AI call here would break that promise, so a source stuck on `HTML` whose
+  // selectors and JSON-LD both missed this page simply yields no result for it, same as if it had no
+  // generic path at all. `HYBRID` (and `AI_EXTRACTION`/`STRUCTURED_DATA`, which never reach this
+  // branch with `allowAi: false`) fall through to AI as before.
+  if (!allowAi) return { result: null, usedAi: false };
 
   const { classification, usedAi } = await classifyCached(page.html);
   if (!classification.looksLikeVesselListing) return { result: null, usedAi };
@@ -200,6 +231,7 @@ async function fetchCandidates(
   urls: string[],
   criteria: SearchCriteria,
   source: SearchSource,
+  allowAi: boolean,
   context: ExternalSearchContext,
   deadline: number,
   stats: ExternalSearchStats,
@@ -220,7 +252,7 @@ async function fetchCandidates(
       const url = urls[index];
 
       try {
-        const { result, usedAi } = await fetchAndNormalize(url, source);
+        const { result, usedAi } = await fetchAndNormalize(url, source, allowAi);
         stats.pagesVisited += 1;
         if (usedAi) stats.aiCalls += 1;
         if (result) {
@@ -269,7 +301,17 @@ function buildRunSearch(source: SearchSource) {
     const toFetch = selectGenericCandidates(allEntries, MAX_CANDIDATE_POOL);
     stats.pagesRejected = allEntries.length - toFetch.length;
 
-    const results = await fetchCandidates(toFetch, criteria, source, context, deadline, stats, errors);
+    const allowAi = source.processingType !== "HTML";
+    const results = await fetchCandidates(
+      toFetch,
+      criteria,
+      source,
+      allowAi,
+      context,
+      deadline,
+      stats,
+      errors,
+    );
     // Candidates queued but never reached because the deadline hit — on top of the ones the
     // sampling step itself already excluded above. Matches `pagesRejected`'s meaning in
     // `providers/brilions/provider.ts`: it does not separately track "fetched but not a listing" —

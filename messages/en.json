@@ -1006,7 +1006,7 @@
     "searchSources": {
       "title": "Search sources",
       "subtitle": "External sites the smart search can use as an additional source of listings.",
-      "wiringHint": "A new source is added as a draft and stays out of search until it's checked (\"Check\" — reachability, robots.txt, sitemap, structured data, a candidate-card preview) and approved. Approving a source with the \"Structured data\" or \"AI extraction\" strategy starts crawling it immediately — no deploy needed, through a generic provider with no site-specific code. The \"HTML parsing\" strategy still needs a provider actually implemented in code (see src/server/search/providers/, provider-registry.ts) — specific selectors still have to be written. Enabling or disabling an already-active source takes effect immediately.",
+      "wiringHint": "A new source is added as a draft and stays out of search until it's checked (\"Check\" — reachability, robots.txt, sitemap, structured data, a candidate-card preview) and approved. Approving a source with the \"Structured data\" or \"AI extraction\" strategy starts crawling it immediately — no deploy needed, through a generic provider with no site-specific code. For \"HTML parsing\" and \"Hybrid\", filling in the selector configuration in the form (or applying the AI suggestion from the check result) is enough — without it the source still isn't crawled. The \"API\" strategy, and any source with no purpose-built provider in code (see src/server/search/providers/, provider-registry.ts), still needs one written. Enabling or disabling an already-active source takes effect immediately.",
       "empty": "No sources yet.",
       "edit": "Edit",
       "enable": "Enable",
@@ -1092,6 +1092,9 @@
         "baseUrlPlaceholder": "https://meridian.com",
         "sourceType": "Source type",
         "processingType": "Processing strategy",
+        "selectorConfig": "Selector configuration (JSON)",
+        "selectorConfigPlaceholder": "{\n  \"fields\": {\n    \"name\": { \"selector\": \"h1\" }\n  }\n}",
+        "selectorConfigHint": "Needed for the \"HTML parsing\" and \"Hybrid\" strategies on a new domain — without it the source registers but isn't crawled. Fill it in by hand, or apply the AI suggestion from the check result.",
         "priority": "Priority",
         "priorityHint": "Higher runs earlier when the search's crawl budget is limited.",
         "notes": "Notes",
@@ -1103,6 +1106,7 @@
           "unauthenticated": "Sign in to add a source",
           "forbidden": "Not enough permissions",
           "domainTaken": "A source with that domain already exists",
+          "selectorConfigInvalid": "Selector configuration is not valid JSON",
           "generic": "Couldn't add the source"
         }
       },
@@ -1138,6 +1142,7 @@
           "notFound": "No structured data (JSON-LD) found"
         },
         "suggestion": "Suggested processing strategy: {type}",
+        "suggestedSelectors": "AI proposed a selector configuration from a sample page",
         "apply": "Apply",
         "candidatePreview": {
           "title": "Candidate card preview",

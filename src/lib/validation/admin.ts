@@ -81,5 +81,65 @@ export const searchSourceSchema = z.object({
   processingType: z.enum(searchProcessingTypeValues),
   priority: z.coerce.number().int().min(0).max(1000).default(50),
   notes: z.string().trim().max(2000).default(""),
+  // Raw JSON text from the form's textarea — parsed and validated against `selectorConfigSchema`
+  // separately (`parseSelectorConfig`), not here, so a bad-JSON error can get its own translated
+  // message instead of tripping the generic "invalid" error for the whole form.
+  selectorConfig: z.string().trim().max(5000).default(""),
 });
 export type SearchSourceInput = z.infer<typeof searchSourceSchema>;
+
+/**
+ * CSS-selector-based field extraction for a `search_sources` row's `HTML`/`HYBRID` `processingType`
+ * (docs/search-source-processing-strategies.md §1.1) — what makes `providers/generic/provider.ts`'s
+ * `extractBySelectors()` able to attempt those two strategies for a source with no purpose-built
+ * `ExternalSearchProvider`, the same way it already attempts `AI_EXTRACTION`/`STRUCTURED_DATA` for
+ * any source. Field names mirror `GenericExtractedFields`
+ * (`src/server/search/providers/generic/normalize.ts`) exactly — this config only ever says where to
+ * find those same fields, never introduces new ones.
+ */
+const selectorFieldSchema = z.object({
+  selector: z.string().trim().min(1).max(300),
+  /** Attribute to read (`content` for `<meta>`, `src`/`data-src` for `<img>`, ...); omitted means
+   *  the element's own text content. */
+  attr: z.string().trim().min(1).max(100).optional(),
+  /** Optional capture-group-1 regex applied to the selected text/attribute — e.g. pulling "8" out
+   *  of "Гостей: 8" — never lets a malformed pattern blank the field (see `extractBySelectors`). */
+  regex: z.string().trim().min(1).max(300).optional(),
+});
+
+export const selectorConfigSchema = z.object({
+  fields: z.object({
+    // `name` unresolved means the whole extraction is treated as a miss (see `extractBySelectors`),
+    // same convention as the JSON-LD tier it sits alongside.
+    name: selectorFieldSchema.optional(),
+    description: selectorFieldSchema.optional(),
+    image: selectorFieldSchema.optional(),
+    guests: selectorFieldSchema.optional(),
+    cabins: selectorFieldSchema.optional(),
+    vesselTypeRaw: selectorFieldSchema.optional(),
+    country: selectorFieldSchema.optional(),
+    city: selectorFieldSchema.optional(),
+  }),
+});
+export type SelectorConfig = z.infer<typeof selectorConfigSchema>;
+
+export type ParsedSelectorConfig =
+  | { ok: true; value: SelectorConfig | null }
+  | { ok: false };
+
+/** Empty input is a valid "no selectors configured" — everything else must be valid JSON matching
+ *  `selectorConfigSchema`, or the whole thing is rejected rather than silently dropped. */
+export function parseSelectorConfig(raw: string): ParsedSelectorConfig {
+  const trimmed = raw.trim();
+  if (!trimmed) return { ok: true, value: null };
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(trimmed);
+  } catch {
+    return { ok: false };
+  }
+
+  const result = selectorConfigSchema.safeParse(parsed);
+  return result.success ? { ok: true, value: result.data } : { ok: false };
+}

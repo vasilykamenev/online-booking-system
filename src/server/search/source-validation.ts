@@ -9,7 +9,9 @@ import {
   classifyCandidatePage,
   type CandidateClassification,
 } from "@/server/search/candidate-classifier";
+import { suggestSelectors } from "@/server/search/selector-suggestion";
 import type { SearchProcessingType } from "@/server/search/source-registry";
+import type { SelectorConfig } from "@/lib/validation/admin";
 
 /**
  * Live, read-only pre-registration checks for a candidate search source (spec §9: "a source must
@@ -48,6 +50,9 @@ export interface SourceValidationReport {
   };
   /** Null when the site wasn't even reachable — there's nothing to base a suggestion on. */
   suggestedProcessingType: SearchProcessingType | null;
+  /** The first sample's `suggestedSelectors`, when any sample produced one — see
+   *  `CandidatePreviewSample.suggestedSelectors`. */
+  suggestedSelectorConfig: SelectorConfig | null;
   candidatePreview: CandidatePreview;
 }
 
@@ -60,6 +65,12 @@ export interface CandidatePreviewSample {
   /** Null when structured data already answered "is this a vessel listing?", or the page couldn't
    *  be fetched, or there was nothing to classify. */
   classification: CandidateClassification | null;
+  /** CSS selectors an AI call proposed for this page's fields (docs/search-source-processing-strategies.md
+   *  §1.1) — only attempted once `classification` already recognized the page as a vessel listing,
+   *  since there's nothing worth pointing selectors at otherwise. Null when not attempted or the
+   *  model produced nothing usable; always a suggestion for the admin to review, never applied on
+   *  its own. */
+  suggestedSelectors: SelectorConfig | null;
 }
 
 export interface CandidatePreview {
@@ -87,19 +98,30 @@ async function previewCandidates(sampleUrls: string[]): Promise<CandidatePreview
   const samples = await Promise.all(
     sampleUrls.map(async (url): Promise<CandidatePreviewSample> => {
       const result = await safeFetch(url, PROBE_TIMEOUTS);
-      if (!result.ok) return { url, fetched: false, structuredDataTypes: [], classification: null };
+      if (!result.ok) {
+        return {
+          url,
+          fetched: false,
+          structuredDataTypes: [],
+          classification: null,
+          suggestedSelectors: null,
+        };
+      }
 
       const structuredDataTypes = extractJsonLdTypes(result.body);
       if (structuredDataTypes.length > 0) {
-        return { url, fetched: true, structuredDataTypes, classification: null };
+        return { url, fetched: true, structuredDataTypes, classification: null, suggestedSelectors: null };
       }
 
-      return {
-        url,
-        fetched: true,
-        structuredDataTypes: [],
-        classification: await classifyCandidatePage(result.body),
-      };
+      const classification = await classifyCandidatePage(result.body);
+      // Only worth proposing selectors once we already know this page is a vessel listing — nothing
+      // to point them at otherwise, and it's an extra AI call, not a free one.
+      const suggestedSelectors =
+        classification.looksLikeVesselListing && classification.confidence >= 0.5
+          ? await suggestSelectors(result.body)
+          : null;
+
+      return { url, fetched: true, structuredDataTypes: [], classification, suggestedSelectors };
     }),
   );
 
@@ -168,6 +190,8 @@ export async function validateSearchSource(baseUrl: string): Promise<SourceValid
       : { found: false, url: null, entryCount: null },
     structuredData: { found: structuredDataFound, types: structuredTypes },
     suggestedProcessingType: suggestProcessingType(pageResult.ok, structuredDataFound, candidatePreview),
+    suggestedSelectorConfig:
+      candidatePreview.samples.find((sample) => sample.suggestedSelectors)?.suggestedSelectors ?? null,
     candidatePreview,
   };
 }

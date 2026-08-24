@@ -11,6 +11,7 @@ import {
   amenityKeySchema,
   commissionRateSchema,
   searchSourceSchema,
+  parseSelectorConfig,
   type userRoleValues,
 } from "@/lib/validation/admin";
 import {
@@ -306,8 +307,14 @@ export async function createSearchSource(
     processingType: formData.get("processingType"),
     priority: formData.get("priority"),
     notes: formData.get("notes"),
+    // Absent (not just empty) when the form hid this field for the current processingType — the
+    // schema's `.default("")` only kicks in for `undefined`, so `null` needs coalescing here too.
+    selectorConfig: formData.get("selectorConfig") ?? "",
   });
   if (!parsed.success) return { error: "invalid" };
+
+  const selectorConfig = parseSelectorConfig(parsed.data.selectorConfig);
+  if (!selectorConfig.ok) return { error: "selectorConfigInvalid" };
 
   const supabase = await createClient();
   const admin = await requireAdmin(supabase);
@@ -323,6 +330,7 @@ export async function createSearchSource(
       processing_type: parsed.data.processingType,
       priority: parsed.data.priority,
       notes: parsed.data.notes || null,
+      selector_config: selectorConfig.value as Json,
       // Every new source starts unreviewed — `approveSearchSource` is the only path to `enabled`.
       status: "draft",
       enabled: false,
@@ -353,8 +361,14 @@ export async function updateSearchSource(
     processingType: formData.get("processingType"),
     priority: formData.get("priority"),
     notes: formData.get("notes"),
+    // Absent (not just empty) when the form hid this field for the current processingType — the
+    // schema's `.default("")` only kicks in for `undefined`, so `null` needs coalescing here too.
+    selectorConfig: formData.get("selectorConfig") ?? "",
   });
   if (!parsed.success) return { error: "invalid" };
+
+  const selectorConfig = parseSelectorConfig(parsed.data.selectorConfig);
+  if (!selectorConfig.ok) return { error: "selectorConfigInvalid" };
 
   const supabase = await createClient();
   const admin = await requireAdmin(supabase);
@@ -373,6 +387,7 @@ export async function updateSearchSource(
       processing_type: parsed.data.processingType,
       priority: parsed.data.priority,
       notes: parsed.data.notes || null,
+      selector_config: selectorConfig.value as Json,
     })
     .eq("id", sourceId);
   if (error) return { error: error.code === "23505" ? "domainTaken" : "generic" };

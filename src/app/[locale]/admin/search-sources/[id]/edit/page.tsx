@@ -45,6 +45,7 @@ export default async function EditSearchSourcePage({
             processingType: source.processingType,
             priority: source.priority,
             notes: source.notes ?? "",
+            selectorConfig: source.selectorConfig ? JSON.stringify(source.selectorConfig, null, 2) : "",
           }}
         />
       </div>
