@@ -1,6 +1,7 @@
 "use client";
 
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
+import { Loader2 } from "lucide-react";
 import { useLocale, useTranslations } from "next-intl";
 import type { Locale } from "@/i18n/routing";
 import { Link, useRouter } from "@/i18n/navigation";
@@ -411,6 +412,7 @@ export function SearchSourceForm({
 
       <div className="flex items-center gap-2 sm:col-span-2">
         <Button type="submit" disabled={isPending} className="rounded-full sm:w-fit">
+          {isPending && <Loader2 className="size-4 animate-spin" strokeWidth={1.5} />}
           {mode === "create" ? t("add") : t("save")}
         </Button>
         {mode === "edit" && (
