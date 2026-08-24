@@ -69,13 +69,11 @@ export const searchProcessingTypeValues = [
  * array (see `src/server/search/README.md`). The admin form makes this explicit rather than
  * implying "add a row, get a new source searched".
  */
+const DOMAIN_PATTERN = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/;
+
 export const searchSourceSchema = z.object({
   name: z.string().trim().min(1).max(120),
-  domain: z
-    .string()
-    .trim()
-    .toLowerCase()
-    .regex(/^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/, "invalidDomain"),
+  domain: z.string().trim().toLowerCase().regex(DOMAIN_PATTERN, "invalidDomain"),
   baseUrl: z.url().max(500),
   sourceType: z.enum(searchSourceTypeValues),
   processingType: z.enum(searchProcessingTypeValues),
@@ -85,6 +83,9 @@ export const searchSourceSchema = z.object({
   // separately (`parseSelectorConfig`), not here, so a bad-JSON error can get its own translated
   // message instead of tripping the generic "invalid" error for the whole form.
   selectorConfig: z.string().trim().max(5000).default(""),
+  // Raw newline/comma-separated text from the form — parsed and validated separately
+  // (`parseImageDomains`), same reasoning as `selectorConfig` above.
+  imageDomains: z.string().trim().max(1000).default(""),
 });
 export type SearchSourceInput = z.infer<typeof searchSourceSchema>;
 
@@ -142,4 +143,23 @@ export function parseSelectorConfig(raw: string): ParsedSelectorConfig {
 
   const result = selectorConfigSchema.safeParse(parsed);
   return result.success ? { ok: true, value: result.data } : { ok: false };
+}
+
+export type ParsedImageDomains = { ok: true; value: string[] } | { ok: false };
+
+/**
+ * Trusted image-CDN hostnames for a source, beyond its own `domain` — `api/external-image/route.ts`'s
+ * proxy allows either. Split on commas/whitespace/newlines so admins can paste a list in whatever
+ * shape is convenient; each entry must itself be a valid domain (same `DOMAIN_PATTERN` as the
+ * source's own `domain` field — a proxy allowlist entry is exactly as security-sensitive as that
+ * field is). Empty input is valid — "no extra image hosts", not an error.
+ */
+export function parseImageDomains(raw: string): ParsedImageDomains {
+  const entries = raw
+    .split(/[\s,]+/)
+    .map((entry) => entry.trim().toLowerCase())
+    .filter((entry) => entry.length > 0);
+
+  if (entries.some((entry) => !DOMAIN_PATTERN.test(entry))) return { ok: false };
+  return { ok: true, value: [...new Set(entries)] };
 }

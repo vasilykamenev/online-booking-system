@@ -76,6 +76,35 @@ describe("extractJsonLdFields", () => {
     expect(extractJsonLdFields(html)).toBeNull();
   });
 
+  it("skips a site-wide Organization/TravelAgency block in favor of the page's own listing, regardless of document order", () => {
+    // Reproduces globesailor.ru: every page carries a page-wide `TravelAgency` block (site name, no
+    // `image`) ahead of the page-specific `Product` block — before this fix, the org block's name
+    // ("GlobeSailor") and missing image leaked into every single result from the source.
+    const html = `
+      <script type="application/ld+json">
+        {"@type":"TravelAgency","name":"GlobeSailor","url":"https://www.globesailor.ru/"}
+      </script>
+      <script type="application/ld+json">
+        {"@type":"Product","name":"Аренда яхты Гренада","image":"https://example.com/grenada.jpg"}
+      </script>
+    `;
+    expect(extractJsonLdFields(html)).toEqual({
+      name: "Аренда яхты Гренада",
+      description: null,
+      image: "https://example.com/grenada.jpg",
+    });
+  });
+
+  it("skips a named Organization node inside the same @graph as the real listing", () => {
+    const html = `<script type="application/ld+json">
+      {"@graph":[
+        {"@type":"Organization","name":"GlobeSailor"},
+        {"@type":"Product","name":"Catamaran X","image":"https://example.com/a.jpg"}
+      ]}
+    </script>`;
+    expect(extractJsonLdFields(html)?.name).toBe("Catamaran X");
+  });
+
   it("returns null when the page has no JSON-LD at all", () => {
     expect(extractJsonLdFields("<html><body>text</body></html>")).toBeNull();
   });

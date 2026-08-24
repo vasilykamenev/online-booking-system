@@ -35,6 +35,11 @@ export interface SearchSource {
   /** Null means the generic provider still can't attempt `HTML`/`HYBRID` for this source — see
    *  `provider-registry.ts`'s `isGenericEligible`. */
   selectorConfig: SelectorConfig | null;
+  /** Trusted image-CDN hostnames beyond `domain` itself — `api/external-image/route.ts`'s proxy
+   *  allowlist checks both. A source's own pages and its photos are often on different hosts (e.g.
+   *  globesailor.ru's listings link to images on static.theglobesailor.com); without this, every
+   *  photo from such a source gets rejected by the proxy even though `domain` itself is correct. */
+  imageDomains: string[];
 }
 
 /**
@@ -48,7 +53,7 @@ export const listEnabledSources = cache(async (): Promise<SearchSource[]> => {
   const { data, error } = await supabase
     .from("search_sources")
     .select(
-      "id, name, domain, base_url, enabled, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, selector_config",
+      "id, name, domain, base_url, enabled, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, selector_config, image_domains",
     )
     .eq("enabled", true)
     // Belt-and-suspenders: `enabled` should only ever be true alongside status = 'active' (that's
@@ -79,6 +84,7 @@ export const listEnabledSources = cache(async (): Promise<SearchSource[]> => {
       robotsAllows: row.robots_allows,
       lastCheckedAt: row.last_checked_at,
       selectorConfig: parsedSelectorConfig.success ? parsedSelectorConfig.data : null,
+      imageDomains: row.image_domains ?? [],
     };
   });
 });

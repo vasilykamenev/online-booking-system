@@ -150,12 +150,13 @@ export interface AdminSearchSource {
   robotsAllows: boolean | null;
   lastCheckedAt: string | null;
   selectorConfig: SelectorConfig | null;
+  imageDomains: string[];
   notes: string | null;
   createdAt: string;
 }
 
 const SEARCH_SOURCE_COLUMNS =
-  "id, name, domain, base_url, enabled, status, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, selector_config, notes, created_at";
+  "id, name, domain, base_url, enabled, status, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, selector_config, image_domains, notes, created_at";
 
 /** Parses `selector_config` the same defensively-null-on-failure way `listEnabledSources`
  *  (`source-registry.ts`) does — an admin-authored value should always be valid (the form validates
@@ -191,6 +192,7 @@ export async function getAllSearchSourcesAdmin(): Promise<AdminSearchSource[]> {
     robotsAllows: row.robots_allows,
     lastCheckedAt: row.last_checked_at,
     selectorConfig: parseAdminSelectorConfig(row.selector_config),
+    imageDomains: row.image_domains,
     notes: row.notes,
     createdAt: row.created_at,
   }));
@@ -225,6 +227,7 @@ export async function getSearchSourceById(id: string): Promise<AdminSearchSource
     robotsAllows: data.robots_allows,
     lastCheckedAt: data.last_checked_at,
     selectorConfig: parseAdminSelectorConfig(data.selector_config),
+    imageDomains: data.image_domains,
     notes: data.notes,
     createdAt: data.created_at,
   };

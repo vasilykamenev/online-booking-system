@@ -831,6 +831,7 @@ export type Database = {
           domain: string
           enabled: boolean
           id: string
+          image_domains: string[]
           last_checked_at: string | null
           name: string
           notes: string | null
@@ -849,6 +850,7 @@ export type Database = {
           domain: string
           enabled?: boolean
           id?: string
+          image_domains?: string[]
           last_checked_at?: string | null
           name: string
           notes?: string | null
@@ -867,6 +869,7 @@ export type Database = {
           domain?: string
           enabled?: boolean
           id?: string
+          image_domains?: string[]
           last_checked_at?: string | null
           name?: string
           notes?: string | null

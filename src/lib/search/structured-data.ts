@@ -66,6 +66,33 @@ function firstString(value: unknown): string | null {
   return null;
 }
 
+/**
+ * Site-wide/organizational schema types, never the listing a page is actually about. Almost every
+ * commercial site injects one of these on every page (nav header, footer, or site-level SEO
+ * boilerplate) — usually *before* any page-specific JSON-LD in document order — so without this
+ * exclusion `findFirstNamedNode` locks onto the site's own name/logo on every page of a source
+ * (observed live on globesailor.ru: a page-wide `TravelAgency` block named "GlobeSailor" precedes
+ * the page's actual `Product` block in every listing page's HTML). Not a positive `@type` allowlist
+ * (see this file's other doc comment for why) — just the types that are structurally never the
+ * page's showcased item, regardless of what that item's own type turns out to be.
+ */
+const NON_LISTING_TYPES = new Set([
+  "Organization",
+  "TravelAgency",
+  "LocalBusiness",
+  "Corporation",
+  "WebSite",
+  "WebPage",
+  "BreadcrumbList",
+  "SiteNavigationElement",
+]);
+
+function isNonListingNode(record: Record<string, unknown>): boolean {
+  const type = record["@type"];
+  const types = typeof type === "string" ? [type] : Array.isArray(type) ? type : [];
+  return types.some((entry) => typeof entry === "string" && NON_LISTING_TYPES.has(entry));
+}
+
 function findFirstNamedNode(node: unknown): Record<string, unknown> | null {
   if (Array.isArray(node)) {
     for (const item of node) {
@@ -77,17 +104,21 @@ function findFirstNamedNode(node: unknown): Record<string, unknown> | null {
   if (node === null || typeof node !== "object") return null;
 
   const record = node as Record<string, unknown>;
-  if (typeof record.name === "string" && record.name.trim()) return record;
+  if (!isNonListingNode(record) && typeof record.name === "string" && record.name.trim()) {
+    return record;
+  }
   if ("@graph" in record) return findFirstNamedNode(record["@graph"]);
   return null;
 }
 
 /**
  * Pulls basic listing fields (name/description/image) off the first JSON-LD node that declares a
- * `name` — deliberately not filtered to a specific `@type` allowlist (schema.org has no dedicated
- * "boat" type, and site owners rarely tag charter listings precisely as `Product`), so this trusts
- * "has a name" as the signal that a node describes the thing the page is about. Returns `null` when
- * no page-wide JSON-LD carries a name at all, which is a fact about the page, not a failure.
+ * `name` and isn't a known site-wide/organizational type (`NON_LISTING_TYPES`) — deliberately not
+ * filtered to a positive `@type` allowlist (schema.org has no dedicated "boat" type, and site owners
+ * rarely tag charter listings precisely as `Product`), so this trusts "has a name, and isn't clearly
+ * about the site itself" as the signal that a node describes the thing the page is about. Returns
+ * `null` when no page-wide JSON-LD carries such a name at all, which is a fact about the page, not a
+ * failure.
  */
 export function extractJsonLdFields(html: string): JsonLdFields | null {
   for (const match of html.matchAll(SCRIPT_PATTERN)) {

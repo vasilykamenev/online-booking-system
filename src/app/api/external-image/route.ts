@@ -16,7 +16,10 @@ import { listEnabledSources } from "@/server/search/source-registry";
  * Guarded the same way the rest of the crawler is: `safeFetchBinary` gives SSRF protection (private
  * IPs, redirect re-validation, size/time limits), and the target host must belong to a source that
  * is actually `active` and `enabled` in the registry — this is a narrow image proxy for our own
- * search results, not a general-purpose open proxy.
+ * search results, not a general-purpose open proxy. "Belong to a source" means either the source's
+ * own `domain` or one of its admin-set `imageDomains` — a source's photos are frequently hosted on a
+ * separate CDN host from its pages (globesailor.ru → static.theglobesailor.com being the case that
+ * surfaced this), so `domain` alone rejects perfectly legitimate photos.
  */
 
 const ALLOWED_CONTENT_TYPES = new Set(["image/jpeg", "image/png", "image/webp", "image/avif", "image/gif"]);
@@ -43,7 +46,8 @@ export async function GET(request: Request): Promise<NextResponse> {
   }
 
   const sources = await listEnabledSources();
-  if (!isAllowedHost(target.hostname, sources.map((source) => source.domain))) {
+  const allowedDomains = sources.flatMap((source) => [source.domain, ...source.imageDomains]);
+  if (!isAllowedHost(target.hostname, allowedDomains)) {
     return new NextResponse(null, { status: 403 });
   }
 

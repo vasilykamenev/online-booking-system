@@ -39,6 +39,9 @@ export interface SearchSourceFormDefaultValues {
   notes: string;
   /** Raw JSON text, or "" — mirrors the form field's own shape, not the parsed `SelectorConfig`. */
   selectorConfig: string;
+  /** Raw comma/newline-separated text, or "" — mirrors the form field's own shape, not the parsed
+   *  `string[]`. */
+  imageDomains: string;
 }
 
 const GENERIC_SELECTOR_TYPES = new Set<(typeof searchProcessingTypeValues)[number]>(["HTML", "HYBRID"]);
@@ -349,6 +352,16 @@ export function SearchSourceForm({
           <p className="text-xs font-light text-muted-foreground">{t("selectorConfigHint")}</p>
         </div>
       )}
+      <div className="flex flex-col gap-2 sm:col-span-2">
+        <Label htmlFor="imageDomains">{t("imageDomains")}</Label>
+        <Input
+          id="imageDomains"
+          name="imageDomains"
+          placeholder={t("imageDomainsPlaceholder")}
+          defaultValue={defaultValues?.imageDomains}
+        />
+        <p className="text-xs font-light text-muted-foreground">{t("imageDomainsHint")}</p>
+      </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor="priority">{t("priority")}</Label>
         <Input

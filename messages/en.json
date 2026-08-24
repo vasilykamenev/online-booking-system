@@ -1095,6 +1095,9 @@
         "selectorConfig": "Selector configuration (JSON)",
         "selectorConfigPlaceholder": "{\n  \"fields\": {\n    \"name\": { \"selector\": \"h1\" }\n  }\n}",
         "selectorConfigHint": "Needed for the \"HTML parsing\" and \"Hybrid\" strategies on a new domain — without it the source registers but isn't crawled. Fill it in by hand, or apply the AI suggestion from the check result.",
+        "imageDomains": "Trusted image hosts",
+        "imageDomainsPlaceholder": "e.g. static.example-cdn.com, images.example.com",
+        "imageDomainsHint": "Comma-separated hostnames, only needed when photos are served from a different host than the site itself (a separate CDN, for instance) — the source's own domain is always allowed. Photos from any other host are rejected, not just hidden.",
         "priority": "Priority",
         "priorityHint": "Higher runs earlier when the search's crawl budget is limited.",
         "notes": "Notes",
@@ -1107,6 +1110,7 @@
           "forbidden": "Not enough permissions",
           "domainTaken": "A source with that domain already exists",
           "selectorConfigInvalid": "Selector configuration is not valid JSON",
+          "imageDomainsInvalid": "Trusted image hosts must be valid domain names",
           "generic": "Couldn't add the source"
         }
       },

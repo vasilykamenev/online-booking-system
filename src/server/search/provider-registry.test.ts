@@ -30,6 +30,7 @@ function source(
     robotsAllows: null,
     lastCheckedAt: null,
     selectorConfig,
+    imageDomains: [],
   };
 }
 

@@ -38,6 +38,7 @@ const BASE_DEFAULTS: SearchSourceFormDefaultValues = {
   priority: 50,
   notes: "",
   selectorConfig: "",
+  imageDomains: "",
 };
 
 afterEach(() => {
