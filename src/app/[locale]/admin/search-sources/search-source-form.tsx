@@ -14,11 +14,13 @@ import {
 import {
   searchProcessingTypeValues,
   searchSourceTypeValues,
+  urlClassificationValues,
 } from "@/lib/validation/admin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
   SelectContent,
@@ -42,6 +44,7 @@ export interface SearchSourceFormDefaultValues {
   /** Raw comma/newline-separated text, or "" — mirrors the form field's own shape, not the parsed
    *  `string[]`. */
   imageDomains: string;
+  autoSelectClassifications: (typeof urlClassificationValues)[number][];
 }
 
 const GENERIC_SELECTOR_TYPES = new Set<(typeof searchProcessingTypeValues)[number]>(["HTML", "HYBRID"]);
@@ -59,6 +62,7 @@ export function SearchSourceForm({
   const tProcessing = useTranslations("admin.searchSources.processingType");
   const tProcessingHint = useTranslations("admin.searchSources.processingTypeHint");
   const tSourceType = useTranslations("admin.searchSources.sourceType");
+  const tClassification = useTranslations("admin.searchSources.classification");
   const tValidation = useTranslations("admin.searchSources.validation");
   const locale = useLocale() as Locale;
   const router = useRouter();
@@ -361,6 +365,22 @@ export function SearchSourceForm({
           defaultValue={defaultValues?.imageDomains}
         />
         <p className="text-xs font-light text-muted-foreground">{t("imageDomainsHint")}</p>
+      </div>
+      <div className="flex flex-col gap-2 sm:col-span-2">
+        <Label>{t("autoSelectClassifications")}</Label>
+        <div className="flex flex-wrap gap-4">
+          {urlClassificationValues.map((value) => (
+            <label key={value} className="group flex items-center gap-2 text-sm font-light">
+              <Checkbox
+                name="autoSelectClassifications"
+                value={value}
+                defaultChecked={defaultValues?.autoSelectClassifications?.includes(value) ?? value === "HIGH"}
+              />
+              {tClassification(value)}
+            </label>
+          ))}
+        </div>
+        <p className="text-xs font-light text-muted-foreground">{t("autoSelectClassificationsHint")}</p>
       </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor="priority">{t("priority")}</Label>

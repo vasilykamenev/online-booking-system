@@ -62,6 +62,13 @@ export const searchProcessingTypeValues = [
   "HYBRID",
 ] as const satisfies readonly Database["public"]["Enums"]["search_processing_type"][];
 
+export const urlClassificationValues = [
+  "HIGH",
+  "MEDIUM",
+  "LOW",
+  "SKIP",
+] as const satisfies readonly Database["public"]["Enums"]["search_url_classification"][];
+
 /**
  * A row here is registry metadata (reliability bonus for ranking, cached robots.txt verdict) —
  * it does not by itself make the app crawl the site. Actually searching a source still requires
@@ -86,8 +93,27 @@ export const searchSourceSchema = z.object({
   // Raw newline/comma-separated text from the form — parsed and validated separately
   // (`parseImageDomains`), same reasoning as `selectorConfig` above.
   imageDomains: z.string().trim().max(1000).default(""),
+  // Checkbox group (`formData.getAll(...)`) — which URL Registry classifications
+  // (docs/CLAUDE_SITEMAP_AI_CRAWLER_RULE.md §4) get auto-selected for fetching without a per-URL
+  // manual override (`search_source_urls.selection_override`). Empty is valid — "nothing
+  // auto-selected, pick URLs by hand" is a legitimate (if unusual) choice, not an error.
+  autoSelectClassifications: z.array(z.enum(urlClassificationValues)).default([]),
 });
 export type SearchSourceInput = z.infer<typeof searchSourceSchema>;
+
+/**
+ * A source's own crawl-rule row (docs/CLAUDE_SITEMAP_AI_CRAWLER_RULE.md §4) — deterministic
+ * path-prefix classification, editable per source in `/admin/search-sources/[id]/urls`. Mirrors
+ * `CrawlRule` (`src/server/search/registry/url-classification.ts`) field-for-field; kept as a
+ * separate schema rather than importing that interface because this one validates raw form input
+ * (`priority` arrives as a string) while that one is the pure-logic shape.
+ */
+export const crawlRuleSchema = z.object({
+  pattern: z.string().trim().min(1).max(300),
+  classification: z.enum(urlClassificationValues),
+  priority: z.coerce.number().int().min(-1000).max(1000).default(0),
+});
+export type CrawlRuleInput = z.infer<typeof crawlRuleSchema>;
 
 /**
  * CSS-selector-based field extraction for a `search_sources` row's `HTML`/`HYBRID` `processingType`

@@ -744,6 +744,118 @@ export type Database = {
         }
         Relationships: []
       }
+      search_source_crawl_rules: {
+        Row: {
+          classification: Database["public"]["Enums"]["search_url_classification"]
+          created_at: string
+          enabled: boolean
+          id: string
+          pattern: string
+          priority: number
+          source_id: string
+          updated_at: string
+        }
+        Insert: {
+          classification: Database["public"]["Enums"]["search_url_classification"]
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          pattern: string
+          priority?: number
+          source_id: string
+          updated_at?: string
+        }
+        Update: {
+          classification?: Database["public"]["Enums"]["search_url_classification"]
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          pattern?: string
+          priority?: number
+          source_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "search_source_crawl_rules_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "search_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      search_source_urls: {
+        Row: {
+          classification: Database["public"]["Enums"]["search_url_classification"]
+          content_hash: string | null
+          crawl_status: Database["public"]["Enums"]["search_url_crawl_status"]
+          created_at: string
+          discovered_at: string
+          http_status: number | null
+          id: string
+          last_ai_processed_at: string | null
+          last_fetched_at: string | null
+          last_seen_at: string
+          priority: number
+          selected: boolean
+          selection_override: boolean | null
+          sitemap_lastmod: string | null
+          source_id: string
+          source_sitemap: string | null
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          classification?: Database["public"]["Enums"]["search_url_classification"]
+          content_hash?: string | null
+          crawl_status?: Database["public"]["Enums"]["search_url_crawl_status"]
+          created_at?: string
+          discovered_at?: string
+          http_status?: number | null
+          id?: string
+          last_ai_processed_at?: string | null
+          last_fetched_at?: string | null
+          last_seen_at?: string
+          priority?: number
+          selected?: boolean
+          selection_override?: boolean | null
+          sitemap_lastmod?: string | null
+          source_id: string
+          source_sitemap?: string | null
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          classification?: Database["public"]["Enums"]["search_url_classification"]
+          content_hash?: string | null
+          crawl_status?: Database["public"]["Enums"]["search_url_crawl_status"]
+          created_at?: string
+          discovered_at?: string
+          http_status?: number | null
+          id?: string
+          last_ai_processed_at?: string | null
+          last_fetched_at?: string | null
+          last_seen_at?: string
+          priority?: number
+          selected?: boolean
+          selection_override?: boolean | null
+          sitemap_lastmod?: string | null
+          source_id?: string
+          source_sitemap?: string | null
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "search_source_urls_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "search_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       search_runs: {
         Row: {
           ai_calls: number
@@ -826,6 +938,7 @@ export type Database = {
       }
       search_sources: {
         Row: {
+          auto_select_classifications: Database["public"]["Enums"]["search_url_classification"][]
           base_url: string
           created_at: string
           domain: string
@@ -845,6 +958,7 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          auto_select_classifications?: Database["public"]["Enums"]["search_url_classification"][]
           base_url: string
           created_at?: string
           domain: string
@@ -864,6 +978,7 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          auto_select_classifications?: Database["public"]["Enums"]["search_url_classification"][]
           base_url?: string
           created_at?: string
           domain?: string
@@ -1087,6 +1202,8 @@ export type Database = {
         | "HYBRID"
       search_source_status: "draft" | "needs_review" | "active" | "rejected"
       search_source_type: "WEBSITE" | "API"
+      search_url_classification: "HIGH" | "MEDIUM" | "LOW" | "SKIP"
+      search_url_crawl_status: "PENDING" | "FETCHED" | "FAILED" | "SKIPPED"
       user_role: "client" | "owner" | "admin"
       vessel_status: "draft" | "published" | "archived"
       vessel_type: "yacht" | "catamaran" | "expedition" | "research" | "hybrid"
@@ -1251,6 +1368,8 @@ export const Constants = {
       ],
       search_source_status: ["draft", "needs_review", "active", "rejected"],
       search_source_type: ["WEBSITE", "API"],
+      search_url_classification: ["HIGH", "MEDIUM", "LOW", "SKIP"],
+      search_url_crawl_status: ["PENDING", "FETCHED", "FAILED", "SKIPPED"],
       user_role: ["client", "owner", "admin"],
       vessel_status: ["draft", "published", "archived"],
       vessel_type: ["yacht", "catamaran", "expedition", "research", "hybrid"],

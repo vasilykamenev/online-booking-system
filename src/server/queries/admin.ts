@@ -151,12 +151,13 @@ export interface AdminSearchSource {
   lastCheckedAt: string | null;
   selectorConfig: SelectorConfig | null;
   imageDomains: string[];
+  autoSelectClassifications: Database["public"]["Enums"]["search_url_classification"][];
   notes: string | null;
   createdAt: string;
 }
 
 const SEARCH_SOURCE_COLUMNS =
-  "id, name, domain, base_url, enabled, status, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, selector_config, image_domains, notes, created_at";
+  "id, name, domain, base_url, enabled, status, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, selector_config, image_domains, auto_select_classifications, notes, created_at";
 
 /** Parses `selector_config` the same defensively-null-on-failure way `listEnabledSources`
  *  (`source-registry.ts`) does — an admin-authored value should always be valid (the form validates
@@ -193,6 +194,7 @@ export async function getAllSearchSourcesAdmin(): Promise<AdminSearchSource[]> {
     lastCheckedAt: row.last_checked_at,
     selectorConfig: parseAdminSelectorConfig(row.selector_config),
     imageDomains: row.image_domains,
+    autoSelectClassifications: row.auto_select_classifications,
     notes: row.notes,
     createdAt: row.created_at,
   }));
@@ -228,9 +230,101 @@ export async function getSearchSourceById(id: string): Promise<AdminSearchSource
     lastCheckedAt: data.last_checked_at,
     selectorConfig: parseAdminSelectorConfig(data.selector_config),
     imageDomains: data.image_domains,
+    autoSelectClassifications: data.auto_select_classifications,
     notes: data.notes,
     createdAt: data.created_at,
   };
+}
+
+export interface AdminCrawlRule {
+  id: string;
+  pattern: string;
+  classification: Database["public"]["Enums"]["search_url_classification"];
+  priority: number;
+  enabled: boolean;
+}
+
+export async function getCrawlRules(sourceId: string): Promise<AdminCrawlRule[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("search_source_crawl_rules")
+    .select("id, pattern, classification, priority, enabled")
+    .eq("source_id", sourceId)
+    .order("priority", { ascending: false });
+
+  throwIfSupabaseError(error);
+  return data ?? [];
+}
+
+export interface AdminUrlRegistryRow {
+  id: string;
+  url: string;
+  classification: Database["public"]["Enums"]["search_url_classification"];
+  priority: number;
+  selected: boolean;
+  selectionOverride: boolean | null;
+  crawlStatus: Database["public"]["Enums"]["search_url_crawl_status"];
+  lastFetchedAt: string | null;
+  lastSeenAt: string;
+}
+
+/** Capped — a large catalog's registry can run into the thousands of rows; this is a review list
+ *  for an admin, not a paginated data table (yet). */
+const URL_REGISTRY_PAGE_LIMIT = 300;
+
+export async function getSourceUrlRegistry(sourceId: string): Promise<AdminUrlRegistryRow[]> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("search_source_urls")
+    .select("id, url, classification, priority, selected, selection_override, crawl_status, last_fetched_at, last_seen_at")
+    .eq("source_id", sourceId)
+    .order("classification", { ascending: true })
+    .order("priority", { ascending: false })
+    .limit(URL_REGISTRY_PAGE_LIMIT);
+
+  throwIfSupabaseError(error);
+
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    url: row.url,
+    classification: row.classification,
+    priority: row.priority,
+    selected: row.selected,
+    selectionOverride: row.selection_override,
+    crawlStatus: row.crawl_status,
+    lastFetchedAt: row.last_fetched_at,
+    lastSeenAt: row.last_seen_at,
+  }));
+}
+
+export type SourceUrlCounts = Record<
+  Database["public"]["Enums"]["search_url_classification"],
+  { total: number; selected: number }
+>;
+
+export async function getSourceUrlCounts(sourceId: string): Promise<SourceUrlCounts> {
+  const supabase = await createClient();
+
+  const { data, error } = await supabase
+    .from("search_source_urls")
+    .select("classification, selected")
+    .eq("source_id", sourceId);
+
+  throwIfSupabaseError(error);
+
+  const counts: SourceUrlCounts = {
+    HIGH: { total: 0, selected: 0 },
+    MEDIUM: { total: 0, selected: 0 },
+    LOW: { total: 0, selected: 0 },
+    SKIP: { total: 0, selected: 0 },
+  };
+  for (const row of data ?? []) {
+    counts[row.classification].total += 1;
+    if (row.selected) counts[row.classification].selected += 1;
+  }
+  return counts;
 }
 
 export interface AdminAuditLogEntry {

@@ -11,6 +11,7 @@ import {
   amenityKeySchema,
   commissionRateSchema,
   searchSourceSchema,
+  crawlRuleSchema,
   parseSelectorConfig,
   parseImageDomains,
   type userRoleValues,
@@ -19,6 +20,7 @@ import {
   validateSearchSource,
   type SourceValidationReport,
 } from "@/server/search/source-validation";
+import { syncSourceUrlRegistry, reclassifyStoredUrls } from "@/server/search/registry/url-registry-sync";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -312,6 +314,7 @@ export async function createSearchSource(
     // schema's `.default("")` only kicks in for `undefined`, so `null` needs coalescing here too.
     selectorConfig: formData.get("selectorConfig") ?? "",
     imageDomains: formData.get("imageDomains") ?? "",
+    autoSelectClassifications: formData.getAll("autoSelectClassifications"),
   });
   if (!parsed.success) return { error: "invalid" };
 
@@ -336,6 +339,7 @@ export async function createSearchSource(
       notes: parsed.data.notes || null,
       selector_config: selectorConfig.value as Json,
       image_domains: imageDomains.value,
+      auto_select_classifications: parsed.data.autoSelectClassifications,
       // Every new source starts unreviewed — `approveSearchSource` is the only path to `enabled`.
       status: "draft",
       enabled: false,
@@ -347,6 +351,11 @@ export async function createSearchSource(
   await logAudit(supabase, admin.id, "create_search_source", "search_sources", source.id, {
     domain: parsed.data.domain,
   });
+
+  // Best-effort (docs/CLAUDE_SITEMAP_AI_CRAWLER_RULE.md §3): populates the URL Registry right away so
+  // the source is ready to search as soon as it's approved. Never blocks/fails source creation — a
+  // sync failure just leaves the registry empty until the next sync.
+  await syncSourceUrlRegistry(supabase, { id: source.id, baseUrl: parsed.data.baseUrl });
 
   revalidatePath(`/${locale}/admin/search-sources`);
   return {};
@@ -370,6 +379,7 @@ export async function updateSearchSource(
     // schema's `.default("")` only kicks in for `undefined`, so `null` needs coalescing here too.
     selectorConfig: formData.get("selectorConfig") ?? "",
     imageDomains: formData.get("imageDomains") ?? "",
+    autoSelectClassifications: formData.getAll("autoSelectClassifications"),
   });
   if (!parsed.success) return { error: "invalid" };
 
@@ -397,6 +407,7 @@ export async function updateSearchSource(
       notes: parsed.data.notes || null,
       selector_config: selectorConfig.value as Json,
       image_domains: imageDomains.value,
+      auto_select_classifications: parsed.data.autoSelectClassifications,
     })
     .eq("id", sourceId);
   if (error) return { error: error.code === "23505" ? "domainTaken" : "generic" };
@@ -404,6 +415,10 @@ export async function updateSearchSource(
   await logAudit(supabase, admin.id, "update_search_source", "search_sources", sourceId, {
     domain: parsed.data.domain,
   });
+
+  // Best-effort re-sync (domain/baseUrl/rules may have changed) — same reasoning as
+  // createSearchSource, never blocks the edit itself.
+  await syncSourceUrlRegistry(supabase, { id: sourceId, baseUrl: parsed.data.baseUrl });
 
   revalidatePath(`/${locale}/admin/search-sources`);
   return redirect({ href: "/admin/search-sources", locale });
@@ -494,5 +509,144 @@ export async function deleteSearchSource(locale: Locale, sourceId: string): Prom
   await logAudit(supabase, admin.id, "delete_search_source", "search_sources", sourceId);
 
   revalidatePath(`/${locale}/admin/search-sources`);
+  return {};
+}
+
+export interface ResyncSearchSourceUrlsResult {
+  error?: "unauthenticated" | "forbidden" | "notFound" | "generic";
+  discovered?: number;
+  truncated?: boolean;
+}
+
+/** Manual "Обновить сейчас" trigger (URL Registry page) — the same full sync
+ * `createSearchSource`/`updateSearchSource` run automatically, exposed on demand for a source whose
+ * registration details haven't changed but whose live sitemap has. */
+export async function resyncSearchSourceUrls(
+  locale: Locale,
+  sourceId: string,
+): Promise<ResyncSearchSourceUrlsResult> {
+  const supabase = await createClient();
+  const admin = await requireAdmin(supabase);
+  if ("error" in admin) return { error: admin.error };
+
+  const { data: source, error } = await supabase
+    .from("search_sources")
+    .select("id, base_url")
+    .eq("id", sourceId)
+    .maybeSingle();
+  if (error) return { error: "generic" };
+  if (!source) return { error: "notFound" };
+
+  const summary = await syncSourceUrlRegistry(supabase, { id: source.id, baseUrl: source.base_url });
+
+  await logAudit(supabase, admin.id, "resync_search_source_urls", "search_sources", sourceId, {
+    discovered: summary.discovered,
+  });
+
+  revalidatePath(`/${locale}/admin/search-sources/${sourceId}/urls`);
+  return { discovered: summary.discovered, truncated: summary.truncated };
+}
+
+export interface CrawlRuleActionState {
+  error?: string;
+}
+
+export async function createCrawlRule(
+  locale: Locale,
+  sourceId: string,
+  _prevState: CrawlRuleActionState,
+  formData: FormData,
+): Promise<CrawlRuleActionState> {
+  const parsed = crawlRuleSchema.safeParse({
+    pattern: formData.get("pattern"),
+    classification: formData.get("classification"),
+    priority: formData.get("priority"),
+  });
+  if (!parsed.success) return { error: "invalid" };
+
+  const supabase = await createClient();
+  const admin = await requireAdmin(supabase);
+  if ("error" in admin) return { error: admin.error };
+
+  const { error } = await supabase.from("search_source_crawl_rules").insert({
+    source_id: sourceId,
+    pattern: parsed.data.pattern,
+    classification: parsed.data.classification,
+    priority: parsed.data.priority,
+  });
+  if (error) return { error: "generic" };
+
+  await logAudit(supabase, admin.id, "create_crawl_rule", "search_source_crawl_rules", sourceId, {
+    pattern: parsed.data.pattern,
+  });
+  await reclassifyStoredUrls(supabase, sourceId);
+
+  revalidatePath(`/${locale}/admin/search-sources/${sourceId}/urls`);
+  return {};
+}
+
+export async function deleteCrawlRule(
+  locale: Locale,
+  sourceId: string,
+  ruleId: string,
+): Promise<DeleteResult> {
+  const supabase = await createClient();
+  const admin = await requireAdmin(supabase);
+  if ("error" in admin) return { error: admin.error };
+
+  const { error } = await supabase.from("search_source_crawl_rules").delete().eq("id", ruleId);
+  if (error) return { error: "generic" };
+
+  await logAudit(supabase, admin.id, "delete_crawl_rule", "search_source_crawl_rules", ruleId);
+  await reclassifyStoredUrls(supabase, sourceId);
+
+  revalidatePath(`/${locale}/admin/search-sources/${sourceId}/urls`);
+  return {};
+}
+
+export interface SetUrlSelectionOverrideResult {
+  error?: "unauthenticated" | "forbidden" | "generic";
+}
+
+/** Point override for one registry row — "selection by list" alongside "selection by rules". `null`
+ *  clears the override and reverts the row to following the source's auto-select rule. */
+export async function setUrlSelectionOverride(
+  locale: Locale,
+  sourceId: string,
+  urlRowId: string,
+  override: boolean | null,
+): Promise<SetUrlSelectionOverrideResult> {
+  const supabase = await createClient();
+  const admin = await requireAdmin(supabase);
+  if ("error" in admin) return { error: admin.error };
+
+  const { data: row, error: readError } = await supabase
+    .from("search_source_urls")
+    .select("classification")
+    .eq("id", urlRowId)
+    .maybeSingle();
+  if (readError || !row) return { error: "generic" };
+
+  const { data: sourceRow } = await supabase
+    .from("search_sources")
+    .select("auto_select_classifications")
+    .eq("id", sourceId)
+    .maybeSingle();
+  const autoSelect = sourceRow?.auto_select_classifications ?? ["HIGH"];
+
+  const { error } = await supabase
+    .from("search_source_urls")
+    .update({
+      selection_override: override,
+      selected: override ?? autoSelect.includes(row.classification),
+    })
+    .eq("id", urlRowId);
+  if (error) return { error: "generic" };
+
+  await logAudit(supabase, admin.id, "set_url_selection_override", "search_source_urls", urlRowId, {
+    override,
+  });
+
+  revalidatePath(`/${locale}/admin/search-sources/${sourceId}/urls`);
   return {};
 }

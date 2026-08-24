@@ -128,6 +128,9 @@ export default async function AdminSearchSourcesPage({
                       <Button asChild variant="outline" size="sm" className="rounded-full">
                         <Link href={`/admin/search-sources/${source.id}/edit`}>{t("edit")}</Link>
                       </Button>
+                      <Button asChild variant="outline" size="sm" className="rounded-full">
+                        <Link href={`/admin/search-sources/${source.id}/urls`}>{t("urlRegistryLink")}</Link>
+                      </Button>
                       {source.status === "active" ? (
                         <SearchSourceToggleButton sourceId={source.id} enabled={source.enabled} />
                       ) : (

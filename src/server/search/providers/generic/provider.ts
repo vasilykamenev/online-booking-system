@@ -12,6 +12,10 @@ import { FALLBACK_SITEMAP_PATHS, MAX_SITEMAP_CANDIDATES } from "@/server/search/
 import { looksLikeSitemap, sampleSitemapLocs } from "@/server/search/crawl/sitemap-rules";
 import { hashContent } from "@/server/search/crawl/page-cache";
 import { classifyCandidatePage, type CandidateClassification } from "@/server/search/candidate-classifier";
+import {
+  selectCandidatesFromRegistry,
+  recordFetchOutcome,
+} from "@/server/search/registry/url-registry-sync";
 import { selectGenericCandidates } from "@/server/search/providers/generic/select-candidates";
 import { normalizeGenericResult } from "@/server/search/providers/generic/normalize";
 import { extractBySelectors } from "@/server/search/providers/generic/extract-by-selectors";
@@ -134,6 +138,11 @@ async function loadCachedSitemap(
 interface FetchedCandidate {
   result: VesselSearchResult | null;
   usedAi: boolean;
+  /** Whether the underlying page fetch itself succeeded — independent of whether extraction found a
+   *  usable listing. Feeds `search_source_urls.crawl_status` when this candidate came from the
+   *  registry (spec §3: crawl_status tracks the fetch step, not extraction). */
+  pageOk: boolean;
+  contentHash: string | null;
 }
 
 async function fetchAndNormalize(
@@ -142,7 +151,8 @@ async function fetchAndNormalize(
   allowAi: boolean,
 ): Promise<FetchedCandidate> {
   const page = await fetchWithCache(url, PAGE_CACHE_MS);
-  if (!page.ok || !page.html) return { result: null, usedAi: false };
+  if (!page.ok || !page.html) return { result: null, usedAi: false, pageOk: false, contentHash: null };
+  const contentHash = hashContent(page.html);
 
   const retrievedAt = new Date().toISOString();
 
@@ -165,7 +175,7 @@ async function fetchAndNormalize(
         fields: { ...bySelectors, image },
         aiConfidence: null,
       });
-      return { result, usedAi: false };
+      return { result, usedAi: false, pageOk: true, contentHash };
     }
   }
 
@@ -190,7 +200,7 @@ async function fetchAndNormalize(
       },
       aiConfidence: null,
     });
-    return { result, usedAi: false };
+    return { result, usedAi: false, pageOk: true, contentHash };
   }
 
   // Pure `HTML` promises a fast, free, deterministic strategy (docs/search-source-processing-strategies.md
@@ -198,10 +208,10 @@ async function fetchAndNormalize(
   // selectors and JSON-LD both missed this page simply yields no result for it, same as if it had no
   // generic path at all. `HYBRID` (and `AI_EXTRACTION`/`STRUCTURED_DATA`, which never reach this
   // branch with `allowAi: false`) fall through to AI as before.
-  if (!allowAi) return { result: null, usedAi: false };
+  if (!allowAi) return { result: null, usedAi: false, pageOk: true, contentHash };
 
   const { classification, usedAi } = await classifyCached(page.html);
-  if (!classification.looksLikeVesselListing) return { result: null, usedAi };
+  if (!classification.looksLikeVesselListing) return { result: null, usedAi, pageOk: true, contentHash };
 
   // `og:image` is read deterministically rather than asked of the model — an AI-stated image URL
   // risks being invented/malformed in a way a `<meta>` tag simply can't be.
@@ -223,17 +233,24 @@ async function fetchAndNormalize(
     },
     aiConfidence: classification.confidence,
   });
-  return { result, usedAi };
+  return { result, usedAi, pageOk: true, contentHash };
+}
+
+interface Candidate {
+  url: string;
+  /** Present when this candidate came from `search_source_urls` (spec §3) rather than the sitemap
+   *  fallback sample below — lets the worker write the fetch outcome back onto its registry row. */
+  registryRowId?: string;
 }
 
 /**
- * Fetches `urls` with up to `FETCH_CONCURRENCY` requests in flight, stopping before starting the
- * next one once `deadline` passes — same fixed-size-worker-pool shape as
+ * Fetches `candidates` with up to `FETCH_CONCURRENCY` requests in flight, stopping before starting
+ * the next one once `deadline` passes — same fixed-size-worker-pool shape as
  * `providers/brilions/provider.ts`'s `fetchCandidates`, for the same reason: a batch would let one
  * slow page (a cold fetch plus an AI call) stall every other worker in its batch.
  */
 async function fetchCandidates(
-  urls: string[],
+  candidates: Candidate[],
   criteria: SearchCriteria,
   source: SearchSource,
   allowAi: boolean,
@@ -253,16 +270,27 @@ async function fetchCandidates(
         return;
       }
       const index = nextIndex++;
-      if (index >= urls.length) return;
-      const url = urls[index];
+      if (index >= candidates.length) return;
+      const { url, registryRowId } = candidates[index];
 
       try {
-        const { result, usedAi } = await fetchAndNormalize(url, source, allowAi);
+        const { result, usedAi, pageOk, contentHash } = await fetchAndNormalize(url, source, allowAi);
         stats.pagesVisited += 1;
         if (usedAi) stats.aiCalls += 1;
         if (result) {
           stats.offersExtracted += 1;
           if (matchesKnownCriteria(result, criteria)) results.push(result);
+        }
+        if (registryRowId) {
+          // Best-effort — closes the loop `crawl_status: PENDING → FETCHED/FAILED` (spec §3) for
+          // real search traffic without a dedicated background fetch job. Never lets a write
+          // failure surface as a search failure.
+          recordFetchOutcome(registryRowId, {
+            crawlStatus: pageOk ? "FETCHED" : "FAILED",
+            httpStatus: null,
+            contentHash,
+            ranAi: usedAi,
+          }).catch(() => {});
         }
       } catch (error) {
         errors.push(`${source.domain}: ${url}: ${String(error)}`);
@@ -270,7 +298,7 @@ async function fetchCandidates(
     }
   }
 
-  const workerCount = Math.min(FETCH_CONCURRENCY, urls.length);
+  const workerCount = Math.min(FETCH_CONCURRENCY, candidates.length);
   await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
   if (stoppedForDeadline) errors.push(`${source.domain}: stopped early — time budget exhausted`);
@@ -294,17 +322,30 @@ function buildRunSearch(source: SearchSource) {
       return { results: [], stats, errors };
     }
 
-    const origin = new URL(source.baseUrl).origin;
-    const sitemap = await loadCachedSitemap(origin, robotsInfo);
-    if (!sitemap) {
-      errors.push(`${source.domain}: could not find or parse a sitemap`);
-      return { results: [], stats, errors };
-    }
-    stats.sourcesVisited = 1;
+    // URL Registry first (docs/CLAUDE_SITEMAP_AI_CRAWLER_RULE.md §3, §4): only ever fetch URLs an
+    // admin's rules (or explicit override) actually selected, not a blind sample of the whole
+    // sitemap. Falls back to the pre-registry live-sampling behavior below when the registry is
+    // still empty for this source (never synced yet) — nothing breaks for a source mid-migration.
+    const registryCandidates = await selectCandidatesFromRegistry(source.id, MAX_CANDIDATE_POOL);
+    let toFetch: Candidate[];
 
-    const allEntries = sampleSitemapLocs(sitemap.xml, RAW_ENTRY_CAP, source.baseUrl);
-    const toFetch = selectGenericCandidates(allEntries, MAX_CANDIDATE_POOL);
-    stats.pagesRejected = allEntries.length - toFetch.length;
+    if (registryCandidates.length > 0) {
+      stats.sourcesVisited = 1;
+      toFetch = registryCandidates.map((c): Candidate => ({ url: c.url, registryRowId: c.id }));
+    } else {
+      const origin = new URL(source.baseUrl).origin;
+      const sitemap = await loadCachedSitemap(origin, robotsInfo);
+      if (!sitemap) {
+        errors.push(`${source.domain}: could not find or parse a sitemap`);
+        return { results: [], stats, errors };
+      }
+      stats.sourcesVisited = 1;
+
+      const allEntries = sampleSitemapLocs(sitemap.xml, RAW_ENTRY_CAP, source.baseUrl);
+      const sampled = selectGenericCandidates(allEntries, MAX_CANDIDATE_POOL);
+      stats.pagesRejected = allEntries.length - sampled.length;
+      toFetch = sampled.map((url): Candidate => ({ url }));
+    }
 
     const allowAi = source.processingType !== "HTML";
     const results = await fetchCandidates(

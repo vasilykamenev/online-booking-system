@@ -39,6 +39,7 @@ const BASE_DEFAULTS: SearchSourceFormDefaultValues = {
   notes: "",
   selectorConfig: "",
   imageDomains: "",
+  autoSelectClassifications: ["HIGH"],
 };
 
 afterEach(() => {

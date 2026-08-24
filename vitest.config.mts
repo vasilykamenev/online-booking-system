@@ -7,6 +7,7 @@ export default defineConfig({
   test: {
     environment: "jsdom",
     globals: true,
+    setupFiles: ["./vitest.stubs/resize-observer.ts"],
   },
   resolve: {
     alias: {

@@ -32,3 +32,38 @@ export function sampleSitemapLocs(xml: string, limit: number, excludeUrl?: strin
 export function looksLikeSitemap(xml: string): boolean {
   return /<(urlset|sitemapindex)[\s>]/i.test(xml) && countSitemapLocs(xml) > 0;
 }
+
+/**
+ * Which of the two sitemap document shapes this is — needed by `full-sitemap-discovery.ts` to know
+ * whether to recurse (a `sitemapindex`'s `<loc>`s are child sitemaps, not page URLs) or stop (a
+ * `urlset`'s `<loc>`s are the actual pages). `null` when the document is neither (see
+ * `looksLikeSitemap`'s own 404-page case) — the caller must not guess in that case.
+ */
+export function getSitemapRootKind(xml: string): "urlset" | "sitemapindex" | null {
+  if (/<sitemapindex[\s>]/i.test(xml)) return "sitemapindex";
+  if (/<urlset[\s>]/i.test(xml)) return "urlset";
+  return null;
+}
+
+export interface SitemapEntry {
+  loc: string;
+  lastmod: string | null;
+}
+
+/**
+ * Parses `<url>…</url>` (urlset) or `<sitemap>…</sitemap>` (sitemapindex) blocks individually, so
+ * each entry's `<lastmod>` stays paired with its own `<loc>` — unlike `extractLocs`'s document-wide
+ * regex, which only needs the bare list `sampleSitemapLocs`/`countSitemapLocs` care about. Used by
+ * `full-sitemap-discovery.ts` to populate the URL Registry's `sitemap_lastmod` (spec §3, §8's change
+ * detection). Same regex-not-real-parser tradeoff as the rest of this file — see the module doc.
+ */
+export function parseSitemapEntries(xml: string): SitemapEntry[] {
+  const entries: SitemapEntry[] = [];
+  for (const block of xml.matchAll(/<(?:url|sitemap)>([\s\S]*?)<\/(?:url|sitemap)>/g)) {
+    const locMatch = /<loc>([^<]+)<\/loc>/.exec(block[1]);
+    if (!locMatch) continue;
+    const lastmodMatch = /<lastmod>([^<]+)<\/lastmod>/.exec(block[1]);
+    entries.push({ loc: locMatch[1].trim(), lastmod: lastmodMatch ? lastmodMatch[1].trim() : null });
+  }
+  return entries;
+}

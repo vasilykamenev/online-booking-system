@@ -1009,6 +1009,7 @@
       "wiringHint": "A new source is added as a draft and stays out of search until it's checked (\"Check\" — reachability, robots.txt, sitemap, structured data, a candidate-card preview) and approved. Approving a source with the \"Structured data\" or \"AI extraction\" strategy starts crawling it immediately — no deploy needed, through a generic provider with no site-specific code. For \"HTML parsing\" and \"Hybrid\", filling in the selector configuration in the form (or applying the AI suggestion from the check result) is enough — without it the source still isn't crawled. The \"API\" strategy, and any source with no purpose-built provider in code (see src/server/search/providers/, provider-registry.ts), still needs one written. Enabling or disabling an already-active source takes effect immediately.",
       "empty": "No sources yet.",
       "edit": "Edit",
+      "urlRegistryLink": "URL registry",
       "enable": "Enable",
       "disable": "Disable",
       "enabled": "Source enabled",
@@ -1098,6 +1099,8 @@
         "imageDomains": "Trusted image hosts",
         "imageDomainsPlaceholder": "e.g. static.example-cdn.com, images.example.com",
         "imageDomainsHint": "Comma-separated hostnames, only needed when photos are served from a different host than the site itself (a separate CDN, for instance) — the source's own domain is always allowed. Photos from any other host are rejected, not just hidden.",
+        "autoSelectClassifications": "Auto-select for crawling",
+        "autoSelectClassificationsHint": "URL Registry classifications (docs/CLAUDE_SITEMAP_AI_CRAWLER_RULE.md §4) that get fetched automatically. Leave a classification unchecked to keep it out of search unless an admin picks specific URLs by hand on the URL registry page. \"High\" is the sane default for actual listing pages.",
         "priority": "Priority",
         "priorityHint": "Higher runs earlier when the search's crawl budget is limited.",
         "notes": "Notes",
@@ -1164,6 +1167,66 @@
           "unauthenticated": "Sign in to check a source",
           "forbidden": "Not enough permissions",
           "generic": "Couldn't check the source"
+        }
+      },
+      "classification": {
+        "HIGH": "High",
+        "MEDIUM": "Medium",
+        "LOW": "Low",
+        "SKIP": "Skip"
+      },
+      "urlRegistry": {
+        "title": "URL registry",
+        "backToEdit": "Back to source",
+        "resyncNow": "Sync now",
+        "resyncSuccess": "Sync complete — {count} URLs discovered",
+        "resyncTruncated": "The site's sitemap is larger than the sync limits allow — this is a partial pass, not the whole catalog.",
+        "resyncErrors": {
+          "unauthenticated": "Sign in to sync a source's URLs",
+          "forbidden": "Not enough permissions",
+          "notFound": "Source not found",
+          "generic": "Couldn't sync this source's URLs"
+        },
+        "empty": "No URLs discovered yet — run \"Sync now\", or check that the source has a reachable sitemap.",
+        "countsLine": "{selected} selected of {total}",
+        "urlsTitle": "Discovered URLs",
+        "urlsHint": "Only URLs marked \"selected\" here are actually fetched by search — by classification rule below, or by a manual pin per row. Capped at the 300 highest-priority rows.",
+        "columns": {
+          "url": "URL",
+          "classification": "Classification",
+          "crawlStatus": "Crawl status",
+          "selection": "Selection"
+        },
+        "crawlStatus": {
+          "PENDING": "Not fetched yet",
+          "FETCHED": "Fetched",
+          "FAILED": "Fetch failed",
+          "SKIPPED": "Skipped"
+        },
+        "selection": {
+          "auto": "By rule",
+          "include": "Always include",
+          "exclude": "Always exclude",
+          "error": "Couldn't update this URL's selection"
+        }
+      },
+      "crawlRules": {
+        "title": "Crawl rules",
+        "hint": "Path-prefix rules that classify this source's URLs (docs/CLAUDE_SITEMAP_AI_CRAWLER_RULE.md §4) — the most specific matching pattern wins. A source with no rules of its own falls back to a sane built-in default set.",
+        "pattern": "Path prefix",
+        "patternPlaceholder": "/yachts/*",
+        "classification": "Classification",
+        "priority": "Priority",
+        "actions": "Actions",
+        "add": "Add rule",
+        "delete": "Delete",
+        "deleted": "Rule deleted",
+        "deleteError": "Couldn't delete the rule",
+        "errors": {
+          "invalid": "Check the fields you filled in",
+          "unauthenticated": "Sign in to edit crawl rules",
+          "forbidden": "Not enough permissions",
+          "generic": "Couldn't add the rule"
         }
       }
     },

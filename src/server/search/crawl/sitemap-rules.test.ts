@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { countSitemapLocs, looksLikeSitemap, sampleSitemapLocs } from "./sitemap-rules";
+import {
+  countSitemapLocs,
+  getSitemapRootKind,
+  looksLikeSitemap,
+  parseSitemapEntries,
+  sampleSitemapLocs,
+} from "./sitemap-rules";
 
 const URLSET_SAMPLE = `<?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
@@ -60,5 +66,45 @@ describe("sampleSitemapLocs", () => {
 
   it("returns an empty array when the sitemap has no entries", () => {
     expect(sampleSitemapLocs(HTML_404_SAMPLE, 3)).toEqual([]);
+  });
+});
+
+describe("getSitemapRootKind", () => {
+  it("identifies a urlset document", () => {
+    expect(getSitemapRootKind(URLSET_SAMPLE)).toBe("urlset");
+  });
+
+  it("identifies a sitemapindex document", () => {
+    expect(getSitemapRootKind(SITEMAP_INDEX_SAMPLE)).toBe("sitemapindex");
+  });
+
+  it("returns null for neither", () => {
+    expect(getSitemapRootKind(HTML_404_SAMPLE)).toBeNull();
+  });
+});
+
+describe("parseSitemapEntries", () => {
+  it("pairs each <loc> with its own <lastmod>, not any other entry's", () => {
+    const xml = `<urlset>
+      <url><loc>https://example.com/a</loc><lastmod>2026-01-01</lastmod></url>
+      <url><loc>https://example.com/b</loc></url>
+    </urlset>`;
+    expect(parseSitemapEntries(xml)).toEqual([
+      { loc: "https://example.com/a", lastmod: "2026-01-01" },
+      { loc: "https://example.com/b", lastmod: null },
+    ]);
+  });
+
+  it("parses <sitemap> blocks from a sitemapindex the same way", () => {
+    const xml = `<sitemapindex>
+      <sitemap><loc>https://example.com/sitemap-1.xml</loc><lastmod>2026-02-02</lastmod></sitemap>
+    </sitemapindex>`;
+    expect(parseSitemapEntries(xml)).toEqual([
+      { loc: "https://example.com/sitemap-1.xml", lastmod: "2026-02-02" },
+    ]);
+  });
+
+  it("returns an empty array for a document with no <url>/<sitemap> blocks", () => {
+    expect(parseSitemapEntries(HTML_404_SAMPLE)).toEqual([]);
   });
 });

@@ -47,6 +47,7 @@ export default async function EditSearchSourcePage({
             notes: source.notes ?? "",
             selectorConfig: source.selectorConfig ? JSON.stringify(source.selectorConfig, null, 2) : "",
             imageDomains: source.imageDomains.join(", "),
+            autoSelectClassifications: source.autoSelectClassifications,
           }}
         />
       </div>

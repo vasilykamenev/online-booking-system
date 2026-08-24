@@ -50,6 +50,9 @@
 | `interpretation-cache.ts` | Кэш интерпретаций | §25 |
 | `search-run-log.ts` | Метрики поиска | §26 |
 | `../ai/query-interpreter.ts` | AI-разбор запроса | §4 |
+| `registry/url-classification.ts` | Детерминированная классификация URL по правилам (pure) | docs/CLAUDE_SITEMAP_AI_CRAWLER_RULE.md §4 |
+| `registry/url-registry-sync.ts` | Синхронизация URL Registry (`search_source_urls`) | docs/CLAUDE_SITEMAP_AI_CRAWLER_RULE.md §3, §8 |
+| `crawl/full-sitemap-discovery.ts` | Рекурсивный обход `sitemapindex` для наполнения реестра | docs/CLAUDE_SITEMAP_AI_CRAWLER_RULE.md §2.3 |
 
 UI — `src/app/[locale]/(booking)/discover/` (§20).
 
@@ -203,6 +206,57 @@ Source-agnostic, не привязана к brilions — переиспольз�
 | `robots.ts` | Живая проверка robots.txt через `safeFetch` (`fetchRobotsInfo`, `checkRobotsAllowed`) |
 | `sitemap-discovery.ts` | Живой поиск sitemap: `Sitemap:`-директива → фолбэк-пути → первый, что похож на реальный |
 | `page-cache.ts` / `cached-fetch.ts` | БД-кэш страниц (`search_page_cache`, spec §25) |
+
+## URL Registry и правила классификации
+
+Реализация `docs/CLAUDE_SITEMAP_AI_CRAWLER_RULE.md` поверх существующей инфраструктуры краулинга:
+конвейер `robots.txt → sitemap → URL Registry → классификация → fetch` теперь персистентен, а не
+пересобирается заново на каждый пользовательский поиск.
+
+**Проблема, которую это решает.** До этого раздела `providers/generic/provider.ts` сам находил
+sitemap на каждый поиск и брал из него равномерную выборку (`select-candidates.ts`) — без реестра,
+без классификации, без объяснимого «почему отобраны именно эти URL». `sitemap-discovery.ts` к тому
+же не разворачивал `<sitemapindex>` — сознательный пробел, задокументированный в самом файле.
+
+**Что появилось:**
+
+- `search_source_urls` (миграция `20260824110001_search_source_url_registry.sql`) — URL Registry
+  (спека §3): один источник → много строк `{url, source_sitemap, sitemap_lastmod, classification,
+  priority, selected, crawl_status, content_hash, ...}`.
+- `search_source_crawl_rules` — правила классификации по префиксу пути (спека §4), редактируемые
+  в `/admin/search-sources/[id]/urls`. Источник без своих правил использует встроенный
+  `DEFAULT_CRAWL_RULES` (`registry/url-classification.ts`).
+- `search_sources.auto_select_classifications` — какие классификации (`HIGH`/`MEDIUM`/`LOW`/`SKIP`)
+  автоматически попадают в `selected = true`, редактируется в форме источника рядом с
+  `imageDomains`. Точечный ручной override на любую строку (`selection_override`) всегда сильнее
+  правила — это и есть «отбор по списку», не только «по правилам».
+- `crawl/full-sitemap-discovery.ts` — рекурсивный обход `sitemapindex`, отдельный от
+  `sitemap-discovery.ts`'s намеренно быстрого/неглубокого `discoverSitemap` (тот остаётся как есть
+  для live-поиска и превью регистрации).
+- `registry/url-registry-sync.ts` — оркестрирует discover → classify → upsert
+  (`syncSourceUrlRegistry`) и «переклассифицировать без повторного обхода сайта»
+  (`reclassifyStoredUrls`, вызывается при изменении правил/`auto_select_classifications`).
+
+**Когда это запускается.** Явно, не по cron'у (см. следующий раздел о том, почему): при создании
+источника, при его редактировании и по кнопке «Обновить сейчас» на странице реестра — всегда
+best-effort, ошибка сети не блокирует сохранение источника, реестр просто остаётся пустым/устаревшим
+до следующей попытки.
+
+**Как это включается в живой поиск.** `providers/generic/provider.ts`'s `buildRunSearch` сначала
+спрашивает `selectCandidatesFromRegistry(source.id, MAX_CANDIDATE_POOL)` — читает только `selected`
+строки, отсортированные по classification/priority. Если реестр пуст (источник ещё ни разу не
+синхронизировался), используется прежнее поведение (`loadCachedSitemap` + `selectGenericCandidates`)
+без изменений — ничего не ломается для источника, зарегистрированного до этого раздела. После
+фетча кандидата, если он пришёл из реестра, `recordFetchOutcome` пишет `crawl_status`
+(`PENDING → FETCHED/FAILED`), `content_hash`, `last_fetched_at` обратно в его строку — реальный
+поисковый трафик закрывает цикл спеки §3/§8 без отдельного фонового fetch-джоба.
+
+**Почему без реального cron'а.** `EXTERNAL_SEARCH_INDEXING_PLAN.md` уже описывает следующий шаг —
+полный фоновый обход в `external_vessels` + Vercel Cron + курсорная пагинация — с открытыми
+вопросами по платформе деплоя, которые эта задача не поднимала. URL Registry спроектирован так,
+чтобы тот cron просто читал `search_source_urls where selected`, а не заново парсил sitemap —
+`syncSourceUrlRegistry` уже сегодня можно вызывать откуда угодно, включая будущий cron route, без
+переделок.
 
 ## Первый источник — brilions.com
 
