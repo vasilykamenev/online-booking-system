@@ -239,6 +239,7 @@ export async function getSearchSourceById(id: string): Promise<AdminSearchSource
 export interface AdminCrawlRule {
   id: string;
   pattern: string;
+  patternType: Database["public"]["Enums"]["search_crawl_rule_pattern_type"];
   classification: Database["public"]["Enums"]["search_url_classification"];
   priority: number;
   enabled: boolean;
@@ -249,12 +250,19 @@ export async function getCrawlRules(sourceId: string): Promise<AdminCrawlRule[]>
 
   const { data, error } = await supabase
     .from("search_source_crawl_rules")
-    .select("id, pattern, classification, priority, enabled")
+    .select("id, pattern, pattern_type, classification, priority, enabled")
     .eq("source_id", sourceId)
     .order("priority", { ascending: false });
 
   throwIfSupabaseError(error);
-  return data ?? [];
+  return (data ?? []).map((row) => ({
+    id: row.id,
+    pattern: row.pattern,
+    patternType: row.pattern_type,
+    classification: row.classification,
+    priority: row.priority,
+    enabled: row.enabled,
+  }));
 }
 
 export interface AdminUrlRegistryRow {

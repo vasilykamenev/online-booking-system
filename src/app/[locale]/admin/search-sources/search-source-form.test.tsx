@@ -1,3 +1,4 @@
+import type { ComponentProps } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, render } from "@testing-library/react";
 import { SearchSourceForm, type SearchSourceFormDefaultValues } from "./search-source-form";
@@ -18,6 +19,9 @@ vi.mock("next-intl", () => ({
 
 vi.mock("@/i18n/navigation", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn(), refresh: vi.fn() }),
+  Link: ({ href, children }: ComponentProps<"a"> & { href: unknown }) => (
+    <a href={typeof href === "string" ? href : "#"}>{children}</a>
+  ),
 }));
 
 // Never actually invoked (the form is never submitted) — "@/server/actions/admin" is a "use server"

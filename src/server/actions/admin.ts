@@ -20,7 +20,13 @@ import {
   validateSearchSource,
   type SourceValidationReport,
 } from "@/server/search/source-validation";
-import { syncSourceUrlRegistry, reclassifyStoredUrls } from "@/server/search/registry/url-registry-sync";
+import {
+  syncSourceUrlRegistry,
+  reclassifyStoredUrls,
+  previewSourceCrawlClassification,
+  type CrawlPreviewResult,
+} from "@/server/search/registry/url-registry-sync";
+import { fetchRobotsInfo } from "@/server/search/crawl/robots";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -559,6 +565,7 @@ export async function createCrawlRule(
 ): Promise<CrawlRuleActionState> {
   const parsed = crawlRuleSchema.safeParse({
     pattern: formData.get("pattern"),
+    patternType: formData.get("patternType"),
     classification: formData.get("classification"),
     priority: formData.get("priority"),
   });
@@ -571,6 +578,7 @@ export async function createCrawlRule(
   const { error } = await supabase.from("search_source_crawl_rules").insert({
     source_id: sourceId,
     pattern: parsed.data.pattern,
+    pattern_type: parsed.data.patternType,
     classification: parsed.data.classification,
     priority: parsed.data.priority,
   });
@@ -649,4 +657,110 @@ export async function setUrlSelectionOverride(
 
   revalidatePath(`/${locale}/admin/search-sources/${sourceId}/urls`);
   return {};
+}
+
+export interface CrawlRulePreviewState extends Partial<CrawlPreviewResult> {
+  error?: "unauthenticated" | "forbidden" | "notFound" | "generic";
+}
+
+/**
+ * Read-only "what would happen" check for the crawl-rules page — robots.txt rules plus a live
+ * sitemap walk classified by the source's currently saved rules, nothing persisted. Lets an admin
+ * verify a rule (prefix or regex) against the real site before relying on it, without waiting for a
+ * full `resyncSearchSourceUrls`. No audit log entry: this never changes anything, same reasoning as
+ * `validateSearchSourceCandidate`.
+ */
+export async function previewSourceCrawlRules(sourceId: string): Promise<CrawlRulePreviewState> {
+  const supabase = await createClient();
+  const admin = await requireAdmin(supabase);
+  if ("error" in admin) return { error: admin.error };
+
+  const { data: source, error } = await supabase
+    .from("search_sources")
+    .select("id, base_url")
+    .eq("id", sourceId)
+    .maybeSingle();
+  if (error) return { error: "generic" };
+  if (!source) return { error: "notFound" };
+
+  try {
+    return await previewSourceCrawlClassification(supabase, { id: source.id, baseUrl: source.base_url });
+  } catch {
+    return { error: "generic" };
+  }
+}
+
+export interface CreateRulesFromRobotsResult {
+  error?: "unauthenticated" | "forbidden" | "notFound" | "noDisallowRules" | "generic";
+  created?: number;
+  skipped?: number;
+}
+
+/**
+ * Turns a site's own robots.txt `Disallow` entries (docs/CLAUDE_SITEMAP_AI_CRAWLER_RULE.md §2.1,
+ * §4) into SKIP crawl rules — a site that already tells crawlers to stay off `/account/` or
+ * `/checkout/` is telling us the same thing our own classifier would otherwise have to be taught by
+ * hand. `Allow` entries aren't turned into rules: "allowed to crawl" doesn't map onto any of our
+ * classifications (HIGH/MEDIUM/LOW all mean "allowed", just at different priority), so there's
+ * nothing non-arbitrary to create from them — they still show up in the preview panel for the admin
+ * to read. Patterns that already exist as a rule for this source (by exact string match) are
+ * skipped, not duplicated.
+ */
+export async function createCrawlRulesFromRobots(
+  locale: Locale,
+  sourceId: string,
+): Promise<CreateRulesFromRobotsResult> {
+  const supabase = await createClient();
+  const admin = await requireAdmin(supabase);
+  if ("error" in admin) return { error: admin.error };
+
+  const { data: source, error: sourceError } = await supabase
+    .from("search_sources")
+    .select("id, base_url")
+    .eq("id", sourceId)
+    .maybeSingle();
+  if (sourceError) return { error: "generic" };
+  if (!source) return { error: "notFound" };
+
+  let robotsInfo;
+  try {
+    robotsInfo = await fetchRobotsInfo(source.base_url);
+  } catch {
+    return { error: "generic" };
+  }
+
+  const disallowPaths = robotsInfo.rules.rules.filter((rule) => !rule.allow).map((rule) => rule.path);
+  if (disallowPaths.length === 0) return { error: "noDisallowRules" };
+
+  const { data: existingRules } = await supabase
+    .from("search_source_crawl_rules")
+    .select("pattern")
+    .eq("source_id", sourceId);
+  const existingPatterns = new Set((existingRules ?? []).map((rule) => rule.pattern));
+
+  const uniqueDisallowPaths = [...new Set(disallowPaths)];
+  const toInsert = uniqueDisallowPaths
+    .filter((path) => !existingPatterns.has(path))
+    .map((path) => ({
+      source_id: sourceId,
+      pattern: path,
+      pattern_type: "PREFIX" as const,
+      classification: "SKIP" as const,
+      priority: 0,
+    }));
+
+  if (toInsert.length === 0) {
+    return { created: 0, skipped: uniqueDisallowPaths.length };
+  }
+
+  const { error } = await supabase.from("search_source_crawl_rules").insert(toInsert);
+  if (error) return { error: "generic" };
+
+  await logAudit(supabase, admin.id, "create_crawl_rules_from_robots", "search_source_crawl_rules", sourceId, {
+    created: toInsert.length,
+  });
+  await reclassifyStoredUrls(supabase, sourceId);
+
+  revalidatePath(`/${locale}/admin/search-sources/${sourceId}/urls`);
+  return { created: toInsert.length, skipped: uniqueDisallowPaths.length - toInsert.length };
 }

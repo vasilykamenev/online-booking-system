@@ -751,6 +751,7 @@ export type Database = {
           enabled: boolean
           id: string
           pattern: string
+          pattern_type: Database["public"]["Enums"]["search_crawl_rule_pattern_type"]
           priority: number
           source_id: string
           updated_at: string
@@ -761,6 +762,7 @@ export type Database = {
           enabled?: boolean
           id?: string
           pattern: string
+          pattern_type?: Database["public"]["Enums"]["search_crawl_rule_pattern_type"]
           priority?: number
           source_id: string
           updated_at?: string
@@ -771,6 +773,7 @@ export type Database = {
           enabled?: boolean
           id?: string
           pattern?: string
+          pattern_type?: Database["public"]["Enums"]["search_crawl_rule_pattern_type"]
           priority?: number
           source_id?: string
           updated_at?: string
@@ -1193,6 +1196,7 @@ export type Database = {
         | "failed"
         | "refunded"
         | "cancelled"
+      search_crawl_rule_pattern_type: "PREFIX" | "REGEX"
       search_external_phase: "SKIPPED" | "PENDING" | "COMPLETE" | "FAILED"
       search_processing_type:
         | "API"
@@ -1358,6 +1362,7 @@ export const Constants = {
         "refunded",
         "cancelled",
       ],
+      search_crawl_rule_pattern_type: ["PREFIX", "REGEX"],
       search_external_phase: ["SKIPPED", "PENDING", "COMPLETE", "FAILED"],
       search_processing_type: [
         "API",

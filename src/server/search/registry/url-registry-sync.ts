@@ -48,11 +48,18 @@ function pathOf(url: string): string {
 async function loadCrawlRules(supabase: SupabaseServerClient, sourceId: string): Promise<CrawlRule[]> {
   const { data } = await supabase
     .from("search_source_crawl_rules")
-    .select("pattern, classification, priority, enabled")
+    .select("pattern, pattern_type, classification, priority, enabled")
     .eq("source_id", sourceId)
     .order("priority", { ascending: false });
 
-  return data && data.length > 0 ? data : DEFAULT_CRAWL_RULES;
+  if (!data || data.length === 0) return DEFAULT_CRAWL_RULES;
+  return data.map((row) => ({
+    pattern: row.pattern,
+    patternType: row.pattern_type,
+    classification: row.classification,
+    priority: row.priority,
+    enabled: row.enabled,
+  }));
 }
 
 async function loadAutoSelect(supabase: SupabaseServerClient, sourceId: string): Promise<UrlClassification[]> {
@@ -182,6 +189,73 @@ export async function reclassifyStoredUrls(supabase: SupabaseServerClient, sourc
 
   await upsertClassifiedRows(supabase, rows);
   return rows.length;
+}
+
+/** Caps how many classified URLs a live preview returns to the admin UI — this is a read that
+ *  renders in a browser tab, not a sync, so a `MAX_URLS_TOTAL`-sized (up to 3000) response would be
+ *  both slow to render and unnecessary: an admin tuning rules needs to see whether they *work*, not
+ *  every single matched URL. */
+const PREVIEW_URL_LIMIT = 200;
+
+export interface PreviewedUrl {
+  url: string;
+  classification: UrlClassification;
+  priority: number;
+}
+
+export interface CrawlPreviewResult {
+  robots: {
+    found: boolean;
+    rules: { path: string; allow: boolean }[];
+    sitemapUrls: string[];
+  };
+  urls: {
+    entries: PreviewedUrl[];
+    /** Total classified URLs discovered this run, before the `PREVIEW_URL_LIMIT` cut — lets the UI
+     *  say "showing 200 of 640" instead of silently truncating. */
+    totalDiscovered: number;
+    truncated: boolean;
+  };
+}
+
+/**
+ * Live, read-only preview for the crawl-rules admin page: fetches robots.txt and does a full
+ * recursive sitemap walk (same network path `syncSourceUrlRegistry` uses), then classifies every
+ * discovered URL with the source's *currently saved* rules — but writes nothing to
+ * `search_source_urls`. Lets an admin see "what would this rule set actually do to the real site"
+ * without paying for (or waiting on) a full persisted sync. Unlike `syncSourceUrlRegistry`, this
+ * does NOT catch network errors — the caller (a Server Action) is expected to, since a preview
+ * failure should surface to the admin as "couldn't check the site", not silently show empty results.
+ */
+export async function previewSourceCrawlClassification(
+  supabase: SupabaseServerClient,
+  source: SourceSyncTarget,
+): Promise<CrawlPreviewResult> {
+  const [robotsInfo, rules] = await Promise.all([
+    fetchRobotsInfo(source.baseUrl),
+    loadCrawlRules(supabase, source.id),
+  ]);
+
+  const origin = new URL(source.baseUrl).origin;
+  const discovery = await discoverAllSitemapEntries(origin, robotsInfo.sitemapUrls);
+
+  const entries = discovery.entries.map((entry): PreviewedUrl => {
+    const { classification, priority } = classifyUrl(pathOf(entry.loc), rules);
+    return { url: entry.loc, classification, priority };
+  });
+
+  return {
+    robots: {
+      found: robotsInfo.found,
+      rules: robotsInfo.rules.rules,
+      sitemapUrls: robotsInfo.sitemapUrls,
+    },
+    urls: {
+      entries: entries.slice(0, PREVIEW_URL_LIMIT),
+      totalDiscovered: entries.length,
+      truncated: discovery.truncated || entries.length > PREVIEW_URL_LIMIT,
+    },
+  };
 }
 
 export interface RegistryCandidate {

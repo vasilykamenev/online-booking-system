@@ -7,7 +7,7 @@
  * `Disallow`/`Allow` matching rather than full RFC 9309.
  */
 
-interface RobotsRule {
+export interface RobotsRule {
   path: string;
   allow: boolean;
 }

@@ -223,9 +223,13 @@ sitemap на каждый поиск и брал из него равномер�
 - `search_source_urls` (миграция `20260824110001_search_source_url_registry.sql`) — URL Registry
   (спека §3): один источник → много строк `{url, source_sitemap, sitemap_lastmod, classification,
   priority, selected, crawl_status, content_hash, ...}`.
-- `search_source_crawl_rules` — правила классификации по префиксу пути (спека §4), редактируемые
-  в `/admin/search-sources/[id]/urls`. Источник без своих правил использует встроенный
-  `DEFAULT_CRAWL_RULES` (`registry/url-classification.ts`).
+- `search_source_crawl_rules` — правила классификации (спека §4), редактируемые в
+  `/admin/search-sources/[id]/urls`. Каждое правило — `PREFIX` (совпадение по началу пути, как
+  раньше) либо `REGEX` (ECMAScript-регулярка без слэшей/флагов, `RegExp.test()` по пути URL —
+  миграция `20260824120001_search_crawl_rule_pattern_type.sql`); побеждает самое специфичное
+  совпадение (для `PREFIX` — длина префикса, для `REGEX` — длина шаблона), при равенстве — большее
+  `priority`. Источник без своих правил использует встроенный `DEFAULT_CRAWL_RULES`
+  (`registry/url-classification.ts`, все — `PREFIX`).
 - `search_sources.auto_select_classifications` — какие классификации (`HIGH`/`MEDIUM`/`LOW`/`SKIP`)
   автоматически попадают в `selected = true`, редактируется в форме источника рядом с
   `imageDomains`. Точечный ручной override на любую строку (`selection_override`) всегда сильнее
@@ -236,6 +240,17 @@ sitemap на каждый поиск и брал из него равномер�
 - `registry/url-registry-sync.ts` — оркестрирует discover → classify → upsert
   (`syncSourceUrlRegistry`) и «переклассифицировать без повторного обхода сайта»
   (`reclassifyStoredUrls`, вызывается при изменении правил/`auto_select_classifications`).
+- `previewSourceCrawlClassification` (там же) — живой, ничего не пишущий в БД предпросмотр:
+  robots.txt + полный обход sitemap.xml реального сайта, каждый найденный URL классифицирован
+  *текущими сохранёнными* правилами. Кнопка «Проверить сайт» на странице реестра
+  (`crawl-rule-preview.tsx`) — так админ видит результат применения правила (особенно нового
+  regex) к реальным URL без ожидания полного `syncSourceUrlRegistry` и без побочных записей в
+  `search_source_urls`. Показывает и сырые правила `Allow`/`Disallow` из robots.txt.
+- `createCrawlRulesFromRobots` (`server/actions/admin.ts`) — по кнопке «Создать правила из
+  Disallow» превращает каждую строку `Disallow` из robots.txt сайта (спека §2.1, §4) в правило
+  `PREFIX` → `SKIP`, пропуская уже существующие паттерны. `Allow`-строки в правила не превращаются
+  — «разрешено» не соответствует ни одной нашей классификации однозначно, они остаются только в
+  предпросмотре для чтения админом.
 
 **Когда это запускается.** Явно, не по cron'у (см. следующий раздел о том, почему): при создании
 источника, при его редактировании и по кнопке «Обновить сейчас» на странице реестра — всегда

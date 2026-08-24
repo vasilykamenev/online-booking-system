@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useRef, useState, useTransition } from "react";
 import { useLocale, useTranslations } from "next-intl";
 import type { Locale } from "@/i18n/routing";
-import { useRouter } from "@/i18n/navigation";
+import { Link, useRouter } from "@/i18n/navigation";
 import {
   createSearchSource,
   updateSearchSource,
@@ -409,13 +409,16 @@ export function SearchSourceForm({
         <p className="text-sm text-destructive sm:col-span-2">{t(`errors.${state.error}`)}</p>
       )}
 
-      <Button
-        type="submit"
-        disabled={isPending}
-        className="rounded-full sm:col-span-2 sm:w-fit"
-      >
-        {mode === "create" ? t("add") : t("save")}
-      </Button>
+      <div className="flex items-center gap-2 sm:col-span-2">
+        <Button type="submit" disabled={isPending} className="rounded-full sm:w-fit">
+          {mode === "create" ? t("add") : t("save")}
+        </Button>
+        {mode === "edit" && (
+          <Button asChild type="button" variant="outline" className="rounded-full sm:w-fit">
+            <Link href="/admin/search-sources">{t("cancel")}</Link>
+          </Button>
+        )}
+      </div>
     </form>
   );
 }

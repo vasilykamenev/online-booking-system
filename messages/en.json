@@ -1107,6 +1107,7 @@
         "notesPlaceholder": "Source quirks: no pricing, specific regions only, etc.",
         "add": "Add source",
         "save": "Save",
+        "cancel": "Cancel",
         "errors": {
           "invalid": "Check the fields you filled in",
           "unauthenticated": "Sign in to add a source",
@@ -1212,9 +1213,17 @@
       },
       "crawlRules": {
         "title": "Crawl rules",
-        "hint": "Path-prefix rules that classify this source's URLs (docs/CLAUDE_SITEMAP_AI_CRAWLER_RULE.md §4) — the most specific matching pattern wins. A source with no rules of its own falls back to a sane built-in default set.",
-        "pattern": "Path prefix",
+        "hint": "Rules that classify this source's URLs (docs/CLAUDE_SITEMAP_AI_CRAWLER_RULE.md §4) — by path prefix or by regular expression. The most specific matching pattern wins. A source with no rules of its own falls back to a sane built-in default set.",
+        "pattern": "Path pattern",
         "patternPlaceholder": "/yachts/*",
+        "patternPlaceholderRegex": "^/yachts/[a-z0-9-]+$",
+        "patternType": {
+          "label": "Pattern type",
+          "PREFIX": "Prefix",
+          "REGEX": "Regex"
+        },
+        "patternTypeHintPrefix": "Matches the start of the path, same as before. A trailing \"*\" is purely decorative — matching itself is always prefix-based.",
+        "patternTypeHintRegex": "An ECMAScript regular expression with no surrounding slashes or flags — tested with RegExp.test() against the URL's path (e.g. /yachts/aurora). Invalid syntax is rejected when the rule is saved.",
         "classification": "Classification",
         "priority": "Priority",
         "actions": "Actions",
@@ -1223,10 +1232,45 @@
         "deleted": "Rule deleted",
         "deleteError": "Couldn't delete the rule",
         "errors": {
-          "invalid": "Check the fields you filled in",
+          "invalid": "Check the fields you filled in — for \"Regex\" the pattern must be valid",
           "unauthenticated": "Sign in to edit crawl rules",
           "forbidden": "Not enough permissions",
           "generic": "Couldn't add the rule"
+        },
+        "preview": {
+          "title": "Check against the real site",
+          "hint": "Live fetch of the site's robots.txt and sitemap.xml, classifying every discovered URL with the currently saved rules — nothing is written to the database. Useful before saving a new rule (especially a regex) or while a source hasn't been synced yet.",
+          "run": "Check site",
+          "loading": "Checking…",
+          "countLine": "Showing {shown} of {total} discovered URLs",
+          "truncated": "list cut off by the crawl limits (docs/CLAUDE_SITEMAP_AI_CRAWLER_RULE.md §5.2)",
+          "empty": "No URLs found in the site's sitemap.xml.",
+          "columns": {
+            "url": "URL"
+          },
+          "errors": {
+            "unauthenticated": "Sign in to check this source",
+            "forbidden": "Not enough permissions",
+            "notFound": "Source not found",
+            "generic": "Couldn't check the site — it may be unreachable or its sitemap malformed"
+          }
+        },
+        "robots": {
+          "title": "robots.txt",
+          "notFound": "No robots.txt found on the site.",
+          "empty": "robots.txt was found but has no Allow/Disallow rules for User-agent: *.",
+          "allow": "Allow",
+          "disallow": "Disallow",
+          "createFromRobots": "Create rules from Disallow",
+          "createFromRobotsSuccess": "Created {created} rule(s) from robots.txt",
+          "createFromRobotsNoneNew": "Every Disallow rule in robots.txt already exists ({skipped})",
+          "createFromRobotsErrors": {
+            "unauthenticated": "Sign in to edit crawl rules",
+            "forbidden": "Not enough permissions",
+            "notFound": "Source not found",
+            "noDisallowRules": "robots.txt has no Disallow rules",
+            "generic": "Couldn't create rules from robots.txt"
+          }
         }
       }
     },

@@ -25,15 +25,10 @@ import { ResyncUrlsButton } from "./resync-urls-button";
 import { CrawlRuleForm } from "./crawl-rule-form";
 import { CrawlRuleDeleteButton } from "./crawl-rule-delete-button";
 import { UrlSelectionToggle } from "./url-selection-toggle";
+import { CrawlRulePreview } from "./crawl-rule-preview";
+import { CLASSIFICATION_BADGE_VARIANT } from "./classification-badge";
 
 type UrlClassification = Database["public"]["Enums"]["search_url_classification"];
-
-const CLASSIFICATION_BADGE_VARIANT: Record<UrlClassification, "default" | "secondary" | "outline" | "destructive"> = {
-  HIGH: "default",
-  MEDIUM: "secondary",
-  LOW: "outline",
-  SKIP: "destructive",
-};
 
 export async function generateMetadata({
   params,
@@ -56,6 +51,7 @@ export default async function SearchSourceUrlsPage({
   const tClassification = await getTranslations("admin.searchSources.classification");
   const tCrawlStatus = await getTranslations("admin.searchSources.urlRegistry.crawlStatus");
   const tRules = await getTranslations("admin.searchSources.crawlRules");
+  const tPatternType = await getTranslations("admin.searchSources.crawlRules.patternType");
 
   const source = await getSearchSourceById(id);
   if (!source) notFound();
@@ -113,6 +109,7 @@ export default async function SearchSourceUrlsPage({
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead>{tRules("patternType.label")}</TableHead>
                   <TableHead>{tRules("pattern")}</TableHead>
                   <TableHead>{tRules("classification")}</TableHead>
                   <TableHead>{tRules("priority")}</TableHead>
@@ -122,6 +119,9 @@ export default async function SearchSourceUrlsPage({
               <TableBody>
                 {rules.map((rule) => (
                   <TableRow key={rule.id}>
+                    <TableCell>
+                      <Badge variant="outline">{tPatternType(rule.patternType)}</Badge>
+                    </TableCell>
                     <TableCell className="font-mono text-xs">{rule.pattern}</TableCell>
                     <TableCell>
                       <Badge variant={CLASSIFICATION_BADGE_VARIANT[rule.classification]}>
@@ -138,6 +138,10 @@ export default async function SearchSourceUrlsPage({
             </Table>
           </div>
         )}
+      </div>
+
+      <div className="mt-8">
+        <CrawlRulePreview sourceId={id} />
       </div>
 
       <div className="mt-8">

@@ -69,6 +69,11 @@ export const urlClassificationValues = [
   "SKIP",
 ] as const satisfies readonly Database["public"]["Enums"]["search_url_classification"][];
 
+export const crawlRulePatternTypeValues = [
+  "PREFIX",
+  "REGEX",
+] as const satisfies readonly Database["public"]["Enums"]["search_crawl_rule_pattern_type"][];
+
 /**
  * A row here is registry metadata (reliability bonus for ranking, cached robots.txt verdict) —
  * it does not by itself make the app crawl the site. Actually searching a source still requires
@@ -108,11 +113,24 @@ export type SearchSourceInput = z.infer<typeof searchSourceSchema>;
  * separate schema rather than importing that interface because this one validates raw form input
  * (`priority` arrives as a string) while that one is the pure-logic shape.
  */
-export const crawlRuleSchema = z.object({
-  pattern: z.string().trim().min(1).max(300),
-  classification: z.enum(urlClassificationValues),
-  priority: z.coerce.number().int().min(-1000).max(1000).default(0),
-});
+export const crawlRuleSchema = z
+  .object({
+    pattern: z.string().trim().min(1).max(300),
+    // "PREFIX" (literal path prefix, optional trailing "*") or "REGEX" (ECMAScript regex source,
+    // no delimiters/flags, tested against the URL's pathname) — see `CrawlRule` in
+    // `src/server/search/registry/url-classification.ts`.
+    patternType: z.enum(crawlRulePatternTypeValues).default("PREFIX"),
+    classification: z.enum(urlClassificationValues),
+    priority: z.coerce.number().int().min(-1000).max(1000).default(0),
+  })
+  .superRefine((value, ctx) => {
+    if (value.patternType !== "REGEX") return;
+    try {
+      new RegExp(value.pattern);
+    } catch {
+      ctx.addIssue({ code: "custom", path: ["pattern"], message: "invalidRegex" });
+    }
+  });
 export type CrawlRuleInput = z.infer<typeof crawlRuleSchema>;
 
 /**
