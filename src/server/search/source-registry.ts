@@ -63,8 +63,16 @@ export const listEnabledSources = cache(async (): Promise<SearchSource[]> => {
     .order("priority", { ascending: false });
 
   // A read failure must not break search — the internal half of a global search is perfectly
-  // useful on its own, and an unreachable registry only costs us the external half.
-  if (error) return [];
+  // useful on its own, and an unreachable registry only costs us the external half. Logged (not
+  // just swallowed) because this is otherwise invisible: `getActiveExternalProviders()` reads this
+  // as "zero enabled sources" and `global-search-service.ts` reports `externalPhase: "SKIPPED"` —
+  // indistinguishable, from the outside, from a registry that's genuinely empty. A stuck migration
+  // or a broken RLS policy on `search_sources` would otherwise degrade every search's external half
+  // to nothing with no trace in Vercel's error monitoring at all.
+  if (error) {
+    console.error("[listEnabledSources] search_sources read failed", error);
+    return [];
+  }
 
   return (data ?? []).map((row) => {
     // A read failure must not break search (same principle as the outer `if (error) return []`

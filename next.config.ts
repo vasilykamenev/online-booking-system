@@ -24,20 +24,17 @@ const nextConfig: NextConfig = {
     // render without a code change/deploy. Only trusted first-party storage belongs in this list.
     remotePatterns: [...(supabaseRemotePattern ? [supabaseRemotePattern] : [])],
     // Next.js 16 requires a same-origin `src` carrying a query string to be explicitly allow-listed
-    // (breaking change, "Local Images with Query Strings") — the external-image proxy's `?url=...`
-    // is exactly that. `search` is deliberately omitted rather than pinned to a literal value: the
-    // proxied URL varies per photo, and next/image's LocalPattern.search only matches an exact
-    // string, no wildcard. That's safe here specifically because the route itself (not this config)
-    // is what actually gates which URLs it will fetch — allowlisted source domain, content-type,
-    // SSRF-safe fetch (see external-image/route.ts) — this pattern only says "yes, optimize a local
-    // path under this one route", not "trust whatever the query string points at".
-    localPatterns: [
-      // Setting `localPatterns` at all switches next/image from "any local src is fine" to an
-      // allowlist — so every other local image this app already renders (logo, favicons, anything
-      // under /public) needs its own entry, not just the one that motivated adding this array.
-      { pathname: "/**", search: "" },
-      { pathname: "/api/external-image" },
-    ],
+    // (breaking change, "Local Images with Query Strings") — but `LocalPattern.search` can only be
+    // one literal string or empty (no wildcard — confirmed against
+    // node_modules/next/dist/shared/lib/image-config.d.ts), so there is no pattern that matches the
+    // external-image proxy's `?url=...`, which carries a different value per photo. Discovered live:
+    // every proxied photo 400'd from `/_next/image` with INVALID_IMAGE_OPTIMIZE_REQUEST once external
+    // search actually started returning results. `result-card.tsx` renders those photos with
+    // `unoptimized` instead (the proxy already streams the original bytes — Vercel's own resize/
+    // reformat pass was never essential there), so `localPatterns` only needs to cover this app's
+    // other same-origin images (logo, favicons, anything under /public), none of which carry a query
+    // string.
+    localPatterns: [{ pathname: "/**", search: "" }],
     // Local Supabase Storage serves images from 127.0.0.1 — dev-only, never in production,
     // where NEXT_PUBLIC_SUPABASE_URL points at a real (non-private-IP) domain.
     dangerouslyAllowLocalIP: process.env.NODE_ENV !== "production",
