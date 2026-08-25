@@ -112,6 +112,35 @@ export interface SourceSyncTarget {
 export interface SyncSummary {
   discovered: number;
   truncated: boolean;
+  /** Rows removed because their URL's origin no longer matches the source's own `base_url` — see
+   *  `pruneForeignUrls`. Surfaced so an admin can see contamination actually got cleaned up. */
+  pruned: number;
+}
+
+/**
+ * Deletes registry rows whose URL doesn't belong to this source's own origin. The one case a sync
+ * must actively clean up rather than leave alone: `discoverSourceUrls` always walks `source.baseUrl`
+ * itself, so every URL it returns is same-origin by construction — a stored row that isn't is not a
+ * page that "went missing from the sitemap" (the case `last_seen_at`'s doc comment carves out), it's
+ * contamination from some earlier moment when `base_url` pointed somewhere else (e.g. a source
+ * created from another one by mistake, then corrected). Runs on every full sync, so re-pointing a
+ * source at the right URL and clicking "Resync now" self-heals it — no manual DB cleanup needed.
+ */
+async function pruneForeignUrls(
+  supabase: SupabaseServerClient,
+  sourceId: string,
+  origin: string,
+): Promise<number> {
+  const { data } = await supabase
+    .from("search_source_urls")
+    .select("id, url")
+    .eq("source_id", sourceId);
+
+  const foreignIds = (data ?? []).filter((row) => !row.url.startsWith(origin)).map((row) => row.id);
+  if (foreignIds.length === 0) return 0;
+
+  await supabase.from("search_source_urls").delete().in("id", foreignIds);
+  return foreignIds.length;
 }
 
 /** Network-only step: robots.txt → full recursive sitemap walk. No DB access, so it can be tested
@@ -158,9 +187,10 @@ export async function syncSourceUrlRegistry(
     });
 
     await upsertClassifiedRows(supabase, rows);
-    return { discovered: rows.length, truncated: discovery.truncated };
+    const pruned = await pruneForeignUrls(supabase, source.id, new URL(source.baseUrl).origin);
+    return { discovered: rows.length, truncated: discovery.truncated, pruned };
   } catch {
-    return { discovered: 0, truncated: false };
+    return { discovered: 0, truncated: false, pruned: 0 };
   }
 }
 

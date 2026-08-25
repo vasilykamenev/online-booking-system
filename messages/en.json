@@ -1182,6 +1182,7 @@
         "resyncNow": "Sync now",
         "resyncSuccess": "Sync complete — {count} URLs discovered",
         "resyncTruncated": "The site's sitemap is larger than the sync limits allow — this is a partial pass, not the whole catalog.",
+        "resyncPruned": "Removed {count} URLs that no longer belong to this source's domain",
         "resyncErrors": {
           "unauthenticated": "Sign in to sync a source's URLs",
           "forbidden": "Not enough permissions",
@@ -1231,6 +1232,12 @@
         "delete": "Delete",
         "deleted": "Rule deleted",
         "deleteError": "Couldn't delete the rule",
+        "selectAll": "Select all rules",
+        "selectRow": "Select rule",
+        "selectedCount": "{count} rules selected",
+        "deleteSelected": "Delete selected",
+        "confirmDeleteSelected": "Delete {count} selected rules? This can't be undone.",
+        "deletedSelected": "Deleted {count} rules",
         "errors": {
           "invalid": "Check the fields you filled in — for \"Regex\" the pattern must be valid",
           "unauthenticated": "Sign in to edit crawl rules",

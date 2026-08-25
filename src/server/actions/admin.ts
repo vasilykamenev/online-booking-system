@@ -522,6 +522,7 @@ export interface ResyncSearchSourceUrlsResult {
   error?: "unauthenticated" | "forbidden" | "notFound" | "generic";
   discovered?: number;
   truncated?: boolean;
+  pruned?: number;
 }
 
 /** Manual "Обновить сейчас" trigger (URL Registry page) — the same full sync
@@ -547,10 +548,11 @@ export async function resyncSearchSourceUrls(
 
   await logAudit(supabase, admin.id, "resync_search_source_urls", "search_sources", sourceId, {
     discovered: summary.discovered,
+    pruned: summary.pruned,
   });
 
   revalidatePath(`/${locale}/admin/search-sources/${sourceId}/urls`);
-  return { discovered: summary.discovered, truncated: summary.truncated };
+  return { discovered: summary.discovered, truncated: summary.truncated, pruned: summary.pruned };
 }
 
 export interface CrawlRuleActionState {
@@ -606,6 +608,32 @@ export async function deleteCrawlRule(
   if (error) return { error: "generic" };
 
   await logAudit(supabase, admin.id, "delete_crawl_rule", "search_source_crawl_rules", ruleId);
+  await reclassifyStoredUrls(supabase, sourceId);
+
+  revalidatePath(`/${locale}/admin/search-sources/${sourceId}/urls`);
+  return {};
+}
+
+/** Bulk variant of `deleteCrawlRule` for the multi-select toolbar — one round-trip and one
+ *  `reclassifyStoredUrls` pass for the whole selection instead of one per row. */
+export async function deleteCrawlRules(
+  locale: Locale,
+  sourceId: string,
+  ruleIds: string[],
+): Promise<DeleteResult> {
+  if (ruleIds.length === 0) return {};
+
+  const supabase = await createClient();
+  const admin = await requireAdmin(supabase);
+  if ("error" in admin) return { error: admin.error };
+
+  const { error } = await supabase.from("search_source_crawl_rules").delete().in("id", ruleIds);
+  if (error) return { error: "generic" };
+
+  await logAudit(supabase, admin.id, "delete_crawl_rules", "search_source_crawl_rules", sourceId, {
+    ruleIds,
+    count: ruleIds.length,
+  });
   await reclassifyStoredUrls(supabase, sourceId);
 
   revalidatePath(`/${locale}/admin/search-sources/${sourceId}/urls`);

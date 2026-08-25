@@ -24,6 +24,7 @@ export function ResyncUrlsButton({ sourceId }: { sourceId: string }) {
       }
       toast.success(t("resyncSuccess", { count: result.discovered ?? 0 }));
       if (result.truncated) toast.warning(t("resyncTruncated"));
+      if (result.pruned) toast.info(t("resyncPruned", { count: result.pruned }));
       router.refresh();
     });
   }

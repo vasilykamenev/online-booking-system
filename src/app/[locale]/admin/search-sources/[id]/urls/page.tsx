@@ -23,7 +23,7 @@ import {
 import type { Database } from "@/lib/supabase/database.types";
 import { ResyncUrlsButton } from "./resync-urls-button";
 import { CrawlRuleForm } from "./crawl-rule-form";
-import { CrawlRuleDeleteButton } from "./crawl-rule-delete-button";
+import { CrawlRulesTable } from "./crawl-rules-table";
 import { UrlSelectionToggle } from "./url-selection-toggle";
 import { CrawlRulePreview } from "./crawl-rule-preview";
 import { CLASSIFICATION_BADGE_VARIANT } from "./classification-badge";
@@ -51,7 +51,6 @@ export default async function SearchSourceUrlsPage({
   const tClassification = await getTranslations("admin.searchSources.classification");
   const tCrawlStatus = await getTranslations("admin.searchSources.urlRegistry.crawlStatus");
   const tRules = await getTranslations("admin.searchSources.crawlRules");
-  const tPatternType = await getTranslations("admin.searchSources.crawlRules.patternType");
 
   const source = await getSearchSourceById(id);
   if (!source) notFound();
@@ -105,37 +104,8 @@ export default async function SearchSourceUrlsPage({
           <CrawlRuleForm sourceId={id} />
         </div>
         {rules.length > 0 && (
-          <div className="mt-4 overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>{tRules("patternType.label")}</TableHead>
-                  <TableHead>{tRules("pattern")}</TableHead>
-                  <TableHead>{tRules("classification")}</TableHead>
-                  <TableHead>{tRules("priority")}</TableHead>
-                  <TableHead className="text-right">{tRules("actions")}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rules.map((rule) => (
-                  <TableRow key={rule.id}>
-                    <TableCell>
-                      <Badge variant="outline">{tPatternType(rule.patternType)}</Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-xs">{rule.pattern}</TableCell>
-                    <TableCell>
-                      <Badge variant={CLASSIFICATION_BADGE_VARIANT[rule.classification]}>
-                        {tClassification(rule.classification)}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-sm font-light text-muted-foreground">{rule.priority}</TableCell>
-                    <TableCell className="text-right">
-                      <CrawlRuleDeleteButton sourceId={id} ruleId={rule.id} />
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+          <div className="mt-4">
+            <CrawlRulesTable sourceId={id} rules={rules} />
           </div>
         )}
       </div>
