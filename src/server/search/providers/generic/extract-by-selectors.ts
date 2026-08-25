@@ -62,5 +62,10 @@ export function extractBySelectors(html: string, config: SelectorConfig): Generi
     vesselTypeRaw: readString($, config, "vesselTypeRaw"),
     country: readString($, config, "country"),
     city: readString($, config, "city"),
+    // `SelectorConfig` has no price field yet (admin-authored selectors cover name/description/
+    // guests/cabins/type/country/city/image only) — `provider.ts`'s JSON-LD tier is the only source
+    // of price today, and it never runs once this tier already succeeded.
+    price: null,
+    currency: null,
   };
 }

@@ -37,6 +37,8 @@ describe("extractBySelectors", () => {
       vesselTypeRaw: "Motor Yacht",
       country: "Antalya, Turkey",
       city: null,
+      price: null,
+      currency: null,
     });
   });
 

@@ -143,6 +143,11 @@ interface FetchedCandidate {
    *  registry (spec §3: crawl_status tracks the fetch step, not extraction). */
   pageOk: boolean;
   contentHash: string | null;
+  /** A non-fatal observation worth surfacing in the search run's `errors` — currently only "this
+   *  page's own JSON-LD disagreed with itself about price" (`structured-data.ts`'s `priceConflict`,
+   *  docs/SEO_Web_Discovery_JSON_LD_Project_Rules.md §27: "не должна молча выбирать одно значение").
+   *  Never affects the result itself, which already omits the disputed price. */
+  note: string | null;
 }
 
 async function fetchAndNormalize(
@@ -151,7 +156,9 @@ async function fetchAndNormalize(
   allowAi: boolean,
 ): Promise<FetchedCandidate> {
   const page = await fetchWithCache(url, PAGE_CACHE_MS);
-  if (!page.ok || !page.html) return { result: null, usedAi: false, pageOk: false, contentHash: null };
+  if (!page.ok || !page.html) {
+    return { result: null, usedAi: false, pageOk: false, contentHash: null, note: null };
+  }
   const contentHash = hashContent(page.html);
 
   const retrievedAt = new Date().toISOString();
@@ -175,7 +182,7 @@ async function fetchAndNormalize(
         fields: { ...bySelectors, image },
         aiConfidence: null,
       });
-      return { result, usedAi: false, pageOk: true, contentHash };
+      return { result, usedAi: false, pageOk: true, contentHash, note: null };
     }
   }
 
@@ -197,10 +204,15 @@ async function fetchAndNormalize(
         vesselTypeRaw: null,
         country: null,
         city: null,
+        price: structured.price,
+        currency: structured.currency,
       },
       aiConfidence: null,
     });
-    return { result, usedAi: false, pageOk: true, contentHash };
+    const note = structured.priceConflict
+      ? `${source.domain}: ${url}: JSON-LD price conflict across listing blocks — price dropped`
+      : null;
+    return { result, usedAi: false, pageOk: true, contentHash, note };
   }
 
   // Pure `HTML` promises a fast, free, deterministic strategy (docs/search-source-processing-strategies.md
@@ -208,10 +220,12 @@ async function fetchAndNormalize(
   // selectors and JSON-LD both missed this page simply yields no result for it, same as if it had no
   // generic path at all. `HYBRID` (and `AI_EXTRACTION`/`STRUCTURED_DATA`, which never reach this
   // branch with `allowAi: false`) fall through to AI as before.
-  if (!allowAi) return { result: null, usedAi: false, pageOk: true, contentHash };
+  if (!allowAi) return { result: null, usedAi: false, pageOk: true, contentHash, note: null };
 
   const { classification, usedAi } = await classifyCached(page.html);
-  if (!classification.looksLikeVesselListing) return { result: null, usedAi, pageOk: true, contentHash };
+  if (!classification.looksLikeVesselListing) {
+    return { result: null, usedAi, pageOk: true, contentHash, note: null };
+  }
 
   // `og:image` is read deterministically rather than asked of the model — an AI-stated image URL
   // risks being invented/malformed in a way a `<meta>` tag simply can't be.
@@ -230,10 +244,14 @@ async function fetchAndNormalize(
       vesselTypeRaw: classification.extracted.vesselTypeRaw,
       country: classification.extracted.country,
       city: classification.extracted.city,
+      // Not asked of the model (docs/SEO_Web_Discovery_JSON_LD_Project_Rules.md §33 keeps this out
+      // of scope for now — JSON-LD is the only price source today, see this tier's own doc comment).
+      price: null,
+      currency: null,
     },
     aiConfidence: classification.confidence,
   });
-  return { result, usedAi, pageOk: true, contentHash };
+  return { result, usedAi, pageOk: true, contentHash, note: null };
 }
 
 interface Candidate {
@@ -274,9 +292,10 @@ async function fetchCandidates(
       const { url, registryRowId } = candidates[index];
 
       try {
-        const { result, usedAi, pageOk, contentHash } = await fetchAndNormalize(url, source, allowAi);
+        const { result, usedAi, pageOk, contentHash, note } = await fetchAndNormalize(url, source, allowAi);
         stats.pagesVisited += 1;
         if (usedAi) stats.aiCalls += 1;
+        if (note) errors.push(note);
         if (result) {
           stats.offersExtracted += 1;
           if (matchesKnownCriteria(result, criteria)) results.push(result);

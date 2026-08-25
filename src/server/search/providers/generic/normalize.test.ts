@@ -21,6 +21,8 @@ describe("normalizeGenericResult", () => {
         vesselTypeRaw: null,
         country: null,
         city: null,
+        price: null,
+        currency: null,
       },
       aiConfidence: null,
     });
@@ -45,6 +47,8 @@ describe("normalizeGenericResult", () => {
         vesselTypeRaw: "gulet",
         country: "Turkey",
         city: "Antalya",
+        price: null,
+        currency: null,
       },
       aiConfidence: 0.8,
     });
@@ -68,6 +72,8 @@ describe("normalizeGenericResult", () => {
         vesselTypeRaw: "gulet",
         country: null,
         city: null,
+        price: null,
+        currency: null,
       },
       aiConfidence: 0.7,
     });
@@ -91,9 +97,57 @@ describe("normalizeGenericResult", () => {
         vesselTypeRaw: null,
         country: null,
         city: null,
+        price: null,
+        currency: null,
       },
       aiConfidence: null,
     });
     expect(result.images).toEqual([]);
+  });
+
+  it("converts a JSON-LD price from major to minor units and carries the currency", () => {
+    const result = normalizeGenericResult({
+      ...BASE_INPUT,
+      fields: {
+        name: "Ocean Explorer",
+        description: null,
+        image: null,
+        guests: null,
+        cabins: null,
+        vesselTypeRaw: null,
+        country: null,
+        city: null,
+        price: 9500,
+        currency: "EUR",
+      },
+      aiConfidence: null,
+    });
+
+    expect(result.rental.priceMinor).toBe(950_000);
+    expect(result.rental.currency).toBe("EUR");
+    // Deterministic (JSON-LD) price carries no confidence score, same as every other JSON-LD field.
+    expect(result.fieldProvenance["rental.priceMinor"]).toBeUndefined();
+  });
+
+  it("leaves rental.priceMinor null when no price was extracted", () => {
+    const result = normalizeGenericResult({
+      ...BASE_INPUT,
+      fields: {
+        name: "No Price Yacht",
+        description: null,
+        image: null,
+        guests: null,
+        cabins: null,
+        vesselTypeRaw: null,
+        country: null,
+        city: null,
+        price: null,
+        currency: null,
+      },
+      aiConfidence: null,
+    });
+
+    expect(result.rental.priceMinor).toBeNull();
+    expect(result.rental.currency).toBeNull();
   });
 });

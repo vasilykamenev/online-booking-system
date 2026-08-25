@@ -1,4 +1,5 @@
 import { emptyResult, type FieldProvenance, type ResultSource, type VesselSearchResult } from "@/lib/search/result";
+import { MINOR_UNITS_PER_MAJOR } from "@/lib/search/criteria";
 
 /**
  * Folds one candidate page's extracted fields into the canonical `VesselSearchResult` (spec §13),
@@ -19,6 +20,11 @@ export interface GenericExtractedFields {
   vesselTypeRaw: string | null;
   country: string | null;
   city: string | null;
+  /** Major units (e.g. `9500` for "9500 EUR"), as read off a source's own structured data —
+   *  converted to minor units at this normalization boundary, same as `criteria.ts`'s interpreter
+   *  output (CLAUDE.md §7: money is never a float downstream of here). */
+  price: number | null;
+  currency: string | null;
 }
 
 export interface NormalizeGenericInput {
@@ -66,6 +72,11 @@ export function normalizeGenericResult({
       marina: null,
       latitude: null,
       longitude: null,
+    },
+    rental: {
+      ...result.rental,
+      priceMinor: fields.price === null ? null : Math.round(fields.price * MINOR_UNITS_PER_MAJOR),
+      currency: fields.currency,
     },
     description: fields.description,
     images: fields.image ? [{ url: fields.image, alt: fields.name }] : [],
