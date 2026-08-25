@@ -611,6 +611,49 @@ export async function addManualSourceUrls(
   return { added: result.added, skipped: result.skipped };
 }
 
+export interface ClearSourceUrlRegistryResult {
+  error?: "unauthenticated" | "forbidden" | "notFound" | "generic";
+  deleted?: number;
+}
+
+/**
+ * Wipes every row of a source's URL Registry (URL Registry page's "Clear list" button) — for
+ * starting over after a source's `base_url`/sitemap changed shape, or after cleaning up a source
+ * that got contaminated some other way `syncSourceUrlRegistry`'s own `pruneForeignUrls` doesn't
+ * cover. A resync (or manual add) repopulates it from scratch; nothing else references these rows.
+ */
+export async function clearSourceUrlRegistry(
+  locale: Locale,
+  sourceId: string,
+): Promise<ClearSourceUrlRegistryResult> {
+  const supabase = await createClient();
+  const admin = await requireAdmin(supabase);
+  if ("error" in admin) return { error: admin.error };
+
+  const { data: source, error: sourceError } = await supabase
+    .from("search_sources")
+    .select("id")
+    .eq("id", sourceId)
+    .maybeSingle();
+  if (sourceError) return { error: "generic" };
+  if (!source) return { error: "notFound" };
+
+  const { count } = await supabase
+    .from("search_source_urls")
+    .select("id", { count: "exact", head: true })
+    .eq("source_id", sourceId);
+
+  const { error } = await supabase.from("search_source_urls").delete().eq("source_id", sourceId);
+  if (error) return { error: "generic" };
+
+  await logAudit(supabase, admin.id, "clear_search_source_urls", "search_source_urls", sourceId, {
+    deleted: count ?? 0,
+  });
+
+  revalidatePath(`/${locale}/admin/search-sources/${sourceId}/urls`);
+  return { deleted: count ?? 0 };
+}
+
 export interface CrawlRuleActionState {
   error?: string;
 }

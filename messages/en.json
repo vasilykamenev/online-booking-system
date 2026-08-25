@@ -1184,6 +1184,15 @@
         "resyncTruncated": "The site's sitemap is larger than the sync limits allow — this is a partial pass, not the whole catalog.",
         "resyncPruned": "Removed {count} URLs that no longer belong to this source's domain",
         "resyncNoSitemap": "No sitemap found — URLs were collected by following links from the base URL",
+        "clearAll": "Clear list",
+        "clearConfirm": "Delete every discovered URL for this source? This can't be undone — the next sync will rediscover them if they still exist on the site.",
+        "clearSuccess": "Deleted {count} URLs",
+        "clearErrors": {
+          "unauthenticated": "Sign in to clear this source's URL registry",
+          "forbidden": "Not enough permissions",
+          "notFound": "Source not found",
+          "generic": "Couldn't clear the URL registry"
+        },
         "resyncErrors": {
           "unauthenticated": "Sign in to sync a source's URLs",
           "forbidden": "Not enough permissions",

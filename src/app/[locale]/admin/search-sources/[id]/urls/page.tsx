@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/table";
 import type { Database } from "@/lib/supabase/database.types";
 import { ResyncUrlsButton } from "./resync-urls-button";
+import { ClearUrlsButton } from "./clear-urls-button";
 import { CrawlRuleForm } from "./crawl-rule-form";
 import { CrawlRulesTable } from "./crawl-rules-table";
 import { AddManualUrlsForm } from "./add-manual-urls-form";
@@ -117,8 +118,13 @@ export default async function SearchSourceUrlsPage({
       </div>
 
       <div className="mt-8">
-        <h2 className="text-base font-medium tracking-tight">{t("urlsTitle")}</h2>
-        <p className="mt-1 text-xs font-light text-muted-foreground">{t("urlsHint")}</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-base font-medium tracking-tight">{t("urlsTitle")}</h2>
+            <p className="mt-1 text-xs font-light text-muted-foreground">{t("urlsHint")}</p>
+          </div>
+          {total > 0 && <ClearUrlsButton sourceId={id} />}
+        </div>
 
         <div className="mt-4 rounded-2xl border border-border bg-card p-5 shadow-soft">
           <h3 className="text-sm font-medium">{tManualAdd("title")}</h3>
