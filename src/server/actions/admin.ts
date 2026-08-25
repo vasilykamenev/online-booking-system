@@ -399,6 +399,12 @@ export async function updateSearchSource(
   const admin = await requireAdmin(supabase);
   if ("error" in admin) return { error: admin.error };
 
+  const { data: existing } = await supabase
+    .from("search_sources")
+    .select("base_url")
+    .eq("id", sourceId)
+    .maybeSingle();
+
   // Status/enabled are deliberately not touched here — those go through
   // approveSearchSource/rejectSearchSource/setSearchSourceEnabled, which is where the audit trail
   // for the review lifecycle lives. Editing the registration details doesn't reset a review.
@@ -423,9 +429,14 @@ export async function updateSearchSource(
     domain: parsed.data.domain,
   });
 
-  // Best-effort re-sync (domain/baseUrl/rules may have changed) — same reasoning as
-  // createSearchSource, never blocks the edit itself.
-  await syncSourceUrlRegistry(supabase, { id: sourceId, baseUrl: parsed.data.baseUrl });
+  // Re-sync only when `base_url` itself actually changed — the one edit that can make the existing
+  // URL Registry wrong (pointing at a site that's no longer this source's target). Saving any other
+  // field (name, priority, notes, processing type, crawl rules live on their own form) must not
+  // trigger a live re-crawl that reclassifies/bumps every already-discovered row for no reason; an
+  // admin who wants a fresh crawl already has "Resync now" on the URL Registry page for that.
+  if (existing && existing.base_url !== parsed.data.baseUrl) {
+    await syncSourceUrlRegistry(supabase, { id: sourceId, baseUrl: parsed.data.baseUrl });
+  }
 
   revalidatePath(`/${locale}/admin/search-sources`);
   return redirect({ href: "/admin/search-sources", locale });
