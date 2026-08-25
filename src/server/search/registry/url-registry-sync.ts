@@ -3,8 +3,9 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Database } from "@/lib/supabase/database.types";
-import { fetchRobotsInfo } from "@/server/search/crawl/robots";
+import { fetchRobotsInfo, type RobotsInfo } from "@/server/search/crawl/robots";
 import { discoverAllSitemapEntries } from "@/server/search/crawl/full-sitemap-discovery";
+import { discoverUrlsByCrawling } from "@/server/search/crawl/html-link-discovery";
 import {
   classifyUrl,
   DEFAULT_CRAWL_RULES,
@@ -15,9 +16,10 @@ import {
 /**
  * Orchestrates the URL Registry (docs/CLAUDE_SITEMAP_AI_CRAWLER_RULE.md §3, §4, §8) — the DB-facing
  * layer on top of the pure logic in `url-classification.ts` and the network layer in
- * `crawl/full-sitemap-discovery.ts`. Deliberately thin and untested at the unit level, same as
- * `source-registry.ts` (no `.test.ts` of its own) — everything worth unit-testing here already is,
- * in those two modules.
+ * `crawl/full-sitemap-discovery.ts` (sitemap walk) and `crawl/html-link-discovery.ts` (same-origin
+ * link crawl, used when a source has no sitemap at all — see `discoverEntries`). Deliberately thin
+ * and untested at the unit level, same as `source-registry.ts` (no `.test.ts` of its own) —
+ * everything worth unit-testing here already is, in those modules.
  *
  * Every write in this module runs through the caller's own session client (`createClient()`),
  * because every caller today is an admin-authenticated Server Action — RLS's
@@ -115,6 +117,55 @@ export interface SyncSummary {
   /** Rows removed because their URL's origin no longer matches the source's own `base_url` — see
    *  `pruneForeignUrls`. Surfaced so an admin can see contamination actually got cleaned up. */
   pruned: number;
+  /** Which discovery path actually produced `discovered` — `null` only when the sync failed before
+   *  either could run. Surfaced so an admin can tell "this site has no sitemap, so we crawled links
+   *  instead" from "this site has a sitemap and it's just small". */
+  method: "sitemap" | "html-crawl" | null;
+}
+
+export interface SourceDiscoveryEntry {
+  loc: string;
+  lastmod: string | null;
+  /** Which sitemap document listed this URL — `null` for an `html-crawl` entry, which has no
+   *  sitemap to attribute to. */
+  sourceSitemap: string | null;
+}
+
+interface SourceDiscoveryResult {
+  entries: SourceDiscoveryEntry[];
+  truncated: boolean;
+  method: "sitemap" | "html-crawl";
+}
+
+/**
+ * The shared discovery step behind both `discoverSourceUrls` (a real sync) and
+ * `previewSourceCrawlClassification` (the read-only preview) — kept as one function so the two never
+ * drift into showing an admin different things for "what would a sync find". Sitemap discovery
+ * (spec §2.3, §5.2) is always tried first; a same-origin link crawl
+ * (`crawl/html-link-discovery.ts`) only runs when the sitemap walk comes back with nothing — a site
+ * that publishes a sitemap, even a mostly-empty one, is trusted over a guess made by following links.
+ */
+async function discoverEntries(baseUrl: string, robotsInfo: RobotsInfo): Promise<SourceDiscoveryResult> {
+  const origin = new URL(baseUrl).origin;
+  const sitemapResult = await discoverAllSitemapEntries(origin, robotsInfo.sitemapUrls);
+  if (sitemapResult.entries.length > 0) {
+    return {
+      entries: sitemapResult.entries.map((entry) => ({
+        loc: entry.loc,
+        lastmod: entry.lastmod,
+        sourceSitemap: entry.sourceSitemap,
+      })),
+      truncated: sitemapResult.truncated,
+      method: "sitemap",
+    };
+  }
+
+  const crawlResult = await discoverUrlsByCrawling(baseUrl, robotsInfo.rules);
+  return {
+    entries: crawlResult.entries.map((entry) => ({ loc: entry.loc, lastmod: null, sourceSitemap: null })),
+    truncated: crawlResult.truncated,
+    method: "html-crawl",
+  };
 }
 
 /**
@@ -145,10 +196,9 @@ async function pruneForeignUrls(
 
 /** Network-only step: robots.txt → full recursive sitemap walk. No DB access, so it can be tested
  *  or retried independently of the classify/upsert step. */
-export async function discoverSourceUrls(baseUrl: string) {
-  const origin = new URL(baseUrl).origin;
+export async function discoverSourceUrls(baseUrl: string): Promise<SourceDiscoveryResult> {
   const robotsInfo = await fetchRobotsInfo(baseUrl);
-  return discoverAllSitemapEntries(origin, robotsInfo.sitemapUrls);
+  return discoverEntries(baseUrl, robotsInfo);
 }
 
 /**
@@ -188,9 +238,9 @@ export async function syncSourceUrlRegistry(
 
     await upsertClassifiedRows(supabase, rows);
     const pruned = await pruneForeignUrls(supabase, source.id, new URL(source.baseUrl).origin);
-    return { discovered: rows.length, truncated: discovery.truncated, pruned };
+    return { discovered: rows.length, truncated: discovery.truncated, pruned, method: discovery.method };
   } catch {
-    return { discovered: 0, truncated: false, pruned: 0 };
+    return { discovered: 0, truncated: false, pruned: 0, method: null };
   }
 }
 
@@ -221,6 +271,71 @@ export async function reclassifyStoredUrls(supabase: SupabaseServerClient, sourc
   return rows.length;
 }
 
+export interface AddManualUrlsResult {
+  added: number;
+  /** URLs rejected for being malformed or, more commonly, for belonging to a different domain than
+   *  this source's own `base_url` — never silently added and then swept away by the next sync's
+   *  `pruneForeignUrls`, rejected up front instead. */
+  skipped: number;
+}
+
+/**
+ * The manual-entry escape hatch for a source with no sitemap and nothing (or nothing useful) for
+ * `discoverUrlsByCrawling` to find by following links — an admin who already knows the exact detail
+ * page URLs can paste them in directly. Classified with the source's current rules exactly like a
+ * real sync's discoveries, so they show up correctly bucketed in the registry and get fetched by
+ * live search on the same terms as anything a sitemap or crawl would have found. Survives future
+ * syncs the same way any registry row does — a sync only adds/reclassifies, never deletes a row
+ * merely for not being rediscovered (see `search_source_urls`'s migration comment).
+ */
+export async function addManualUrls(
+  supabase: SupabaseServerClient,
+  source: SourceSyncTarget,
+  rawUrls: string[],
+): Promise<AddManualUrlsResult> {
+  const origin = new URL(source.baseUrl).origin;
+
+  const valid = new Set<string>();
+  let skipped = 0;
+  for (const raw of rawUrls) {
+    try {
+      const parsed = new URL(raw.trim());
+      parsed.hash = "";
+      if (parsed.origin !== origin) {
+        skipped++;
+        continue;
+      }
+      valid.add(parsed.toString());
+    } catch {
+      skipped++;
+    }
+  }
+  if (valid.size === 0) return { added: 0, skipped };
+
+  const [rules, autoSelect, overrides] = await Promise.all([
+    loadCrawlRules(supabase, source.id),
+    loadAutoSelect(supabase, source.id),
+    loadExistingOverrides(supabase, source.id),
+  ]);
+
+  const now = new Date().toISOString();
+  const rows: ClassifiedRow[] = [...valid].map((url) => {
+    const { classification, priority } = classifyUrl(pathOf(url), rules);
+    const override = overrides.get(url) ?? null;
+    return {
+      source_id: source.id,
+      url,
+      classification,
+      priority,
+      selected: override ?? autoSelect.includes(classification),
+      last_seen_at: now,
+    };
+  });
+
+  await upsertClassifiedRows(supabase, rows);
+  return { added: rows.length, skipped };
+}
+
 export interface PreviewedUrl {
   url: string;
   classification: UrlClassification;
@@ -239,20 +354,26 @@ export interface CrawlPreviewResult {
      *  client-side rather than the server dropping rows, so "show me all of it" actually means all
      *  of it, not the first N. */
     entries: PreviewedUrl[];
-    /** True only when the sitemap walk itself hit a resource limit (depth/sitemap-count/URL-count,
-     *  spec §5.2) — not a display concern, since `entries` is never further truncated. */
+    /** True only when the discovery walk itself hit a resource limit (depth/sitemap-count/URL-count
+     *  for a sitemap walk, or pages-visited/depth/URL-count for a link crawl) — not a display
+     *  concern, since `entries` is never further truncated. */
     truncated: boolean;
+    /** Which discovery path produced `entries` — see `discoverEntries`'s doc comment. Lets the UI
+     *  tell an admin "no sitemap, these came from following links on the homepage" instead of
+     *  silently presenting a link-crawl result as if it were a sitemap read. */
+    method: "sitemap" | "html-crawl";
   };
 }
 
 /**
- * Live, read-only preview for the crawl-rules admin page: fetches robots.txt and does a full
- * recursive sitemap walk (same network path `syncSourceUrlRegistry` uses), then classifies every
- * discovered URL with the source's *currently saved* rules — but writes nothing to
- * `search_source_urls`. Lets an admin see "what would this rule set actually do to the real site"
- * without paying for (or waiting on) a full persisted sync. Unlike `syncSourceUrlRegistry`, this
- * does NOT catch network errors — the caller (a Server Action) is expected to, since a preview
- * failure should surface to the admin as "couldn't check the site", not silently show empty results.
+ * Live, read-only preview for the crawl-rules admin page: fetches robots.txt and runs the same
+ * discovery `syncSourceUrlRegistry` would (`discoverEntries` — sitemap walk, falling back to a
+ * same-origin link crawl when the site has no sitemap), then classifies every discovered URL with
+ * the source's *currently saved* rules — but writes nothing to `search_source_urls`. Lets an admin
+ * see "what would this rule set actually do to the real site" without paying for (or waiting on) a
+ * full persisted sync. Unlike `syncSourceUrlRegistry`, this does NOT catch network errors — the
+ * caller (a Server Action) is expected to, since a preview failure should surface to the admin as
+ * "couldn't check the site", not silently show empty results.
  */
 export async function previewSourceCrawlClassification(
   supabase: SupabaseServerClient,
@@ -263,8 +384,7 @@ export async function previewSourceCrawlClassification(
     loadCrawlRules(supabase, source.id),
   ]);
 
-  const origin = new URL(source.baseUrl).origin;
-  const discovery = await discoverAllSitemapEntries(origin, robotsInfo.sitemapUrls);
+  const discovery = await discoverEntries(source.baseUrl, robotsInfo);
 
   const entries = discovery.entries.map((entry): PreviewedUrl => {
     const { classification, priority } = classifyUrl(pathOf(entry.loc), rules);
@@ -280,6 +400,7 @@ export async function previewSourceCrawlClassification(
     urls: {
       entries,
       truncated: discovery.truncated,
+      method: discovery.method,
     },
   };
 }

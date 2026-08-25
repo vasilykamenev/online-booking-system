@@ -24,6 +24,7 @@ import {
   syncSourceUrlRegistry,
   reclassifyStoredUrls,
   previewSourceCrawlClassification,
+  addManualUrls,
   type CrawlPreviewResult,
 } from "@/server/search/registry/url-registry-sync";
 import { fetchRobotsInfo } from "@/server/search/crawl/robots";
@@ -523,6 +524,7 @@ export interface ResyncSearchSourceUrlsResult {
   discovered?: number;
   truncated?: boolean;
   pruned?: number;
+  method?: "sitemap" | "html-crawl" | null;
 }
 
 /** Manual "Обновить сейчас" trigger (URL Registry page) — the same full sync
@@ -549,10 +551,64 @@ export async function resyncSearchSourceUrls(
   await logAudit(supabase, admin.id, "resync_search_source_urls", "search_sources", sourceId, {
     discovered: summary.discovered,
     pruned: summary.pruned,
+    method: summary.method,
   });
 
   revalidatePath(`/${locale}/admin/search-sources/${sourceId}/urls`);
-  return { discovered: summary.discovered, truncated: summary.truncated, pruned: summary.pruned };
+  return {
+    discovered: summary.discovered,
+    truncated: summary.truncated,
+    pruned: summary.pruned,
+    method: summary.method,
+  };
+}
+
+export interface AddManualUrlsActionResult {
+  error?: "unauthenticated" | "forbidden" | "notFound" | "invalid" | "generic";
+  added?: number;
+  skipped?: number;
+}
+
+/**
+ * Manual-entry escape hatch (URL Registry page) for a source `resyncSearchSourceUrls` can't help —
+ * no sitemap, and following links from the homepage doesn't reach the detail pages either. An admin
+ * pastes the exact URLs; `addManualUrls` (`url-registry-sync.ts`) classifies and stores them exactly
+ * like a real sync's discoveries.
+ */
+export async function addManualSourceUrls(
+  locale: Locale,
+  sourceId: string,
+  _prevState: AddManualUrlsActionResult,
+  formData: FormData,
+): Promise<AddManualUrlsActionResult> {
+  const rawUrls = String(formData.get("urls") ?? "")
+    .split(/[\s,]+/)
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+  if (rawUrls.length === 0) return { error: "invalid" };
+
+  const supabase = await createClient();
+  const admin = await requireAdmin(supabase);
+  if ("error" in admin) return { error: admin.error };
+
+  const { data: source, error } = await supabase
+    .from("search_sources")
+    .select("id, base_url")
+    .eq("id", sourceId)
+    .maybeSingle();
+  if (error) return { error: "generic" };
+  if (!source) return { error: "notFound" };
+
+  const result = await addManualUrls(supabase, { id: source.id, baseUrl: source.base_url }, rawUrls);
+  if (result.added === 0) return { error: "invalid" };
+
+  await logAudit(supabase, admin.id, "add_manual_source_urls", "search_source_urls", sourceId, {
+    added: result.added,
+    skipped: result.skipped,
+  });
+
+  revalidatePath(`/${locale}/admin/search-sources/${sourceId}/urls`);
+  return { added: result.added, skipped: result.skipped };
 }
 
 export interface CrawlRuleActionState {

@@ -1183,13 +1183,14 @@
         "resyncSuccess": "Sync complete — {count} URLs discovered",
         "resyncTruncated": "The site's sitemap is larger than the sync limits allow — this is a partial pass, not the whole catalog.",
         "resyncPruned": "Removed {count} URLs that no longer belong to this source's domain",
+        "resyncNoSitemap": "No sitemap found — URLs were collected by following links from the base URL",
         "resyncErrors": {
           "unauthenticated": "Sign in to sync a source's URLs",
           "forbidden": "Not enough permissions",
           "notFound": "Source not found",
           "generic": "Couldn't sync this source's URLs"
         },
-        "empty": "No URLs discovered yet — run \"Sync now\", or check that the source has a reachable sitemap.",
+        "empty": "No URLs discovered yet — run \"Sync now\" (if there's no sitemap, the platform will follow links from the site instead), or add them manually above.",
         "countsLine": "{selected} selected of {total}",
         "urlsTitle": "Discovered URLs",
         "urlsHint": "Only URLs marked \"selected\" here are actually fetched by search — by classification rule below, or by a manual pin per row. Capped at the 300 highest-priority rows.",
@@ -1210,6 +1211,22 @@
           "include": "Always include",
           "exclude": "Always exclude",
           "error": "Couldn't update this URL's selection"
+        },
+        "manualAdd": {
+          "title": "Add URLs manually",
+          "label": "URL list",
+          "placeholder": "https://natural.com/yachts/aurora\nhttps://natural.com/yachts/orion",
+          "hint": "One URL per line (spaces or commas work too). Only URLs on the same domain as the source's base URL are accepted — anything else would just get removed on the next sync.",
+          "submit": "Add URLs",
+          "added": "Added {count} URLs",
+          "skipped": "Skipped {count} (different domain or invalid URL)",
+          "errors": {
+            "invalid": "Enter at least one valid URL on the same domain as the source",
+            "unauthenticated": "Sign in to add URLs to this source",
+            "forbidden": "Not enough permissions",
+            "notFound": "Source not found",
+            "generic": "Couldn't add these URLs"
+          }
         }
       },
       "crawlRules": {
@@ -1249,6 +1266,7 @@
           "hint": "Live fetch of the site's robots.txt and sitemap.xml, classifying every discovered URL with the currently saved rules — nothing is written to the database. Useful before saving a new rule (especially a regex) or while a source hasn't been synced yet.",
           "run": "Check site",
           "loading": "Checking…",
+          "noSitemap": "No sitemap found — URLs were collected by following links from the base URL",
           "countLine": "Showing {from}–{to} of {total} discovered URLs",
           "truncated": "list cut off by the crawl limits (docs/CLAUDE_SITEMAP_AI_CRAWLER_RULE.md §5.2)",
           "empty": "No URLs found in the site's sitemap.xml.",

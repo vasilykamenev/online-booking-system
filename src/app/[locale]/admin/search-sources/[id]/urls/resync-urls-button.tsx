@@ -23,6 +23,7 @@ export function ResyncUrlsButton({ sourceId }: { sourceId: string }) {
         return;
       }
       toast.success(t("resyncSuccess", { count: result.discovered ?? 0 }));
+      if (result.method === "html-crawl") toast.info(t("resyncNoSitemap"));
       if (result.truncated) toast.warning(t("resyncTruncated"));
       if (result.pruned) toast.info(t("resyncPruned", { count: result.pruned }));
       router.refresh();

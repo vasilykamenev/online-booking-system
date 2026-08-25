@@ -24,6 +24,7 @@ import type { Database } from "@/lib/supabase/database.types";
 import { ResyncUrlsButton } from "./resync-urls-button";
 import { CrawlRuleForm } from "./crawl-rule-form";
 import { CrawlRulesTable } from "./crawl-rules-table";
+import { AddManualUrlsForm } from "./add-manual-urls-form";
 import { UrlSelectionToggle } from "./url-selection-toggle";
 import { CrawlRulePreview } from "./crawl-rule-preview";
 import { CLASSIFICATION_BADGE_VARIANT } from "./classification-badge";
@@ -51,6 +52,7 @@ export default async function SearchSourceUrlsPage({
   const tClassification = await getTranslations("admin.searchSources.classification");
   const tCrawlStatus = await getTranslations("admin.searchSources.urlRegistry.crawlStatus");
   const tRules = await getTranslations("admin.searchSources.crawlRules");
+  const tManualAdd = await getTranslations("admin.searchSources.urlRegistry.manualAdd");
 
   const source = await getSearchSourceById(id);
   if (!source) notFound();
@@ -117,6 +119,13 @@ export default async function SearchSourceUrlsPage({
       <div className="mt-8">
         <h2 className="text-base font-medium tracking-tight">{t("urlsTitle")}</h2>
         <p className="mt-1 text-xs font-light text-muted-foreground">{t("urlsHint")}</p>
+
+        <div className="mt-4 rounded-2xl border border-border bg-card p-5 shadow-soft">
+          <h3 className="text-sm font-medium">{tManualAdd("title")}</h3>
+          <div className="mt-3">
+            <AddManualUrlsForm sourceId={id} />
+          </div>
+        </div>
 
         {rows.length === 0 ? (
           <p className="mt-4 rounded-2xl border border-dashed border-border p-10 text-center text-sm font-light text-muted-foreground">

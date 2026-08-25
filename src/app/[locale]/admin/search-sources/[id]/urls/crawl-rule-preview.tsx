@@ -88,7 +88,10 @@ export function CrawlRulePreview({ sourceId }: { sourceId: string }) {
 
       {result?.urls && (
         <div className="mt-4">
-          <div className="flex flex-wrap items-center justify-between gap-3">
+          {result.urls.method === "html-crawl" && (
+            <p className="text-xs font-light text-muted-foreground">{t("preview.noSitemap")}</p>
+          )}
+          <div className="mt-1 flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs font-light text-muted-foreground">
               {t("preview.countLine", { from: rangeFrom, to: rangeTo, total: entries.length })}
               {result.urls.truncated && ` — ${t("preview.truncated")}`}
