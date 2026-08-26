@@ -152,6 +152,35 @@ function findMonth(words: string[], monthNames: { name: string; month: number }[
   return best?.month ?? null;
 }
 
+const NEXT_MONTH_PHRASES = ["next month", "следующий месяц", "будущий месяц"];
+const THIS_MONTH_PHRASES = ["this month", "текущий месяц", "этот месяц"];
+
+/**
+ * "next month"/"следующий месяц" or "this month"/"этот месяц" resolved against `today` — the one
+ * relative-date phrase common enough in real queries ("rent yacht on next month") to warrant
+ * handling without an AI call, which is this module's whole reason for existing (see the doc
+ * comment at the top: a global search must still return something useful when the AI path is
+ * unavailable). Without this, a query naming no *literal* month falls straight through to
+ * `date: null` — silently dropping the one criterion the user was most specific about, exactly the
+ * failure this module exists to avoid elsewhere (spec §4: never guess, but also never just drop
+ * something the query actually stated).
+ *
+ * Deliberately narrow: no other relative phrase ("next week", "this weekend") is resolved here —
+ * `SearchCriteria.date` has no week-level granularity to put one in without inventing a wrong month
+ * near a month boundary, and a literal month name (`findMonth`, called first) always wins when one
+ * is present — this only runs when nothing literal was found.
+ */
+function resolveRelativeMonth(query: string, today: Date): { month: number; year: number } | null {
+  if (NEXT_MONTH_PHRASES.some((phrase) => containsTerm(query, phrase))) {
+    const next = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth() + 1, 1));
+    return { month: next.getUTCMonth() + 1, year: next.getUTCFullYear() };
+  }
+  if (THIS_MONTH_PHRASES.some((phrase) => containsTerm(query, phrase))) {
+    return { month: today.getUTCMonth() + 1, year: today.getUTCFullYear() };
+  }
+  return null;
+}
+
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
@@ -310,12 +339,16 @@ export interface DeterministicInterpretationInput {
   vocabulary: SearchVocabulary;
   /** Locales whose month and currency names should be recognised — pass `routing.locales`. */
   locales: readonly string[];
+  /** Reference date for resolving "next month"/"this month" — injectable for tests, defaults to
+   *  now. Mirrors `interpretQuery`'s own `today` parameter on the AI path. */
+  today?: Date;
 }
 
 export function interpretQueryDeterministic({
   query,
   vocabulary,
   locales,
+  today = new Date(),
 }: DeterministicInterpretationInput): SearchCriteria {
   const consumed: Range[] = [];
 
@@ -354,8 +387,15 @@ export function interpretQueryDeterministic({
   // stated year stays year-less rather than assuming the current one (spec §4: no invented values).
   const isoDates = [...remaining.matchAll(/\b(\d{4}-\d{2}-\d{2})\b/g)].map((match) => match[1]);
   const words = normalizeForMatch(remaining).split(" ").filter(Boolean);
-  const month = findMonth(words, buildMonthNames(locales));
+  const literalMonth = findMonth(words, buildMonthNames(locales));
+  // Only consulted when no literal month name was found — an explicit month always wins over a
+  // relative phrase.
+  const relativeMonth = literalMonth === null ? resolveRelativeMonth(query, today) : null;
+  const month = literalMonth ?? relativeMonth?.month ?? null;
   const yearMatch = /\b(20\d{2})\b/.exec(remaining);
+  // A relative phrase resolves both month and year together — an explicit 4-digit year elsewhere
+  // in the query still wins (checked first), same precedence as the literal-month case above.
+  const year = yearMatch ? Number(yearMatch[1]) : (relativeMonth?.year ?? null);
 
   const captainRequired = CAPTAIN_MARKERS.some((marker) => containsTerm(query, marker)) || null;
   const crewRequired = CREW_MARKERS.some((marker) => containsTerm(query, marker)) || null;
@@ -387,12 +427,12 @@ export function interpretQueryDeterministic({
   return searchCriteriaSchema.parse({
     location: country || city || marina ? { country, city, marina, region: null } : null,
     date:
-      isoDates.length > 0 || month !== null || yearMatch
+      isoDates.length > 0 || month !== null || year !== null
         ? {
             from: isoDates[0] ?? null,
             to: isoDates[1] ?? null,
             month,
-            year: yearMatch ? Number(yearMatch[1]) : null,
+            year,
             flexible: isoDates.length === 0 && month !== null ? true : null,
           }
         : null,

@@ -28,8 +28,8 @@ const vocabulary: SearchVocabulary = {
   ],
 };
 
-function interpret(query: string) {
-  return interpretQueryDeterministic({ query, vocabulary, locales: LOCALES });
+function interpret(query: string, today?: Date) {
+  return interpretQueryDeterministic({ query, vocabulary, locales: LOCALES, today });
 }
 
 describe("interpretQueryDeterministic — spec §4 worked examples", () => {
@@ -83,6 +83,58 @@ describe("interpretQueryDeterministic — never invents criteria (spec §4)", ()
     const criteria = interpret("катамаран на 8 человек");
     expect(criteria.price).toBeNull();
     expect(criteria.capacity?.persons).toBe(8);
+  });
+});
+
+// The reported bug: "rent yacht on next month" registered no date at all — the deterministic
+// fallback only ever recognized a *literal* month name (findMonth), never a relative phrase, so a
+// query naming no explicit month silently lost the one criterion it was clearest about whenever
+// the AI path was unavailable (missing/invalid API key, timeout, rate limit — query-interpreter.ts
+// falls back here on any of those).
+describe("interpretQueryDeterministic — relative month", () => {
+  const TODAY = new Date(Date.UTC(2026, 7, 26)); // 2026-08-26, matches this project's "today"
+
+  it("resolves 'next month' relative to today", () => {
+    const criteria = interpret("rent yacht on next month", TODAY);
+    expect(criteria.date?.month).toBe(9);
+    expect(criteria.date?.year).toBe(2026);
+    expect(criteria.date?.flexible).toBe(true);
+  });
+
+  it("resolves 'следующий месяц' the same way, in Russian", () => {
+    const criteria = interpret("аренда яхты на следующий месяц", TODAY);
+    expect(criteria.date?.month).toBe(9);
+    expect(criteria.date?.year).toBe(2026);
+  });
+
+  it("resolves 'this month' to the current month and year", () => {
+    const criteria = interpret("yacht available this month", TODAY);
+    expect(criteria.date?.month).toBe(8);
+    expect(criteria.date?.year).toBe(2026);
+  });
+
+  it("resolves 'этот месяц', in Russian", () => {
+    const criteria = interpret("яхта на этот месяц", TODAY);
+    expect(criteria.date?.month).toBe(8);
+    expect(criteria.date?.year).toBe(2026);
+  });
+
+  it("rolls over into next year when 'next month' is December", () => {
+    const december = new Date(Date.UTC(2026, 11, 15)); // 2026-12-15
+    const criteria = interpret("yacht next month", december);
+    expect(criteria.date?.month).toBe(1);
+    expect(criteria.date?.year).toBe(2027);
+  });
+
+  it("prefers an explicit month name over a relative phrase in the same query", () => {
+    const criteria = interpret("yacht next month, actually in December", TODAY);
+    expect(criteria.date?.month).toBe(12);
+  });
+
+  it("defaults to the real current date when none is injected", () => {
+    // No fixed `today` — just confirms the parameter is optional and the call doesn't throw.
+    const criteria = interpretQueryDeterministic({ query: "yacht next month", vocabulary, locales: LOCALES });
+    expect(criteria.date?.month).not.toBeNull();
   });
 });
 

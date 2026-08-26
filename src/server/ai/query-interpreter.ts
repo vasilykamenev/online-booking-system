@@ -160,7 +160,7 @@ export async function interpretQuery({
   locales,
   today = new Date(),
 }: InterpretQueryInput): Promise<InterpretationOutcome> {
-  const deterministic = () => interpretQueryDeterministic({ query, vocabulary, locales });
+  const deterministic = () => interpretQueryDeterministic({ query, vocabulary, locales, today });
 
   const client = getAnthropicClient();
   if (!client) {
