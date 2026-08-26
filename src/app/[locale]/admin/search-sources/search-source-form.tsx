@@ -78,14 +78,38 @@ export function SearchSourceForm({
     defaultValues?.processingType ?? "HTML",
   );
   const [selectorConfigText, setSelectorConfigText] = useState(defaultValues?.selectorConfig ?? "");
+  const [name, setName] = useState(defaultValues?.name ?? "");
+  const [domain, setDomain] = useState(defaultValues?.domain ?? "");
   const [validation, setValidation] = useState<SearchSourceValidationState | null>(null);
   const [isValidating, startValidation] = useTransition();
+
+  /** Best-effort hostname for the Domain field's autofill — the same `DOMAIN_PATTERN` convention
+   *  existing sources already follow (`globesailor.ru`, `brilions.com`: no `www.`, no scheme). Never
+   *  thrown on a malformed URL — the field just stays whatever it already was. */
+  function hostnameFrom(url: string): string | null {
+    try {
+      return new URL(url).hostname.replace(/^www\./, "");
+    } catch {
+      return null;
+    }
+  }
 
   function handleValidate() {
     const input = formRef.current?.elements.namedItem("baseUrl");
     const baseUrl = input instanceof HTMLInputElement ? input.value : "";
     startValidation(async () => {
-      setValidation(await validateSearchSourceCandidate(baseUrl));
+      const result = await validateSearchSourceCandidate(baseUrl);
+      setValidation(result);
+
+      // Only when empty: this must never overwrite something the admin already typed, including a
+      // deliberate correction made after a previous Check.
+      if (result.report) {
+        if (!name.trim() && result.report.suggestedName) setName(result.report.suggestedName);
+        if (!domain.trim()) {
+          const hostname = hostnameFrom(result.report.finalUrl ?? baseUrl);
+          if (hostname) setDomain(hostname);
+        }
+      }
     });
   }
   // Tracks which `state` the processingType hint was last adjusted for, so a successful create
@@ -100,6 +124,11 @@ export function SearchSourceForm({
       setProcessingType("HTML");
       setSelectorConfigText("");
       setValidation(null);
+      // `name`/`domain` are now controlled (autofill needs to read/write them), so `formRef.reset()`
+      // below only clears the DOM — these two must be cleared here too, or the next render would
+      // put the just-submitted values right back via `value={name}`/`value={domain}`.
+      setName("");
+      setDomain("");
     }
   }
 
@@ -121,7 +150,8 @@ export function SearchSourceForm({
           id="name"
           name="name"
           placeholder={t("namePlaceholder")}
-          defaultValue={defaultValues?.name}
+          value={name}
+          onChange={(event) => setName(event.target.value)}
           required
         />
       </div>
@@ -131,7 +161,8 @@ export function SearchSourceForm({
           id="domain"
           name="domain"
           placeholder={t("domainPlaceholder")}
-          defaultValue={defaultValues?.domain}
+          value={domain}
+          onChange={(event) => setDomain(event.target.value)}
           required
         />
       </div>

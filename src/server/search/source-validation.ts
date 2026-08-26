@@ -5,6 +5,7 @@ import { fetchRobotsInfo } from "@/server/search/crawl/robots";
 import { discoverSitemap } from "@/server/search/crawl/sitemap-discovery";
 import { sampleSitemapLocs } from "@/server/search/crawl/sitemap-rules";
 import { extractJsonLdTypes } from "@/lib/search/structured-data";
+import { extractPageSummary } from "@/lib/search/page-text";
 import {
   classifyCandidatePage,
   type CandidateClassification,
@@ -32,6 +33,11 @@ export interface SourceValidationReport {
   status: number | null;
   finalUrl: string | null;
   failureReason: string | null;
+  /** The homepage's own `<title>` tag, trimmed and capped to `searchSourceSchema`'s `name` limit
+   *  (120 chars) — a starting point for the form's Name field, same "suggest, never apply on its
+   *  own" treatment as `suggestedProcessingType`/`suggestedSelectorConfig` below. `null` when the
+   *  site wasn't reachable or published no `<title>`. */
+  suggestedName: string | null;
   robotsTxt: {
     found: boolean;
     /** Whether the wildcard user-agent block allows the base URL's own path — informational only,
@@ -169,6 +175,9 @@ export async function validateSearchSource(baseUrl: string): Promise<SourceValid
   const sitemap = await discoverSitemap(origin, robotsInfo.sitemapUrls, PROBE_TIMEOUTS);
   const structuredTypes = pageResult.ok ? extractJsonLdTypes(pageResult.body) : [];
   const structuredDataFound = structuredTypes.length > 0;
+  // Capped to `searchSourceSchema.name`'s own 120-char max (`lib/validation/admin.ts`) so the
+  // suggestion is always submittable as-is, not just close.
+  const suggestedName = pageResult.ok ? (extractPageSummary(pageResult.body).title?.slice(0, 120) ?? null) : null;
 
   const sampleUrls = sitemap
     ? sampleSitemapLocs(sitemap.xml, MAX_CANDIDATE_SAMPLES, pageResult.ok ? pageResult.finalUrl : undefined)
@@ -180,6 +189,7 @@ export async function validateSearchSource(baseUrl: string): Promise<SourceValid
     status: pageResult.status ?? null,
     finalUrl: pageResult.ok ? pageResult.finalUrl : null,
     failureReason: pageResult.ok ? null : pageResult.reason,
+    suggestedName,
     robotsTxt: {
       found: robotsInfo.found,
       allowsBasePath: isAllowedByRobots(robotsInfo.rules, pathname),
