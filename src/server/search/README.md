@@ -193,6 +193,14 @@ UI-странице: `discover/page.tsx` вызывает `getActiveExternalProv
 индекс + курсорную пагинацию (CLAUDE.md §9). План разложен по шагам, с миграцией, схемой cron-job'а
 и открытыми вопросами — см. [`EXTERNAL_SEARCH_INDEXING_PLAN.md`](./EXTERNAL_SEARCH_INDEXING_PLAN.md).
 
+**Data Merger / Conflict Detector** (docs/SEO_Web_Discovery_JSON_LD_Project_Rules.md §24–§27) —
+фазы P1+P2 реализованы, персистентно, отдельно от эфемерного пути выше: каждое успешное извлечение
+generic-провайдера дополнительно апсертит `search_extracted_listings`, а расхождение с уже сохранённым
+значением поля логируется в `search_field_conflicts`, а не тихо перезаписывается. Ничего из этого пока
+не читается живым поиском (P3, соответствует нерешённому «Следующему шагу» выше) — см.
+[`data-merger-provenance-design.md`](../../../docs/data-merger-provenance-design.md) для модели,
+формулы допуска по цене и того, что осталось (P3, ручное разрешение конфликта админом).
+
 ## Инфраструктура краулинга — `src/server/search/crawl/`
 
 Source-agnostic, не привязана к brilions — переиспользуется любым будущим провайдером:

@@ -141,6 +141,8 @@
     "removeCriterion": "Remove criterion: {criterion}",
     "degraded": "This query was parsed by the simplified non-AI interpreter — some criteria may have been missed.",
     "resultsCount": "{count, plural, =0 {Nothing found} one {# offer} other {# offers}}",
+    "externalResultsCount": "{count, plural, one {# more offer from external sources} other {# more offers from external sources}}",
+    "externalLoading": "Checking external sources…",
     "meta": "Internal: {internal} · External: {external} · {ms} ms",
     "emptyCriteria": "Try being more specific — name a country, a guest count or a budget.",
     "noResults": "Nothing matched these criteria. Try removing one of the criteria above.",
@@ -1094,7 +1096,7 @@
         "sourceType": "Source type",
         "processingType": "Processing strategy",
         "selectorConfig": "Selector configuration (JSON)",
-        "selectorConfigPlaceholder": "{\n  \"fields\": {\n    \"name\": { \"selector\": \"h1\" }\n  }\n}",
+        "selectorConfigPlaceholder": "'{'\n  \"fields\": '{'\n    \"name\": '{' \"selector\": \"h1\" '}'\n  '}'\n'}'",
         "selectorConfigHint": "Needed for the \"HTML parsing\" and \"Hybrid\" strategies on a new domain — without it the source registers but isn't crawled. Fill it in by hand, or apply the AI suggestion from the check result.",
         "imageDomains": "Trusted image hosts",
         "imageDomainsPlaceholder": "e.g. static.example-cdn.com, images.example.com",
@@ -1235,6 +1237,35 @@
             "forbidden": "Not enough permissions",
             "notFound": "Source not found",
             "generic": "Couldn't add these URLs"
+          }
+        },
+        "conflicts": {
+          "title": "Field conflicts",
+          "hint": "A freshly extracted value disagreed with what's already stored — the stored value keeps being used in the registry until the new one is confirmed by a later crawl.",
+          "columns": {
+            "url": "URL",
+            "field": "Field",
+            "previousValue": "Stored value",
+            "newValue": "New value",
+            "sources": "Sources",
+            "detectedAt": "Detected"
+          },
+          "field": {
+            "name": "Name",
+            "description": "Description",
+            "price_minor": "Price",
+            "currency": "Currency",
+            "guests": "Guests",
+            "cabins": "Cabins",
+            "vessel_type_raw": "Vessel type",
+            "country": "Country",
+            "city": "City"
+          },
+          "source": {
+            "SELECTOR": "Selectors",
+            "JSON_LD": "JSON-LD",
+            "AI": "AI",
+            "MANUAL": "Manual"
           }
         }
       },

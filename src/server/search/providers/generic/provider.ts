@@ -16,6 +16,8 @@ import {
   selectCandidatesFromRegistry,
   recordFetchOutcome,
 } from "@/server/search/registry/url-registry-sync";
+import { recordExtraction, resultToListingFields } from "@/server/search/registry/extracted-listings";
+import type { FieldSource } from "@/server/search/registry/listing-merge";
 import { selectGenericCandidates } from "@/server/search/providers/generic/select-candidates";
 import { normalizeGenericResult } from "@/server/search/providers/generic/normalize";
 import { extractBySelectors } from "@/server/search/providers/generic/extract-by-selectors";
@@ -70,6 +72,13 @@ const MAX_CANDIDATE_POOL = 20;
 // Lower than brilions' 5 — each worker may be waiting on an up-to-8s AI call, not just a page
 // fetch, so fewer of them keep concurrent Anthropic spend (and load on the target site) in check.
 const FETCH_CONCURRENCY = 3;
+
+/** Fixed confidence for deterministic tiers (design doc data-merger-provenance-design.md §3.4) — not a
+ *  model score, just where each tier ranks relative to the others when a `search_extracted_listings`
+ *  field later needs a starting point to lower on conflict. AI's confidence is `classification.confidence`
+ *  instead, read as-is. */
+const SELECTOR_CONFIDENCE = 0.95;
+const JSON_LD_CONFIDENCE = 0.9;
 
 /**
  * In-process cache of AI classification, keyed by page-content hash — same pattern and same reason
@@ -148,6 +157,13 @@ interface FetchedCandidate {
    *  docs/SEO_Web_Discovery_JSON_LD_Project_Rules.md §27: "не должна молча выбирать одно значение").
    *  Never affects the result itself, which already omits the disputed price. */
   note: string | null;
+  /** Which tier produced `result`, `null` when there is none — feeds `search_extracted_listings`'
+   *  per-field provenance (design doc §3.4). `null` result and `null` fieldSource always travel
+   *  together. */
+  fieldSource: FieldSource | null;
+  /** 0.0-1.0, paired with `fieldSource` — fixed per deterministic tier, or the AI classifier's own
+   *  score. Meaningless when `fieldSource` is `null`. */
+  confidence: number | null;
 }
 
 async function fetchAndNormalize(
@@ -157,7 +173,7 @@ async function fetchAndNormalize(
 ): Promise<FetchedCandidate> {
   const page = await fetchWithCache(url, PAGE_CACHE_MS);
   if (!page.ok || !page.html) {
-    return { result: null, usedAi: false, pageOk: false, contentHash: null, note: null };
+    return { result: null, usedAi: false, pageOk: false, contentHash: null, note: null, fieldSource: null, confidence: null };
   }
   const contentHash = hashContent(page.html);
 
@@ -182,7 +198,7 @@ async function fetchAndNormalize(
         fields: { ...bySelectors, image },
         aiConfidence: null,
       });
-      return { result, usedAi: false, pageOk: true, contentHash, note: null };
+      return { result, usedAi: false, pageOk: true, contentHash, note: null, fieldSource: "SELECTOR", confidence: SELECTOR_CONFIDENCE };
     }
   }
 
@@ -212,7 +228,7 @@ async function fetchAndNormalize(
     const note = structured.priceConflict
       ? `${source.domain}: ${url}: JSON-LD price conflict across listing blocks — price dropped`
       : null;
-    return { result, usedAi: false, pageOk: true, contentHash, note };
+    return { result, usedAi: false, pageOk: true, contentHash, note, fieldSource: "JSON_LD", confidence: JSON_LD_CONFIDENCE };
   }
 
   // Pure `HTML` promises a fast, free, deterministic strategy (docs/search-source-processing-strategies.md
@@ -220,11 +236,11 @@ async function fetchAndNormalize(
   // selectors and JSON-LD both missed this page simply yields no result for it, same as if it had no
   // generic path at all. `HYBRID` (and `AI_EXTRACTION`/`STRUCTURED_DATA`, which never reach this
   // branch with `allowAi: false`) fall through to AI as before.
-  if (!allowAi) return { result: null, usedAi: false, pageOk: true, contentHash, note: null };
+  if (!allowAi) return { result: null, usedAi: false, pageOk: true, contentHash, note: null, fieldSource: null, confidence: null };
 
   const { classification, usedAi } = await classifyCached(page.html);
   if (!classification.looksLikeVesselListing) {
-    return { result: null, usedAi, pageOk: true, contentHash, note: null };
+    return { result: null, usedAi, pageOk: true, contentHash, note: null, fieldSource: null, confidence: null };
   }
 
   // `og:image` is read deterministically rather than asked of the model — an AI-stated image URL
@@ -251,7 +267,7 @@ async function fetchAndNormalize(
     },
     aiConfidence: classification.confidence,
   });
-  return { result, usedAi, pageOk: true, contentHash, note: null };
+  return { result, usedAi, pageOk: true, contentHash, note: null, fieldSource: "AI", confidence: classification.confidence };
 }
 
 interface Candidate {
@@ -292,13 +308,30 @@ async function fetchCandidates(
       const { url, registryRowId } = candidates[index];
 
       try {
-        const { result, usedAi, pageOk, contentHash, note } = await fetchAndNormalize(url, source, allowAi);
+        const { result, usedAi, pageOk, contentHash, note, fieldSource, confidence } = await fetchAndNormalize(
+          url,
+          source,
+          allowAi,
+        );
         stats.pagesVisited += 1;
         if (usedAi) stats.aiCalls += 1;
         if (note) errors.push(note);
         if (result) {
           stats.offersExtracted += 1;
           if (matchesKnownCriteria(result, criteria)) results.push(result);
+          if (fieldSource && confidence !== null) {
+            // Best-effort, additive persistence (design doc data-merger-provenance-design.md phase P1) —
+            // never read back by this same request, so a failure here must never affect the response.
+            recordExtraction({
+              sourceId: source.id,
+              url,
+              fields: resultToListingFields(result),
+              fieldSource,
+              confidence,
+              sourceUrl: url,
+              retrievedAt: result.source.retrievedAt,
+            }).catch(() => {});
+          }
         }
         if (registryRowId) {
           // Best-effort — closes the loop `crawl_status: PENDING → FETCHED/FAILED` (spec §3) for

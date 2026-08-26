@@ -859,6 +859,118 @@ export type Database = {
           },
         ]
       }
+      search_extracted_listings: {
+        Row: {
+          cabins: number | null
+          city: string | null
+          country: string | null
+          created_at: string
+          currency: string | null
+          description: string | null
+          field_provenance: Json
+          guests: number | null
+          id: string
+          last_extracted_at: string
+          name: string | null
+          price_minor: number | null
+          source_id: string
+          updated_at: string
+          url: string
+          vessel_type_raw: string | null
+        }
+        Insert: {
+          cabins?: number | null
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          currency?: string | null
+          description?: string | null
+          field_provenance?: Json
+          guests?: number | null
+          id?: string
+          last_extracted_at?: string
+          name?: string | null
+          price_minor?: number | null
+          source_id: string
+          updated_at?: string
+          url: string
+          vessel_type_raw?: string | null
+        }
+        Update: {
+          cabins?: number | null
+          city?: string | null
+          country?: string | null
+          created_at?: string
+          currency?: string | null
+          description?: string | null
+          field_provenance?: Json
+          guests?: number | null
+          id?: string
+          last_extracted_at?: string
+          name?: string | null
+          price_minor?: number | null
+          source_id?: string
+          updated_at?: string
+          url?: string
+          vessel_type_raw?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "search_extracted_listings_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "search_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      search_field_conflicts: {
+        Row: {
+          detected_at: string
+          field: string
+          id: string
+          listing_id: string
+          new_source: Database["public"]["Enums"]["search_field_source"]
+          new_value: Json
+          previous_source: Database["public"]["Enums"]["search_field_source"]
+          previous_value: Json
+          resolution: string | null
+          resolved_at: string | null
+        }
+        Insert: {
+          detected_at?: string
+          field: string
+          id?: string
+          listing_id: string
+          new_source: Database["public"]["Enums"]["search_field_source"]
+          new_value: Json
+          previous_source: Database["public"]["Enums"]["search_field_source"]
+          previous_value: Json
+          resolution?: string | null
+          resolved_at?: string | null
+        }
+        Update: {
+          detected_at?: string
+          field?: string
+          id?: string
+          listing_id?: string
+          new_source?: Database["public"]["Enums"]["search_field_source"]
+          new_value?: Json
+          previous_source?: Database["public"]["Enums"]["search_field_source"]
+          previous_value?: Json
+          resolution?: string | null
+          resolved_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "search_field_conflicts_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "search_extracted_listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       search_runs: {
         Row: {
           ai_calls: number
@@ -1198,6 +1310,7 @@ export type Database = {
         | "cancelled"
       search_crawl_rule_pattern_type: "PREFIX" | "REGEX"
       search_external_phase: "SKIPPED" | "PENDING" | "COMPLETE" | "FAILED"
+      search_field_source: "SELECTOR" | "JSON_LD" | "AI" | "MANUAL"
       search_processing_type:
         | "API"
         | "HTML"
@@ -1364,6 +1477,7 @@ export const Constants = {
       ],
       search_crawl_rule_pattern_type: ["PREFIX", "REGEX"],
       search_external_phase: ["SKIPPED", "PENDING", "COMPLETE", "FAILED"],
+      search_field_source: ["SELECTOR", "JSON_LD", "AI", "MANUAL"],
       search_processing_type: [
         "API",
         "HTML",

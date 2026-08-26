@@ -68,6 +68,45 @@ describe("matchesKnownCriteria — capacity", () => {
   });
 });
 
+describe("matchesKnownCriteria — location", () => {
+  it("excludes a result with no location at all when the query names a city", () => {
+    const noLocation = fishingBoat({ location: { country: null, region: null, city: null, marina: null, latitude: null, longitude: null } });
+    expect(
+      matchesKnownCriteria(noLocation, searchCriteriaSchema.parse({ location: { city: "Antalya" } })),
+    ).toBe(false);
+  });
+
+  it("excludes a result with no location at all when the query names a country", () => {
+    const noLocation = fishingBoat({ location: { country: null, region: null, city: null, marina: null, latitude: null, longitude: null } });
+    expect(
+      matchesKnownCriteria(noLocation, searchCriteriaSchema.parse({ location: { country: "Turkey" } })),
+    ).toBe(false);
+  });
+
+  it("keeps a result that states a city, even one that disagrees — ranking, not this filter, handles a mismatch", () => {
+    const otherCity = fishingBoat({
+      location: { country: null, region: null, city: "Bodrum", marina: null, latitude: null, longitude: null },
+    });
+    expect(
+      matchesKnownCriteria(otherCity, searchCriteriaSchema.parse({ location: { city: "Antalya" } })),
+    ).toBe(true);
+  });
+
+  it("keeps a result whose country is known even when only its city is null", () => {
+    const countryOnly = fishingBoat({
+      location: { country: "Turkey", region: null, city: null, marina: null, latitude: null, longitude: null },
+    });
+    expect(
+      matchesKnownCriteria(countryOnly, searchCriteriaSchema.parse({ location: { city: "Antalya" } })),
+    ).toBe(true);
+  });
+
+  it("does not filter on location when the query didn't ask for one", () => {
+    const noLocation = fishingBoat({ location: { country: null, region: null, city: null, marina: null, latitude: null, longitude: null } });
+    expect(matchesKnownCriteria(noLocation, searchCriteriaSchema.parse({}))).toBe(true);
+  });
+});
+
 describe("matchesKnownCriteria — never filters on price", () => {
   it("keeps a result even when the query has a budget — this source never publishes prices", () => {
     const result = fishingBoat();

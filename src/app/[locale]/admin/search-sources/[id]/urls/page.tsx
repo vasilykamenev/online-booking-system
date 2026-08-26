@@ -8,6 +8,7 @@ import {
   getSourceUrlCounts,
   getCrawlRules,
   getSourceUrlRegistry,
+  getOpenFieldConflicts,
 } from "@/server/queries/admin";
 import { buildTitle } from "@/lib/site";
 import { Badge } from "@/components/ui/badge";
@@ -54,14 +55,16 @@ export default async function SearchSourceUrlsPage({
   const tCrawlStatus = await getTranslations("admin.searchSources.urlRegistry.crawlStatus");
   const tRules = await getTranslations("admin.searchSources.crawlRules");
   const tManualAdd = await getTranslations("admin.searchSources.urlRegistry.manualAdd");
+  const tConflicts = await getTranslations("admin.searchSources.urlRegistry.conflicts");
 
   const source = await getSearchSourceById(id);
   if (!source) notFound();
 
-  const [counts, rules, rows] = await Promise.all([
+  const [counts, rules, rows, conflicts] = await Promise.all([
     getSourceUrlCounts(id),
     getCrawlRules(id),
     getSourceUrlRegistry(id),
+    getOpenFieldConflicts(id),
   ]);
   const classifications: UrlClassification[] = ["HIGH", "MEDIUM", "LOW", "SKIP"];
   const total = classifications.reduce((sum, key) => sum + counts[key].total, 0);
@@ -116,6 +119,45 @@ export default async function SearchSourceUrlsPage({
       <div className="mt-8">
         <CrawlRulePreview sourceId={id} />
       </div>
+
+      {conflicts.length > 0 && (
+        <div className="mt-8">
+          <h2 className="text-base font-medium tracking-tight">{tConflicts("title")}</h2>
+          <p className="mt-1 text-xs font-light text-muted-foreground">{tConflicts("hint")}</p>
+          <div className="mt-4 overflow-hidden rounded-2xl border border-border bg-card shadow-soft">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>{tConflicts("columns.url")}</TableHead>
+                  <TableHead>{tConflicts("columns.field")}</TableHead>
+                  <TableHead>{tConflicts("columns.previousValue")}</TableHead>
+                  <TableHead>{tConflicts("columns.newValue")}</TableHead>
+                  <TableHead>{tConflicts("columns.sources")}</TableHead>
+                  <TableHead>{tConflicts("columns.detectedAt")}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {conflicts.map((conflict) => (
+                  <TableRow key={conflict.id}>
+                    <TableCell className="max-w-xs truncate font-mono text-xs" title={conflict.url}>
+                      {conflict.url}
+                    </TableCell>
+                    <TableCell className="text-sm">{tConflicts(`field.${conflict.field}`)}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">{String(conflict.previousValue)}</TableCell>
+                    <TableCell className="text-sm font-medium">{String(conflict.newValue)}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {tConflicts(`source.${conflict.previousSource}`)} → {tConflicts(`source.${conflict.newSource}`)}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {new Date(conflict.detectedAt).toLocaleDateString(locale)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      )}
 
       <div className="mt-8">
         <div className="flex flex-wrap items-center justify-between gap-3">

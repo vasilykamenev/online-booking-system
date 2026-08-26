@@ -5,7 +5,7 @@ import { routing } from "@/i18n/routing";
 import { isEmptyCriteria, removeCriterion, type SearchCriteria } from "@/lib/search/criteria";
 import { dedupeResults } from "@/lib/search/dedupe";
 import { rankResults } from "@/lib/search/ranking";
-import type { UnifiedSearchResponse, VesselSearchResult } from "@/lib/search/result";
+import type { ResultSource, UnifiedSearchResponse, VesselSearchResult } from "@/lib/search/result";
 import { interpretQuery, type InterpretationOutcome } from "@/server/ai/query-interpreter";
 import { buildSearchVocabulary } from "@/server/queries/search-vocabulary";
 import { searchInternalVessels } from "@/server/search/internal-provider";
@@ -22,39 +22,89 @@ import {
 } from "@/server/search/providers";
 
 /**
- * `GlobalVesselSearchService` (spec §5) — the orchestrator.
+ * `GlobalVesselSearchService` (spec §5) — the orchestrator, split into two independently-awaited
+ * phases (see `docs/data-merger-provenance-design.md`'s sibling performance note — internal search is
+ * a fast, indexed Postgres query; external search is a live, budgeted crawl that can take seconds).
  *
- * It owns the pipeline order and nothing else: interpret → search internal and external
- * independently → normalize → deduplicate → rank → return. Spec §2's dividing line is enforced
- * here, in that every step below is deterministic code; the only AI in the whole flow sits behind
- * `interpretQuery` (and, later, behind an extraction provider).
- *
- * External search is a separate phase on purpose. BRD §8 budgets a search response at one second,
- * which no amount of crawling will ever fit inside, so internal results return immediately and the
- * external phase is reported through `meta.externalPhase` rather than blocking the response.
+ * Historically both ran inside one `Promise.all` and the whole response waited for the slower of the
+ * two — which defeated the internal phase's own speed and directly contradicted BRD §8's ≤1s budget
+ * for it. `runInternalSearchPhase` now returns as soon as internal search is done; `discover/page.tsx`
+ * renders those results immediately and streams `runExternalSearchPhase`'s results into a
+ * `<Suspense>` boundary once the external crawl (or timeout) resolves. Dedup/ranking correctness is
+ * preserved by computing `dedupeResults`/`rankResults` over BOTH sets together, same as before — see
+ * `runExternalSearchPhase`'s doc comment for how the two phases avoid rendering the same vessel twice.
  */
 
 export type GlobalSearchResponse = UnifiedSearchResponse<SearchCriteria>;
 
-export interface GlobalSearchOptions {
+const DEFAULT_EXTERNAL_TIMEOUT_MS = 20_000;
+
+export interface InternalSearchPhaseOptions {
   locale: Locale;
-  /**
-   * Criterion paths the user dismissed via the UI chips (spec §20), in `criteriaToChips`'s
-   * vocabulary. Applied *after* interpretation, since a chip is derived from the interpreted
-   * criteria — which also means the removals survive in a shared URL without the criteria
-   * themselves having to travel in it.
-   */
+  /** Criterion paths the user dismissed via the UI chips (spec §20) — applied *after*
+   *  interpretation, since a chip is derived from the interpreted criteria. */
   removedCriteria?: string[];
-  /**
-   * External providers to consult. Empty by default: the Source Registry is populated first
-   * (spec §8's "known sources" stage) and providers are enabled per source from there.
-   */
-  externalProviders?: ExternalSearchProvider[];
-  externalTimeoutMs?: number;
-  signal?: AbortSignal;
 }
 
-const DEFAULT_EXTERNAL_TIMEOUT_MS = 20_000;
+export interface InternalSearchPhaseResult {
+  searchId: string;
+  query: string;
+  locale: Locale;
+  interpretedCriteria: SearchCriteria;
+  interpretation: InterpretationOutcome;
+  /** Ranked among themselves — `runExternalSearchPhase` re-ranks the combined set once external
+   *  results exist, but section A (rendered immediately, before that) needs a sensible order too. */
+  internalResults: VesselSearchResult[];
+  rejectedForDates: number;
+  startedAt: number;
+  baseErrors: string[];
+}
+
+/** Interpretation + internal search only (spec §5's fast half) — no network crawl, so this alone
+ *  comfortably fits BRD §8's ≤1s budget on a warm interpretation-cache hit, and is bounded by one
+ *  model call (`AI_CALL_TIMEOUT_MS`) on a miss. `discover/page.tsx` awaits this directly, outside any
+ *  `<Suspense>` boundary. */
+export async function runInternalSearchPhase(
+  query: string,
+  options: InternalSearchPhaseOptions,
+): Promise<InternalSearchPhaseResult> {
+  const startedAt = Date.now();
+  const searchId = randomUUID();
+  const errors: string[] = [];
+
+  const vocabulary = await buildSearchVocabulary();
+  let interpretation: InterpretationOutcome;
+  const cached = readCachedInterpretation(options.locale, query);
+  if (cached) {
+    interpretation = cached;
+  } else {
+    interpretation = await interpretQuery({ query, vocabulary, locales: routing.locales });
+    writeCachedInterpretation(options.locale, query, interpretation);
+  }
+
+  const criteria = (options.removedCriteria ?? []).reduce(removeCriterion, interpretation.criteria);
+
+  const internalOutcome = await searchInternalVessels(criteria, options.locale).catch((error: unknown) => {
+    errors.push(`internal: ${String(error)}`);
+    return { results: [] as VesselSearchResult[], rejectedForDates: 0 };
+  });
+
+  const rankedInternal = rankResults(internalOutcome.results, criteria, {
+    sourceReliability: await getSourceReliability().catch(() => ({})),
+  });
+
+  return {
+    searchId,
+    query,
+    locale: options.locale,
+    interpretedCriteria: criteria,
+    interpretation,
+    internalResults: rankedInternal,
+    rejectedForDates: internalOutcome.rejectedForDates,
+    startedAt,
+    baseErrors: errors,
+  };
+}
 
 /** An outcome plus whether the provider actually broke its "never throw" contract. */
 interface ExternalProviderRun {
@@ -73,7 +123,7 @@ interface ExternalProviderRun {
 async function runExternalProviders(
   providers: ExternalSearchProvider[],
   criteria: SearchCriteria,
-  options: Required<Pick<GlobalSearchOptions, "locale">> & { timeoutMs: number; signal?: AbortSignal },
+  options: { locale: Locale; timeoutMs: number; signal?: AbortSignal },
 ): Promise<ExternalProviderRun[]> {
   const settled = await Promise.allSettled(
     providers.map((provider) =>
@@ -100,102 +150,99 @@ async function runExternalProviders(
   );
 }
 
-export async function runGlobalVesselSearch(
-  query: string,
-  options: GlobalSearchOptions,
-): Promise<GlobalSearchResponse> {
-  const startedAt = Date.now();
-  const searchId = randomUUID();
-  const providers = options.externalProviders ?? [];
-  const errors: string[] = [];
+export interface ExternalSearchPhaseOptions {
+  externalProviders: ExternalSearchProvider[];
+  externalTimeoutMs?: number;
+  signal?: AbortSignal;
+}
 
-  // Understand the query ------------------------------------------------
-  const vocabulary = await buildSearchVocabulary();
-  let interpretation: InterpretationOutcome;
-  const cached = readCachedInterpretation(options.locale, query);
-  if (cached) {
-    interpretation = cached;
-  } else {
-    interpretation = await interpretQuery({ query, vocabulary, locales: routing.locales });
-    writeCachedInterpretation(options.locale, query, interpretation);
-  }
+export interface ExternalSearchPhaseResult {
+  /**
+   * Only the externally-sourced rows that survived deduplication as their own entry — never a
+   * duplicate of what section A (internal results) already rendered. `dedupeResults` always keeps an
+   * internal result as the merge's primary (`dedupe.ts`'s `preferPrimary`), so a vessel found both
+   * internally and externally comes out of `dedupeResults` still tagged `origin: "INTERNAL"` — this
+   * filters to `origin === "EXTERNAL"`, which is therefore exactly the set with no internal
+   * counterpart already on screen. The one accepted trade-off: that merged vessel's `alternateSources`
+   * (the "also listed on…" line) won't retroactively appear on the already-rendered internal card —
+   * true only for the rare vessel listed both on our platform and scraped externally.
+   */
+  externalOnlyResults: VesselSearchResult[];
+  sources: ResultSource[];
+  meta: GlobalSearchResponse["meta"];
+}
 
-  const criteria = (options.removedCriteria ?? []).reduce(removeCriterion, interpretation.criteria);
+/** External crawl + combine (spec §5's slow half) — awaited inside a `<Suspense>` boundary in
+ *  `discover/page.tsx`, streamed in after section A already rendered `internalResults`. */
+export async function runExternalSearchPhase(
+  internalPhase: InternalSearchPhaseResult,
+  options: ExternalSearchPhaseOptions,
+): Promise<ExternalSearchPhaseResult> {
+  const providers = options.externalProviders;
+  const errors = [...internalPhase.baseErrors];
 
-  // Search both worlds independently (spec §5) --------------------------
-  const [internalOutcome, externalOutcomes] = await Promise.all([
-    searchInternalVessels(criteria, options.locale).catch((error: unknown) => {
-      errors.push(`internal: ${String(error)}`);
-      return { results: [] as VesselSearchResult[], rejectedForDates: 0 };
-    }),
+  const externalOutcomes =
     providers.length > 0
-      ? runExternalProviders(providers, criteria, {
-          locale: options.locale,
+      ? await runExternalProviders(providers, internalPhase.interpretedCriteria, {
+          locale: internalPhase.locale,
           timeoutMs: options.externalTimeoutMs ?? DEFAULT_EXTERNAL_TIMEOUT_MS,
           signal: options.signal,
         })
-      : Promise.resolve([]),
-  ]);
+      : [];
 
   const externalResults = externalOutcomes.flatMap((run) => run.outcome.results);
   const externalStats = mergeExternalStats(externalOutcomes.map((run) => run.outcome.stats));
   const anyProviderHardFailed = externalOutcomes.some((run) => run.hardFailed);
   errors.push(...externalOutcomes.flatMap((run) => run.outcome.errors));
 
-  // Aggregate, deduplicate, rank (spec §16-§18) -------------------------
-  const combined = [...internalOutcome.results, ...externalResults];
+  // Aggregate, deduplicate, rank (spec §16-§18) — over BOTH sets together, same as before the split,
+  // so a vessel found in both worlds still collapses into one row (just not the one rendered in
+  // section A — see this function's own return-type doc comment).
+  const combined = [...internalPhase.internalResults, ...externalResults];
   const deduped = dedupeResults(combined);
-  const ranked = rankResults(deduped, criteria, {
+  const ranked = rankResults(deduped, internalPhase.interpretedCriteria, {
     sourceReliability: await getSourceReliability().catch(() => ({})),
   });
+  const externalOnlyResults = ranked.filter((result) => result.origin === "EXTERNAL");
 
-  const durationMs = Date.now() - startedAt;
+  const durationMs = Date.now() - internalPhase.startedAt;
   const sources = [
     ...new Map(
       ranked.flatMap((result) => [result.source, ...result.alternateSources]).map((source) => [source.url, source]),
     ).values(),
   ];
 
-  const response: GlobalSearchResponse = {
-    searchId,
-    query,
-    interpretedCriteria: criteria,
-    results: ranked,
-    sources,
-    meta: {
-      internalResults: internalOutcome.results.length,
-      externalResults: externalResults.length,
-      sourcesChecked: externalStats.sourcesVisited,
-      searchDurationMs: durationMs,
-      interpretationDegraded: interpretation.mode !== "AI",
-      // Driven by whether a provider actually broke its contract (`hardFailed`), not by whether
-      // `errors` is non-empty: a provider correctly declining to act (no location in the query,
-      // robots.txt disallow) reports that via `errors` too, and that is not a failure.
-      externalPhase: providers.length === 0 ? "SKIPPED" : anyProviderHardFailed ? "FAILED" : "COMPLETE",
-    },
+  const meta: GlobalSearchResponse["meta"] = {
+    internalResults: internalPhase.internalResults.length,
+    externalResults: externalResults.length,
+    sourcesChecked: externalStats.sourcesVisited,
+    searchDurationMs: durationMs,
+    interpretationDegraded: internalPhase.interpretation.mode !== "AI",
+    // Driven by whether a provider actually broke its contract (`hardFailed`), not by whether
+    // `errors` is non-empty: a provider correctly declining to act (no location in the query,
+    // robots.txt disallow) reports that via `errors` too, and that is not a failure.
+    externalPhase: providers.length === 0 ? "SKIPPED" : anyProviderHardFailed ? "FAILED" : "COMPLETE",
   };
 
-  // Observability (spec §26). Awaited rather than fire-and-forget: a floating promise is not
-  // guaranteed to survive the response on serverless, and silently losing the metrics that make
-  // search quality measurable costs more than one INSERT on the critical path. `recordSearchRun`
-  // swallows its own failures, so this can never fail the search.
+  // Observability (spec §26). Awaited rather than fire-and-forget for the same reason as before the
+  // split: a floating promise is not guaranteed to survive the response on serverless.
   await recordSearchRun({
-    id: searchId,
-    locale: options.locale,
-    query,
-    criteria,
-    interpretation,
+    id: internalPhase.searchId,
+    locale: internalPhase.locale,
+    query: internalPhase.query,
+    criteria: internalPhase.interpretedCriteria,
+    interpretation: internalPhase.interpretation,
     durationMs,
-    internalResults: internalOutcome.results.length,
+    internalResults: internalPhase.internalResults.length,
     externalResults: externalResults.length,
     duplicatesDetected: combined.length - deduped.length,
-    pagesRejected: externalStats.pagesRejected + internalOutcome.rejectedForDates,
+    pagesRejected: externalStats.pagesRejected + internalPhase.rejectedForDates,
     externalStats,
-    externalPhase: response.meta.externalPhase,
+    externalPhase: meta.externalPhase,
     errors,
   });
 
-  return response;
+  return { externalOnlyResults, sources, meta };
 }
 
 /** Re-exported so callers can tell "understood nothing" from "understood, found nothing". */

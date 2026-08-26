@@ -335,6 +335,61 @@ export async function getSourceUrlCounts(sourceId: string): Promise<SourceUrlCou
   return counts;
 }
 
+export interface AdminFieldConflict {
+  id: string;
+  url: string;
+  field: string;
+  previousValue: unknown;
+  newValue: unknown;
+  previousSource: Database["public"]["Enums"]["search_field_source"];
+  newSource: Database["public"]["Enums"]["search_field_source"];
+  detectedAt: string;
+}
+
+// Review list for an admin, same reasoning/cap as `URL_REGISTRY_PAGE_LIMIT` above.
+const OPEN_CONFLICTS_LIMIT = 200;
+
+/** Open (unresolved) `search_field_conflicts` for a source (docs/data-merger-provenance-design.md §3.3,
+ *  phase P2) — a field the extraction cascade re-derived and got a different answer for than what's
+ *  already stored in `search_extracted_listings`, still unconfirmed by a second crawl. Two queries
+ *  rather than one embedded select: filtering conflicts by their parent listing's `source_id` through
+ *  PostgREST's embedded-resource syntax needs an inner join filter that's more fragile to keep in sync
+ *  with schema changes than just fetching this source's listing ids first. */
+export async function getOpenFieldConflicts(sourceId: string): Promise<AdminFieldConflict[]> {
+  const supabase = await createClient();
+
+  const { data: listings, error: listingsError } = await supabase
+    .from("search_extracted_listings")
+    .select("id, url")
+    .eq("source_id", sourceId);
+  throwIfSupabaseError(listingsError);
+  if (!listings || listings.length === 0) return [];
+
+  const urlByListingId = new Map(listings.map((row) => [row.id, row.url]));
+  const { data: conflicts, error: conflictsError } = await supabase
+    .from("search_field_conflicts")
+    .select("id, listing_id, field, previous_value, new_value, previous_source, new_source, detected_at")
+    .in(
+      "listing_id",
+      listings.map((row) => row.id),
+    )
+    .is("resolved_at", null)
+    .order("detected_at", { ascending: false })
+    .limit(OPEN_CONFLICTS_LIMIT);
+  throwIfSupabaseError(conflictsError);
+
+  return (conflicts ?? []).map((row) => ({
+    id: row.id,
+    url: urlByListingId.get(row.listing_id) ?? "",
+    field: row.field,
+    previousValue: row.previous_value,
+    newValue: row.new_value,
+    previousSource: row.previous_source,
+    newSource: row.new_source,
+    detectedAt: row.detected_at,
+  }));
+}
+
 export interface AdminAuditLogEntry {
   id: string;
   adminName: string | null;

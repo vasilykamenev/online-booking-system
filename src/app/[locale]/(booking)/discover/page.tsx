@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import { X } from "lucide-react";
 import { getTranslations, setRequestLocale } from "next-intl/server";
@@ -6,7 +7,11 @@ import { Link } from "@/i18n/navigation";
 import { buildTitle } from "@/lib/site";
 import { criteriaToChips, isEmptyCriteria, MINOR_UNITS_PER_MAJOR } from "@/lib/search/criteria";
 import { formatPrice } from "@/lib/pricing/format";
-import { runGlobalVesselSearch } from "@/server/search/global-search-service";
+import {
+  runInternalSearchPhase,
+  runExternalSearchPhase,
+  type InternalSearchPhaseResult,
+} from "@/server/search/global-search-service";
 import { buildSearchVocabulary } from "@/server/queries/search-vocabulary";
 import { getActiveExternalProviders } from "@/server/search/provider-registry";
 import { DiscoverForm } from "./discover-form";
@@ -28,6 +33,73 @@ function toArray(value: string | string[] | undefined): string[] {
   return Array.isArray(value) ? value : [value];
 }
 
+/**
+ * Streams in once `runExternalSearchPhase` resolves (up to `externalTimeoutMs`) — see
+ * `global-search-service.ts`'s module doc comment for why the search is split into two phases.
+ * Reads its own translations rather than receiving them as a prop: this runs inside a `<Suspense>`
+ * boundary as its own async render pass, and `getTranslations` is request-scoped/cached, so nothing
+ * is lost by calling it again here.
+ */
+async function ExternalResultsSection({ internalPhase }: { internalPhase: InternalSearchPhaseResult }) {
+  const t = await getTranslations("discover");
+  const providers = await getActiveExternalProviders();
+  const { externalOnlyResults, meta } = await runExternalSearchPhase(internalPhase, {
+    externalProviders: providers,
+    externalTimeoutMs: 15_000,
+  });
+
+  const nothingFoundAnywhere = internalPhase.internalResults.length === 0 && externalOnlyResults.length === 0;
+
+  return (
+    <>
+      {/* Paired the same way the single-list header used to be (count on the left, "Свои/Внешние/мс"
+          on the right) — just attached to this section now, since the combined count and total
+          duration aren't known until the external phase itself resolves. */}
+      <div className="mb-6 mt-10 flex flex-wrap items-baseline justify-between gap-2">
+        {externalOnlyResults.length > 0 && (
+          <h2 className="text-lg font-light tracking-tight">
+            {t("externalResultsCount", { count: externalOnlyResults.length })}
+          </h2>
+        )}
+        <p className="text-xs font-light text-muted-foreground">
+          {t("meta", { internal: meta.internalResults, external: meta.externalResults, ms: meta.searchDurationMs })}
+        </p>
+      </div>
+
+      {externalOnlyResults.length > 0 && (
+        <ul className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          {externalOnlyResults.map((result, index) => (
+            <li key={result.id}>
+              <GlobalResultCard result={result} index={index} />
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {nothingFoundAnywhere && (
+        <p className="mt-6 rounded-2xl border border-border bg-card p-8 text-center text-sm font-light text-muted-foreground">
+          {isEmptyCriteria(internalPhase.interpretedCriteria) ? t("emptyCriteria") : t("noResults")}
+        </p>
+      )}
+
+      {meta.externalPhase === "SKIPPED" && (
+        <p className="mt-6 text-xs font-light text-muted-foreground">{t("externalSkipped")}</p>
+      )}
+    </>
+  );
+}
+
+/** Rendered synchronously (Suspense fallbacks can't themselves be async), so `t` comes from the
+ *  parent rather than a fresh `getTranslations` call here. */
+function ExternalResultsFallback({ t }: { t: Awaited<ReturnType<typeof getTranslations>> }) {
+  return (
+    <p className="mt-10 flex items-center gap-2 text-xs font-light text-muted-foreground">
+      <span className="size-1.5 animate-pulse rounded-full bg-muted-foreground/60" aria-hidden />
+      <span className="animate-pulse">{t("externalLoading")}</span>
+    </p>
+  );
+}
+
 export default async function DiscoverPage({
   params,
   searchParams,
@@ -46,22 +118,14 @@ export default async function DiscoverPage({
   const query = rawQuery.slice(0, 500).trim();
   const removed = toArray(resolved.remove);
 
-  const response = query
-    ? await runGlobalVesselSearch(query, {
-        locale: locale as Locale,
-        removedCriteria: removed,
-        // Which sites get consulted is data-driven (`search_sources.enabled`), not a fixed list —
-        // see `provider-registry.ts`. Disabling a source in /admin/search-sources takes it out of
-        // search immediately, with no code change.
-        externalProviders: await getActiveExternalProviders(),
-        // Generous relative to the internal search's own budget: external sources fetch over the
-        // real network, city-filtered but still several page loads. BRD §8's ≤1s applies to
-        // internal search; external is the acknowledged exception (see README's two-phase note).
-        externalTimeoutMs: 15_000,
-      })
+  // Fast half only (spec §5) — interpretation + internal search, no network crawl. Awaited directly
+  // (not wrapped in `<Suspense>`) so chips and internal results render as part of the initial
+  // response; the external crawl is kicked off separately, below, inside a `<Suspense>` boundary.
+  const internalPhase = query
+    ? await runInternalSearchPhase(query, { locale: locale as Locale, removedCriteria: removed })
     : null;
 
-  const chips = response ? criteriaToChips(response.interpretedCriteria) : [];
+  const chips = internalPhase ? criteriaToChips(internalPhase.interpretedCriteria) : [];
 
   /** Preserves the query and every other dismissal while adding one more. */
   const removeHref = (path: string) => {
@@ -75,7 +139,7 @@ export default async function DiscoverPage({
   // query languages — which makes the stored value the wrong thing to display. Resolved back to
   // the reader's locale here, in the presentation layer, leaving the criteria themselves canonical.
   // `buildSearchVocabulary` is request-cached, so this reuses the lookup the search already did.
-  const vocabulary = response ? await buildSearchVocabulary() : null;
+  const vocabulary = internalPhase ? await buildSearchVocabulary() : null;
   const placeLabel = (labelKey: string, value: string) => {
     const entries =
       labelKey === "country"
@@ -95,7 +159,7 @@ export default async function DiscoverPage({
       return placeLabel(labelKey, String(value));
     }
     if (labelKey === "priceMax") {
-      const currency = response?.interpretedCriteria.price?.currency;
+      const currency = internalPhase?.interpretedCriteria.price?.currency;
       // No invented currency symbol. The interpreter can extract an amount without identifying a
       // currency ("бюджет 5000"), and defaulting to USD would show "$5 000" to someone who meant
       // euros — a wrong fact stated confidently, which is worse than an unadorned number.
@@ -128,7 +192,7 @@ export default async function DiscoverPage({
           <DiscoverForm initialQuery={query} />
         </div>
 
-        {response && (
+        {internalPhase && (
           <div className="mt-6 max-w-3xl">
             {chips.length > 0 ? (
               <>
@@ -159,45 +223,35 @@ export default async function DiscoverPage({
               <p className="text-sm font-light text-muted-foreground">{t("nothingUnderstood")}</p>
             )}
 
-            {response.meta.interpretationDegraded && (
+            {internalPhase.interpretation.mode !== "AI" && (
               <p className="mt-3 text-xs font-light text-muted-foreground">{t("degraded")}</p>
             )}
           </div>
         )}
       </section>
 
-      {response && (
+      {internalPhase && (
         <section className="container-page pb-24">
-          <div className="mb-6 flex flex-wrap items-baseline justify-between gap-2">
-            <h2 className="text-lg font-light tracking-tight">
-              {t("resultsCount", { count: response.results.length })}
-            </h2>
-            <p className="text-xs font-light text-muted-foreground">
-              {t("meta", {
-                internal: response.meta.internalResults,
-                external: response.meta.externalResults,
-                ms: response.meta.searchDurationMs,
-              })}
-            </p>
-          </div>
-
-          {response.results.length === 0 ? (
-            <p className="rounded-2xl border border-border bg-card p-8 text-center text-sm font-light text-muted-foreground">
-              {isEmptyCriteria(response.interpretedCriteria) ? t("emptyCriteria") : t("noResults")}
-            </p>
-          ) : (
-            <ul className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
-              {response.results.map((result, index) => (
-                <li key={result.id}>
-                  <GlobalResultCard result={result} index={index} />
-                </li>
-              ))}
-            </ul>
+          {internalPhase.internalResults.length > 0 && (
+            <>
+              <h2 className="text-lg font-light tracking-tight">
+                {t("resultsCount", { count: internalPhase.internalResults.length })}
+              </h2>
+              <ul className="mt-6 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+                {internalPhase.internalResults.map((result, index) => (
+                  <li key={result.id}>
+                    <GlobalResultCard result={result} index={index} />
+                  </li>
+                ))}
+              </ul>
+            </>
           )}
 
-          {response.meta.externalPhase === "SKIPPED" && (
-            <p className="mt-6 text-xs font-light text-muted-foreground">{t("externalSkipped")}</p>
-          )}
+          {/* Streamed in over the same response once the external crawl resolves — never blocks the
+              internal results above (see global-search-service.ts's module doc comment). */}
+          <Suspense fallback={<ExternalResultsFallback t={t} />}>
+            <ExternalResultsSection internalPhase={internalPhase} />
+          </Suspense>
         </section>
       )}
     </div>
