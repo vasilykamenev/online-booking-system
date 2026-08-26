@@ -5,6 +5,11 @@ description: QA pass for the external Search Source registry — registering a s
 
 # Test Search Sources
 
+Run this via the dedicated `test-search-sources` agent (Agent tool, `subagent_type:
+"test-search-sources"`) rather than inline — the pass generates a lot of SQL/curl/browser output
+the orchestrating session doesn't need to hold onto, and the agent's report-only tool access keeps
+it from silently "fixing" what it finds. Wait for its report before deciding whether to ship.
+
 Registering a source has two failure modes that matter differently: a broken **form**
 (validation, save, status transitions) and a source that saves fine but **never
 actually contributes a search result** (wrong `processingType`/`selectorConfig`

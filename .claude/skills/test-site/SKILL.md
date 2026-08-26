@@ -5,6 +5,11 @@ description: Runs a full automated QA pass on the Meridian site — static check
 
 # Test Site
 
+Run this via the dedicated `test-site` agent (Agent tool, `subagent_type: "test-site"`) rather
+than inline — the full pass generates a lot of build/console/network/screenshot output that the
+orchestrating session doesn't need to hold onto, and the agent's report-only tool access keeps it
+from silently "fixing" what it finds. Wait for its report before deciding whether to commit/push.
+
 A QA pass has two phases: **static** (fast, catches most regressions) and **live**
 (catches what only a running page reveals — hydration, console errors, hard-coded
 external assets, layout breaks). Never skip straight to live checks — a build that
