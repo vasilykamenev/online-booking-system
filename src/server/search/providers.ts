@@ -31,6 +31,9 @@ export interface ExternalSearchStats {
   pagesRejected: number;
   offersExtracted: number;
   aiCalls: number;
+  /** Candidates served straight from `search_extracted_listings` (design doc §4 P3) — no HTTP fetch,
+   *  no AI call, not counted in `pagesVisited`/`aiCalls`. The measurable win P3 exists for. */
+  pagesServedFromIndex: number;
 }
 
 export interface ExternalSearchOutcome {
@@ -50,6 +53,7 @@ export const emptyExternalStats: ExternalSearchStats = {
   pagesRejected: 0,
   offersExtracted: 0,
   aiCalls: 0,
+  pagesServedFromIndex: 0,
 };
 
 export function mergeExternalStats(stats: ExternalSearchStats[]): ExternalSearchStats {
@@ -60,6 +64,7 @@ export function mergeExternalStats(stats: ExternalSearchStats[]): ExternalSearch
       pagesRejected: total.pagesRejected + current.pagesRejected,
       offersExtracted: total.offersExtracted + current.offersExtracted,
       aiCalls: total.aiCalls + current.aiCalls,
+      pagesServedFromIndex: total.pagesServedFromIndex + current.pagesServedFromIndex,
     }),
     { ...emptyExternalStats },
   );

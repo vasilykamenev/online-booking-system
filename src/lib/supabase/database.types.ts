@@ -870,6 +870,7 @@ export type Database = {
           field_provenance: Json
           guests: number | null
           id: string
+          image: string | null
           last_extracted_at: string
           name: string | null
           price_minor: number | null
@@ -888,6 +889,7 @@ export type Database = {
           field_provenance?: Json
           guests?: number | null
           id?: string
+          image?: string | null
           last_extracted_at?: string
           name?: string | null
           price_minor?: number | null
@@ -906,6 +908,7 @@ export type Database = {
           field_provenance?: Json
           guests?: number | null
           id?: string
+          image?: string | null
           last_extracted_at?: string
           name?: string | null
           price_minor?: number | null
@@ -990,6 +993,7 @@ export type Database = {
           offers_extracted: number
           offers_normalized: number
           original_query: string
+          pages_from_index: number
           pages_rejected: number
           pages_visited: number
           sources_visited: number
@@ -1013,6 +1017,7 @@ export type Database = {
           offers_extracted?: number
           offers_normalized?: number
           original_query: string
+          pages_from_index?: number
           pages_rejected?: number
           pages_visited?: number
           sources_visited?: number
@@ -1036,6 +1041,7 @@ export type Database = {
           offers_extracted?: number
           offers_normalized?: number
           original_query?: string
+          pages_from_index?: number
           pages_rejected?: number
           pages_visited?: number
           sources_visited?: number

@@ -50,6 +50,12 @@ export interface RecordExtractionInput {
   confidence: number;
   sourceUrl: string;
   retrievedAt: string;
+  /** Plain last-write-wins, unlike every field in `fields` — an image URL changing isn't a
+   *  meaningful conflict to log, so this bypasses `mergeExtractedListing` entirely (design doc
+   *  §4 P3's `listing-index.ts` doc comment explains why the index needs one at all). `null`
+   *  ("no opinion") leaves the previously stored image untouched, same convention as every other
+   *  field. */
+  image: string | null;
 }
 
 interface ListingRow {
@@ -122,6 +128,7 @@ export async function recordExtraction(input: RecordExtractionInput): Promise<vo
         source_id: input.sourceId,
         url: input.url,
         ...merged.fields,
+        ...(input.image !== null ? { image: input.image } : {}),
         field_provenance: merged.fieldProvenance as Json,
         last_extracted_at: input.retrievedAt,
       },

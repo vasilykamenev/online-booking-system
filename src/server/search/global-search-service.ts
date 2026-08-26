@@ -16,6 +16,7 @@ import {
   writeCachedInterpretation,
 } from "@/server/search/interpretation-cache";
 import {
+  emptyExternalStats,
   mergeExternalStats,
   type ExternalSearchOutcome,
   type ExternalSearchProvider,
@@ -143,7 +144,7 @@ async function runExternalProviders(
           hardFailed: true,
           outcome: {
             results: [],
-            stats: { sourcesVisited: 0, pagesVisited: 0, pagesRejected: 0, offersExtracted: 0, aiCalls: 0 },
+            stats: { ...emptyExternalStats },
             errors: [`${providers[index].id}: ${String(outcome.reason)}`],
           },
         },

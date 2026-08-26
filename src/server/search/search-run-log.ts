@@ -48,6 +48,7 @@ export async function recordSearchRun(record: SearchRunRecord): Promise<void> {
         degraded_reason: record.interpretation.degradedReason ?? null,
         sources_visited: record.externalStats.sourcesVisited,
         pages_visited: record.externalStats.pagesVisited,
+        pages_from_index: record.externalStats.pagesServedFromIndex,
         pages_rejected: record.pagesRejected,
         offers_extracted: record.externalStats.offersExtracted,
         offers_normalized: record.externalResults,
