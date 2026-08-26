@@ -10,7 +10,7 @@ vi.mock("./safe-fetch", async (importOriginal) => ({
 const { discoverAllSitemapEntries } = await import("./full-sitemap-discovery");
 
 function ok(body: string): SafeFetchResult {
-  return { ok: true, status: 200, finalUrl: "irrelevant", body };
+  return { ok: true, status: 200, finalUrl: "irrelevant", body, etag: null, lastModified: null };
 }
 
 function urlset(locs: string[]): string {

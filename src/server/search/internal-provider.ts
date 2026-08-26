@@ -93,9 +93,16 @@ async function resolveLocationIds(
 
   return (data ?? [])
     .filter((row) =>
-      // Any named part matching is enough: "Split, Croatia" should still match a row whose marina
-      // field is empty. Precision is recovered at ranking time by `scoreLocation`.
-      terms.some(
+      // Every named part must be satisfied by *some* field on the row, not just any one of them —
+      // matching on the loosest OR of all supplied terms let a query naming both a city and its
+      // country widen back out to every location in that country the moment the catalog has more
+      // than one city per country (e.g. "Antalya, Turkey" would match every Turkish location
+      // through the country term alone, regardless of city). Each term still loosely matches any
+      // of country/city/marina rather than being pinned to its own column, so "Split, Croatia"
+      // still matches a row whose own marina field is empty; only the across-terms combinator
+      // changed from OR to AND. Precision beyond an exact field match is still ranking's job
+      // (`scoreLocation`).
+      terms.every(
         (term) =>
           labelMatches(row.country, term) ||
           labelMatches(row.city, term) ||

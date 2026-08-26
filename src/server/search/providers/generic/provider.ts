@@ -16,8 +16,8 @@ import {
   selectCandidatesFromRegistry,
   recordFetchOutcome,
 } from "@/server/search/registry/url-registry-sync";
-import { recordExtraction, resultToListingFields } from "@/server/search/registry/extracted-listings";
-import { getFreshListing, listingRowToResult } from "@/server/search/registry/listing-index";
+import { recordExtraction, resultToListingFields, touchExtraction } from "@/server/search/registry/extracted-listings";
+import { getFreshListing, getStaleListing, listingRowToResult } from "@/server/search/registry/listing-index";
 import type { FieldSource } from "@/server/search/registry/listing-merge";
 import { selectGenericCandidates } from "@/server/search/providers/generic/select-candidates";
 import { normalizeGenericResult } from "@/server/search/providers/generic/normalize";
@@ -62,11 +62,13 @@ import {
 
 const PAGE_CACHE_MS = 24 * 60 * 60 * 1000;
 const SITEMAP_CACHE_MS = 24 * 60 * 60 * 1000; // Same "changes by the week" assumption as brilions.
-// How fresh a `search_extracted_listings` row must be to serve a candidate without a live fetch
-// (design doc §4 P3). Deliberately equal to `PAGE_CACHE_MS` rather than a second, independently
-// tuned window — the index and the raw-HTML cache expiring in lockstep keeps there being only one
-// freshness knob to reason about; a real ETag/If-Modified-Since check (rules doc §38) is the harder,
-// still-open refinement, not this.
+// How fresh a `search_extracted_listings` row must be to serve a candidate without any network
+// activity at all (design doc §4 P3). Deliberately equal to `PAGE_CACHE_MS` — the index and the
+// raw-HTML cache expiring in lockstep keeps there being only one freshness knob to reason about.
+// Once this elapses, `fetchCandidate` no longer skips the network entirely, but it isn't a full
+// unconditional re-fetch either: design doc §5.4's ETag/If-Modified-Since check (`fetchWithCache`'s
+// conditional-revalidation path) tries first, and a `304` still avoids the expensive part
+// (re-running selectors/JSON-LD/AI) even though a request did go out.
 const INDEX_FRESHNESS_MS = PAGE_CACHE_MS;
 // How many raw sitemap entries are even worth reading into memory before `selectGenericCandidates`
 // picks an even sample from them — a safety cap against a pathologically large sitemap, not the
@@ -176,16 +178,22 @@ interface FetchedCandidate {
    *  was learned this request. Callers must skip both `recordFetchOutcome` (no fetch happened) and
    *  `recordExtraction` (would be a no-op) when this is true. */
   fromIndex: boolean;
+  /** True when a conditional GET confirmed the page hasn't changed since the last successful
+   *  extraction (design doc §5.4) — `result` here is the *previous* extraction, reused rather than
+   *  re-derived, so (like `fromIndex`) `recordExtraction` would be a no-op. Unlike `fromIndex`, a
+   *  real network round-trip did happen: `recordFetchOutcome` should still run, and this counts
+   *  toward its own stat (`pagesRevalidatedUnchanged`), not `pagesServedFromIndex`. */
+  revalidatedUnchanged: boolean;
 }
 
-/** The live-fetch path — never sets `fromIndex` itself, so its return type omits that field and the
- *  one caller below (`fetchCandidate`) fills it in as `false`, keeping every return statement here
- *  unchanged from before P3. */
+/** The live-fetch path — never sets `fromIndex`/`revalidatedUnchanged` itself, so its return type
+ *  omits them and the one caller below (`fetchCandidate`) fills them in as `false`, keeping every
+ *  return statement here unchanged from before P3. */
 async function fetchAndNormalize(
   url: string,
   source: SearchSource,
   allowAi: boolean,
-): Promise<Omit<FetchedCandidate, "fromIndex">> {
+): Promise<Omit<FetchedCandidate, "fromIndex" | "revalidatedUnchanged">> {
   const page = await fetchWithCache(url, PAGE_CACHE_MS);
   if (!page.ok || !page.html) {
     return { result: null, usedAi: false, pageOk: false, contentHash: null, note: null, fieldSource: null, confidence: null };
@@ -285,10 +293,17 @@ async function fetchAndNormalize(
   return { result, usedAi, pageOk: true, contentHash, note: null, fieldSource: "AI", confidence: classification.confidence };
 }
 
-/** Checks `search_extracted_listings` before falling back to a live fetch (design doc §4 P3) — the
- *  only extra step the read path adds; everything below it (worker pool, `matchesKnownCriteria`,
- *  `recordExtraction`) is unchanged. A stale or missing row is indistinguishable from a cache miss:
- *  both fall straight through to `fetchAndNormalize`, which then refreshes the index as it always did. */
+/**
+ * Checks `search_extracted_listings` before falling back to a live fetch (design doc §4 P3), then
+ * — if that missed — tries one cheaper thing before a full re-extraction (design doc §5.4): a
+ * conditional GET against whatever validator (`etag`/`last-modified`) the last fetch of this page
+ * stored. A `304` means the origin confirms nothing changed, so the stale row's already-extracted
+ * values are still correct — reuse them and just extend their freshness, skipping selectors/JSON-LD/AI
+ * entirely for this candidate. Any other outcome (no stale row, no validator stored, or the page
+ * really did change) falls straight through to `fetchAndNormalize`, which then does a normal fetch —
+ * cheap since `fetchWithCache` already populated the page cache while checking, so this never costs a
+ * second network round-trip.
+ */
 async function fetchCandidate(
   url: string,
   source: SearchSource,
@@ -312,11 +327,39 @@ async function fetchCandidate(
       fieldSource: null,
       confidence: null,
       fromIndex: true,
+      revalidatedUnchanged: false,
     };
   }
 
+  const stale = await getStaleListing(source.id, url);
+  if (stale) {
+    const revalidation = await fetchWithCache(url, INDEX_FRESHNESS_MS);
+    if (revalidation.ok && revalidation.contentUnchanged) {
+      const retrievedAt = new Date().toISOString();
+      await touchExtraction(source.id, url, retrievedAt);
+      const result = listingRowToResult(stale, {
+        type: "WEBSITE",
+        name: source.name,
+        domain: source.domain,
+        url,
+        retrievedAt,
+      });
+      return {
+        result,
+        usedAi: false,
+        pageOk: true,
+        contentHash: null,
+        note: null,
+        fieldSource: null,
+        confidence: null,
+        fromIndex: false,
+        revalidatedUnchanged: true,
+      };
+    }
+  }
+
   const live = await fetchAndNormalize(url, source, allowAi);
-  return { ...live, fromIndex: false };
+  return { ...live, fromIndex: false, revalidatedUnchanged: false };
 }
 
 interface Candidate {
@@ -357,10 +400,12 @@ async function fetchCandidates(
       const { url, registryRowId } = candidates[index];
 
       try {
-        const { result, usedAi, pageOk, contentHash, note, fieldSource, confidence, fromIndex } =
+        const { result, usedAi, pageOk, contentHash, note, fieldSource, confidence, fromIndex, revalidatedUnchanged } =
           await fetchCandidate(url, source, allowAi);
         if (fromIndex) {
           stats.pagesServedFromIndex += 1;
+        } else if (revalidatedUnchanged) {
+          stats.pagesRevalidatedUnchanged += 1;
         } else {
           stats.pagesVisited += 1;
           if (usedAi) stats.aiCalls += 1;
@@ -369,7 +414,7 @@ async function fetchCandidates(
         if (result) {
           stats.offersExtracted += 1;
           if (matchesKnownCriteria(result, criteria)) results.push(result);
-          if (!fromIndex && fieldSource && confidence !== null) {
+          if (!fromIndex && !revalidatedUnchanged && fieldSource && confidence !== null) {
             // Best-effort, additive persistence (design doc data-merger-provenance-design.md phase P1) —
             // never read back by this same request, so a failure here must never affect the response.
             recordExtraction({
@@ -387,8 +432,9 @@ async function fetchCandidates(
         if (registryRowId && !fromIndex) {
           // Best-effort — closes the loop `crawl_status: PENDING → FETCHED/FAILED` (spec §3) for
           // real search traffic without a dedicated background fetch job. Never lets a write
-          // failure surface as a search failure. Skipped when served from the index: no fetch
-          // happened this request, so there is no new crawl outcome to record.
+          // failure surface as a search failure. Skipped only when served from the index (no fetch
+          // happened this request) — a revalidated-unchanged candidate still ran a real conditional
+          // GET, so its crawl outcome is recorded like any other fetch.
           recordFetchOutcome(registryRowId, {
             crawlStatus: pageOk ? "FETCHED" : "FAILED",
             httpStatus: null,
@@ -465,9 +511,11 @@ function buildRunSearch(source: SearchSource) {
     // Candidates queued but never reached because the deadline hit — on top of the ones the
     // sampling step itself already excluded above. Matches `pagesRejected`'s meaning in
     // `providers/brilions/provider.ts`: it does not separately track "fetched but not a listing" —
-    // that's simply the gap between `pagesVisited` and `offersExtracted`. `pagesServedFromIndex`
-    // candidates were also reached, just not through a live fetch, so they must not count as rejected.
-    stats.pagesRejected += toFetch.length - stats.pagesVisited - stats.pagesServedFromIndex;
+    // that's simply the gap between `pagesVisited` and `offersExtracted`. `pagesServedFromIndex` and
+    // `pagesRevalidatedUnchanged` candidates were also reached, just not through a full live fetch,
+    // so neither must count as rejected.
+    stats.pagesRejected +=
+      toFetch.length - stats.pagesVisited - stats.pagesServedFromIndex - stats.pagesRevalidatedUnchanged;
 
     return { results, stats, errors };
   };

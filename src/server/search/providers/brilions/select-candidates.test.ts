@@ -23,6 +23,21 @@ describe("matchingCitySlugs", () => {
     expect(matchingCitySlugs(criteria)).toEqual(new Set(["dubai", "abu"]));
   });
 
+  // The reported bug: "yacht for rent on next month Turkey Antalya" returned every Turkish city,
+  // not just Antalya, because the bare "Turkey" term widened the match back out to the whole
+  // country even though "Antalya" had already named a specific, known city.
+  it("narrows to the named city even when its country is also given, not just the city alone", () => {
+    const criteria = searchCriteriaSchema.parse({ location: { city: "Antalya", country: "Turkey" } });
+    expect(matchingCitySlugs(criteria)).toEqual(new Set(["antalya"]));
+  });
+
+  it("still widens to the whole country when only the country is named, no specific city", () => {
+    const criteria = searchCriteriaSchema.parse({ location: { country: "Turkey" } });
+    expect(matchingCitySlugs(criteria)).toEqual(
+      new Set(["bodrum", "fethiye", "antalya", "marmaris", "gocek", "kemer", "stambul", "alanya", "kas", "izmir"]),
+    );
+  });
+
   it("returns an empty set for a location this source doesn't cover — not a skip", () => {
     const criteria = searchCriteriaSchema.parse({ location: { city: "Split" } });
     expect(matchingCitySlugs(criteria)).toEqual(new Set());

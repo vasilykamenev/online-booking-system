@@ -34,6 +34,11 @@ export interface ExternalSearchStats {
   /** Candidates served straight from `search_extracted_listings` (design doc §4 P3) — no HTTP fetch,
    *  no AI call, not counted in `pagesVisited`/`aiCalls`. The measurable win P3 exists for. */
   pagesServedFromIndex: number;
+  /** Candidates where a conditional GET (design doc §5.4) confirmed the page hadn't changed since
+   *  the last extraction — a real request went out (unlike `pagesServedFromIndex`), but selectors/
+   *  JSON-LD/AI never ran; the previous extraction was reused as-is. Not counted in `pagesVisited`
+   *  or `aiCalls`. */
+  pagesRevalidatedUnchanged: number;
 }
 
 export interface ExternalSearchOutcome {
@@ -54,6 +59,7 @@ export const emptyExternalStats: ExternalSearchStats = {
   offersExtracted: 0,
   aiCalls: 0,
   pagesServedFromIndex: 0,
+  pagesRevalidatedUnchanged: 0,
 };
 
 export function mergeExternalStats(stats: ExternalSearchStats[]): ExternalSearchStats {
@@ -65,6 +71,7 @@ export function mergeExternalStats(stats: ExternalSearchStats[]): ExternalSearch
       offersExtracted: total.offersExtracted + current.offersExtracted,
       aiCalls: total.aiCalls + current.aiCalls,
       pagesServedFromIndex: total.pagesServedFromIndex + current.pagesServedFromIndex,
+      pagesRevalidatedUnchanged: total.pagesRevalidatedUnchanged + current.pagesRevalidatedUnchanged,
     }),
     { ...emptyExternalStats },
   );

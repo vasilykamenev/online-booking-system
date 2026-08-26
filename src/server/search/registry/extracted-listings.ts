@@ -159,3 +159,17 @@ export async function recordExtraction(input: RecordExtractionInput): Promise<vo
       .eq("id", resolved.conflictId);
   }
 }
+
+/**
+ * Bumps `last_extracted_at` only — no field or provenance change, no conflict comparison — after a
+ * `304 Not Modified` (design doc §5.4) confirms an otherwise-stale listing's page hasn't actually
+ * changed. Distinct from `recordExtraction`: nothing new was learned this crawl, so there is nothing
+ * to merge or compare, only the row's freshness to extend.
+ */
+export async function touchExtraction(sourceId: string, url: string, retrievedAt: string): Promise<void> {
+  await createAdminClient()
+    .from("search_extracted_listings")
+    .update({ last_extracted_at: retrievedAt })
+    .eq("source_id", sourceId)
+    .eq("url", url);
+}

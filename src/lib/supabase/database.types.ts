@@ -720,25 +720,31 @@ export type Database = {
       search_page_cache: {
         Row: {
           content_hash: string
+          etag: string | null
           fetched_at: string
           html: string
           http_status: number
+          last_modified: string | null
           updated_at: string
           url: string
         }
         Insert: {
           content_hash: string
+          etag?: string | null
           fetched_at?: string
           html: string
           http_status: number
+          last_modified?: string | null
           updated_at?: string
           url: string
         }
         Update: {
           content_hash?: string
+          etag?: string | null
           fetched_at?: string
           html?: string
           http_status?: number
+          last_modified?: string | null
           updated_at?: string
           url?: string
         }
@@ -995,6 +1001,7 @@ export type Database = {
           original_query: string
           pages_from_index: number
           pages_rejected: number
+          pages_revalidated_unchanged: number
           pages_visited: number
           sources_visited: number
           user_id: string | null
@@ -1019,6 +1026,7 @@ export type Database = {
           original_query: string
           pages_from_index?: number
           pages_rejected?: number
+          pages_revalidated_unchanged?: number
           pages_visited?: number
           sources_visited?: number
           user_id?: string | null
@@ -1043,6 +1051,7 @@ export type Database = {
           original_query?: string
           pages_from_index?: number
           pages_rejected?: number
+          pages_revalidated_unchanged?: number
           pages_visited?: number
           sources_visited?: number
           user_id?: string | null

@@ -11,7 +11,7 @@ vi.mock("./safe-fetch", async (importOriginal) => ({
 const { discoverUrlsByCrawling } = await import("./html-link-discovery");
 
 function ok(body: string): SafeFetchResult {
-  return { ok: true, status: 200, finalUrl: "irrelevant", body };
+  return { ok: true, status: 200, finalUrl: "irrelevant", body, etag: null, lastModified: null };
 }
 
 function page(links: string[]): string {

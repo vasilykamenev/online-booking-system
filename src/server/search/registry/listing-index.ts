@@ -26,6 +26,9 @@ export interface FreshListingRow {
   last_extracted_at: string;
 }
 
+const LISTING_ROW_COLUMNS =
+  "name, description, price_minor, currency, guests, cabins, vessel_type_raw, country, city, image, field_provenance, last_extracted_at";
+
 /** `null` when there is no row at all, or the row is older than `maxAgeMs` — a stale row is treated
  *  exactly like a missing one, falling back to a live fetch (which then refreshes it). */
 export async function getFreshListing(
@@ -36,12 +39,27 @@ export async function getFreshListing(
   const cutoff = new Date(Date.now() - maxAgeMs).toISOString();
   const { data } = await createAdminClient()
     .from("search_extracted_listings")
-    .select(
-      "name, description, price_minor, currency, guests, cabins, vessel_type_raw, country, city, image, field_provenance, last_extracted_at",
-    )
+    .select(LISTING_ROW_COLUMNS)
     .eq("source_id", sourceId)
     .eq("url", url)
     .gte("last_extracted_at", cutoff)
+    .maybeSingle();
+  return (data as FreshListingRow | null) ?? null;
+}
+
+/**
+ * Whatever row is stored, regardless of age — the counterpart `getFreshListing` needs for the
+ * ETag/If-Modified-Since path (design doc §5.4): before running a full re-extraction on an
+ * otherwise-stale row, `providers/generic/provider.ts` checks whether the underlying page even
+ * changed at all, and if not, reuses this row's already-extracted values rather than discarding
+ * them just because `INDEX_FRESHNESS_MS` elapsed.
+ */
+export async function getStaleListing(sourceId: string, url: string): Promise<FreshListingRow | null> {
+  const { data } = await createAdminClient()
+    .from("search_extracted_listings")
+    .select(LISTING_ROW_COLUMNS)
+    .eq("source_id", sourceId)
+    .eq("url", url)
     .maybeSingle();
   return (data as FreshListingRow | null) ?? null;
 }

@@ -76,21 +76,31 @@ export function matchingCitySlugs(criteria: SearchCriteria): Set<string> | null 
     return hasFilterableCriteria(criteria) ? new Set(KNOWN_CITY_SLUGS) : null;
   }
 
-  const matched = new Set<string>();
+  // A specific city name is strictly more precise than the country it happens to sit in — if any
+  // term names a known city directly, that's the answer, full stop. The country-level widening
+  // below must only fire when nothing named a specific city; otherwise a query like "Antalya,
+  // Turkey" (city *and* country both present) would let the bare "Turkey" term add every other
+  // Turkish city right back in, defeating the city the query actually asked for (the bug this
+  // fixes — see `select-candidates.test.ts`).
+  const cityMatches = new Set<string>();
   for (const slug of KNOWN_CITY_SLUGS) {
     const label = CITY_LABELS[slug];
-    const isTurkeySlug = TURKEY_CITY_SLUGS.has(slug);
     for (const term of terms) {
-      const normalized = normalizeForMatch(term);
-      if (normalized === normalizeForMatch(label)) matched.add(slug);
-      // A bare country match ("Turkey"/"Турция", "UAE"/"ОАЭ") pulls in every city in that fleet —
-      // still bounded by `selectCandidates` below, so this can't blow the request open.
-      if (normalized === "turkey" || normalized === "turkiye" || normalized === "турция") {
-        if (isTurkeySlug) matched.add(slug);
-      }
-      if (normalized === "uae" || normalized === "united arab emirates" || normalized === "оаэ") {
-        if (!isTurkeySlug) matched.add(slug);
-      }
+      if (normalizeForMatch(term) === normalizeForMatch(label)) cityMatches.add(slug);
+    }
+  }
+  if (cityMatches.size > 0) return cityMatches;
+
+  // No term named a specific known city — fall back to country-level widening. Still bounded by
+  // `selectCandidates` below, so this can't blow the request budget open.
+  const matched = new Set<string>();
+  for (const term of terms) {
+    const normalized = normalizeForMatch(term);
+    if (normalized === "turkey" || normalized === "turkiye" || normalized === "турция") {
+      for (const slug of TURKEY_CITY_SLUGS) matched.add(slug);
+    }
+    if (normalized === "uae" || normalized === "united arab emirates" || normalized === "оаэ") {
+      for (const slug of UAE_CITY_SLUGS) matched.add(slug);
     }
   }
   return matched;

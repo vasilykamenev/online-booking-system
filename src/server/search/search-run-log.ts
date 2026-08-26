@@ -49,6 +49,7 @@ export async function recordSearchRun(record: SearchRunRecord): Promise<void> {
         sources_visited: record.externalStats.sourcesVisited,
         pages_visited: record.externalStats.pagesVisited,
         pages_from_index: record.externalStats.pagesServedFromIndex,
+        pages_revalidated_unchanged: record.externalStats.pagesRevalidatedUnchanged,
         pages_rejected: record.pagesRejected,
         offers_extracted: record.externalStats.offersExtracted,
         offers_normalized: record.externalResults,
