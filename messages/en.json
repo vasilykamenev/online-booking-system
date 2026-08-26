@@ -1248,7 +1248,8 @@
             "previousValue": "Stored value",
             "newValue": "New value",
             "sources": "Sources",
-            "detectedAt": "Detected"
+            "detectedAt": "Detected",
+            "actions": "Actions"
           },
           "field": {
             "name": "Name",
@@ -1266,6 +1267,12 @@
             "JSON_LD": "JSON-LD",
             "AI": "AI",
             "MANUAL": "Manual"
+          },
+          "actions": {
+            "acceptNew": "Accept new",
+            "keepPrevious": "Keep previous",
+            "error": "Could not resolve the conflict",
+            "staleError": "The value already changed since this conflict was detected — the list has been refreshed, check the current row"
           }
         }
       },

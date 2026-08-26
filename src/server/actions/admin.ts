@@ -4,7 +4,14 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "@/i18n/navigation";
 import type { Locale } from "@/i18n/routing";
 import { createClient } from "@/lib/supabase/server";
-import type { Json } from "@/lib/supabase/database.types";
+import { createAdminClient } from "@/lib/supabase/admin";
+import type { Database, Json } from "@/lib/supabase/database.types";
+import {
+  LISTING_FIELDS,
+  type ListingFieldName,
+  type ListingFieldProvenance,
+  type ListingFieldValue,
+} from "@/server/search/registry/listing-merge";
 import {
   updateUserRoleSchema,
   locationSchema,
@@ -901,4 +908,141 @@ export async function createCrawlRulesFromRobots(
 
   revalidatePath(`/${locale}/admin/search-sources/${sourceId}/urls`);
   return { created: toInsert.length, skipped: uniqueDisallowPaths.length - toInsert.length };
+}
+
+interface ConflictListingRow {
+  url: string;
+  field_provenance: ListingFieldProvenance;
+  name: string | null;
+  description: string | null;
+  price_minor: number | null;
+  currency: string | null;
+  guests: number | null;
+  cabins: number | null;
+  vessel_type_raw: string | null;
+  country: string | null;
+  city: string | null;
+}
+
+/** A precise `Update` can't be *written* through a computed key typed as the general
+ *  `ListingFieldName` union — same intersection-of-all-fields limitation as `listing-merge.ts`'s
+ *  own doc comment on `mergeExtractedListing`. An exhaustive switch sidesteps it: each branch's
+ *  literal key gets the update type it actually has, and losing a case here is a compile error
+ *  (`LISTING_FIELDS` is a closed tuple), not a silent runtime gap. */
+function buildListingFieldUpdate(
+  field: ListingFieldName,
+  value: ListingFieldValue,
+): Database["public"]["Tables"]["search_extracted_listings"]["Update"] {
+  switch (field) {
+    case "name":
+      return { name: value as string | null };
+    case "description":
+      return { description: value as string | null };
+    case "price_minor":
+      return { price_minor: value as number | null };
+    case "currency":
+      return { currency: value as string | null };
+    case "guests":
+      return { guests: value as number | null };
+    case "cabins":
+      return { cabins: value as number | null };
+    case "vessel_type_raw":
+      return { vessel_type_raw: value as string | null };
+    case "country":
+      return { country: value as string | null };
+    case "city":
+      return { city: value as string | null };
+  }
+}
+
+export interface ResolveFieldConflictResult {
+  error?: "unauthenticated" | "forbidden" | "notFound" | "stale" | "generic";
+}
+
+/**
+ * Manual resolution for one `search_field_conflicts` row — the last unfinished piece of P2
+ * (docs/data-merger-provenance-design.md §4): until now the only way to close an open conflict was
+ * a second, independent crawl confirming one side (`listing-merge.ts`'s `mergeExtractedListing`).
+ *
+ * "kept_previous" only touches the conflict record — a conflict never overwrites the stored value
+ * (see `mergeExtractedListing`), so the listing row already holds the previous value; there is
+ * nothing to change there.
+ *
+ * "kept_new" also writes the disputed field on `search_extracted_listings`, with `MANUAL`/1.0
+ * provenance (design doc §3.4) — through the service-role client specifically: the migration grants
+ * `authenticated` only `select` on that table (an admin's own session can resolve the conflict
+ * record itself, per that migration's RLS comment, but never write listing data directly). Guards
+ * against a stale conflict: if the field has moved since this conflict was detected (a later
+ * extraction already changed or re-disputed it), refuses rather than clobbering whatever superseded
+ * this conflict's `new_value`.
+ */
+export async function resolveFieldConflict(
+  locale: Locale,
+  sourceId: string,
+  conflictId: string,
+  resolution: "kept_previous" | "kept_new",
+): Promise<ResolveFieldConflictResult> {
+  const supabase = await createClient();
+  const admin = await requireAdmin(supabase);
+  if ("error" in admin) return { error: admin.error };
+
+  const { data: conflict, error: conflictError } = await supabase
+    .from("search_field_conflicts")
+    .select("id, listing_id, field, previous_value, new_value, resolved_at")
+    .eq("id", conflictId)
+    .maybeSingle();
+  if (conflictError || !conflict) return { error: "notFound" };
+  if (conflict.resolved_at) return {}; // Already resolved (e.g. a second admin tab) — nothing left to do.
+
+  const field = conflict.field as ListingFieldName;
+  if (!(LISTING_FIELDS as readonly string[]).includes(field)) return { error: "generic" };
+
+  if (resolution === "kept_new") {
+    const adminSupabase = createAdminClient();
+    const { data: listing, error: listingError } = await adminSupabase
+      .from("search_extracted_listings")
+      .select(
+        "url, name, description, price_minor, currency, guests, cabins, vessel_type_raw, country, city, field_provenance",
+      )
+      .eq("id", conflict.listing_id)
+      .maybeSingle();
+    if (listingError || !listing) return { error: "generic" };
+
+    const row = listing as ConflictListingRow;
+    const currentValue: ListingFieldValue = row[field];
+    if (JSON.stringify(currentValue) !== JSON.stringify(conflict.previous_value)) {
+      return { error: "stale" };
+    }
+
+    const fieldProvenance: ListingFieldProvenance = { ...row.field_provenance };
+    fieldProvenance[field] = {
+      source: "MANUAL",
+      confidence: 1,
+      retrievedAt: new Date().toISOString(),
+      sourceUrl: row.url,
+    };
+
+    const { error: updateError } = await adminSupabase
+      .from("search_extracted_listings")
+      .update({
+        ...buildListingFieldUpdate(field, conflict.new_value as ListingFieldValue),
+        field_provenance: fieldProvenance as Json,
+      })
+      .eq("id", conflict.listing_id);
+    if (updateError) return { error: "generic" };
+  }
+
+  const { error: resolveError } = await supabase
+    .from("search_field_conflicts")
+    .update({ resolved_at: new Date().toISOString(), resolution })
+    .eq("id", conflictId);
+  if (resolveError) return { error: "generic" };
+
+  await logAudit(supabase, admin.id, "resolve_field_conflict", "search_field_conflicts", conflictId, {
+    field: conflict.field,
+    resolution,
+  });
+
+  revalidatePath(`/${locale}/admin/search-sources/${sourceId}/urls`);
+  return {};
 }

@@ -28,6 +28,7 @@ import { CrawlRuleForm } from "./crawl-rule-form";
 import { CrawlRulesTable } from "./crawl-rules-table";
 import { AddManualUrlsForm } from "./add-manual-urls-form";
 import { UrlSelectionToggle } from "./url-selection-toggle";
+import { ResolveConflictButtons } from "./resolve-conflict-buttons";
 import { CrawlRulePreview } from "./crawl-rule-preview";
 import { CLASSIFICATION_BADGE_VARIANT } from "./classification-badge";
 
@@ -134,6 +135,7 @@ export default async function SearchSourceUrlsPage({
                   <TableHead>{tConflicts("columns.newValue")}</TableHead>
                   <TableHead>{tConflicts("columns.sources")}</TableHead>
                   <TableHead>{tConflicts("columns.detectedAt")}</TableHead>
+                  <TableHead>{tConflicts("columns.actions")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -150,6 +152,9 @@ export default async function SearchSourceUrlsPage({
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {new Date(conflict.detectedAt).toLocaleDateString(locale)}
+                    </TableCell>
+                    <TableCell>
+                      <ResolveConflictButtons sourceId={id} conflictId={conflict.id} />
                     </TableCell>
                   </TableRow>
                 ))}
