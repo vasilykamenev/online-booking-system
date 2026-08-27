@@ -17,12 +17,7 @@ import {
   recordFetchOutcome,
 } from "@/server/search/registry/url-registry-sync";
 import { recordExtraction, resultToListingFields, touchExtraction } from "@/server/search/registry/extracted-listings";
-import {
-  getFreshListing,
-  getStaleListing,
-  listingRowToResult,
-  type FreshListingRow,
-} from "@/server/search/registry/listing-index";
+import { getFreshListing, getStaleListing, listingRowToResult } from "@/server/search/registry/listing-index";
 import type { FieldSource } from "@/server/search/registry/listing-merge";
 import { recordBreadcrumbTrail, resolveSeedUrl } from "@/server/search/registry/source-breadcrumbs";
 import { selectGenericCandidates } from "@/server/search/providers/generic/select-candidates";
@@ -360,18 +355,23 @@ async function fetchAndNormalize(
 }
 
 /**
- * Whether a cached row's `country`/`city` is exactly the kind `listingRowToResult` now distrusts
- * (JSON_LD provenance — a leftover per-query breadcrumb confirmation, not a stable fact about the
- * page, see that function's doc comment) *and* the current query actually asked for a location. When
- * both hold, serving the row as-is means this candidate can never satisfy a location-qualified query
- * again until `INDEX_FRESHNESS_MS` elapses — for a JSON-LD-tier source that's every result, every
- * time, the moment its top candidates get cached (observed live: sailica.com went from "wrong country
- * sometimes" to "zero results for any location query" the moment that guard shipped). Worth a cheap
- * re-check rather than accepting that as a permanent blind spot.
+ * Whether a cache-served `result` is worth a cheap location re-check against *this* query: the query
+ * actually asked for a place, and the cached row came back with no location at all.
+ *
+ * Deliberately keyed off the *result's* location being empty, not off the stored row's field
+ * provenance (an earlier version checked `field_provenance.country?.source === "JSON_LD"` — but the
+ * JSON-LD tier stopped persisting `country`/`city` under that source entirely once it stopped
+ * persisting query-scoped confirmations at all (`fetchCandidates`'s own persistence comment), so a
+ * freshly-cached row from that tier now has *no* provenance entry for the field to match against —
+ * the exact condition this was meant to catch could never fire again, silently turning the recheck
+ * into dead code for every extraction going forward, only ever helping legacy rows written before
+ * that fix shipped. A row with no location, regardless of *why* it has none, is exactly the case
+ * worth a free second look: `reconfirmCachedLocation` is a no-op if the cached HTML has no usable
+ * breadcrumb, so this is never worse than skipping the check, only sometimes better.
  */
-function locationNeedsRecheck(row: FreshListingRow, criteria: SearchCriteria): boolean {
+function locationNeedsRecheck(result: VesselSearchResult, criteria: SearchCriteria): boolean {
   if (!criteria.location?.country && !criteria.location?.city) return false;
-  return row.field_provenance.country?.source === "JSON_LD" || row.field_provenance.city?.source === "JSON_LD";
+  return result.location.country === null && result.location.city === null;
 }
 
 /**
@@ -423,10 +423,10 @@ async function fetchCandidate(
       url,
       retrievedAt: cached.last_extracted_at,
     });
-    if (locationNeedsRecheck(cached, criteria)) {
+    if (locationNeedsRecheck(result, criteria)) {
       const page = await fetchWithCache(url, PAGE_CACHE_MS);
       if (page.ok && page.html) result = reconfirmCachedLocation(result, criteria, page.html);
-      logDetail(source, "cached location distrusted (JSON_LD) — re-checked against this query", {
+      logDetail(source, "cached result had no location — re-checked against this query", {
         url,
         confirmed: { country: result.location.country, city: result.location.city },
       });
@@ -457,9 +457,9 @@ async function fetchCandidate(
         url,
         retrievedAt,
       });
-      if (locationNeedsRecheck(stale, criteria) && revalidation.html) {
+      if (locationNeedsRecheck(result, criteria) && revalidation.html) {
         result = reconfirmCachedLocation(result, criteria, revalidation.html);
-        logDetail(source, "revalidated-unchanged location distrusted (JSON_LD) — re-checked against this query", {
+        logDetail(source, "revalidated-unchanged result had no location — re-checked against this query", {
           url,
           confirmed: { country: result.location.country, city: result.location.city },
         });
