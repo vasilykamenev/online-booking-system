@@ -49,6 +49,7 @@ export interface SearchSourceFormDefaultValues {
    *  `string[]`. */
   imageDomains: string;
   autoSelectClassifications: (typeof urlClassificationValues)[number][];
+  detailedLogging: boolean;
 }
 
 const GENERIC_SELECTOR_TYPES = new Set<(typeof searchProcessingTypeValues)[number]>(["HTML", "HYBRID"]);
@@ -565,6 +566,17 @@ export function SearchSourceForm({
           ))}
         </div>
         <p className="text-xs font-light text-muted-foreground">{t("autoSelectClassificationsHint")}</p>
+      </div>
+      <div className="flex flex-col gap-2 sm:col-span-2">
+        <label className="group flex items-center gap-2 text-sm font-light">
+          <Checkbox
+            id="detailedLogging"
+            name="detailedLogging"
+            defaultChecked={defaultValues?.detailedLogging ?? false}
+          />
+          {t("detailedLogging")}
+        </label>
+        <p className="text-xs font-light text-muted-foreground">{t("detailedLoggingHint")}</p>
       </div>
       <div className="flex flex-col gap-2">
         <Label htmlFor="priority">{t("priority")}</Label>

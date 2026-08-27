@@ -95,6 +95,25 @@ const SELECTOR_CONFIDENCE = 0.95;
 const JSON_LD_CONFIDENCE = 0.9;
 
 /**
+ * Gated by `search_sources.detailed_logging` (admin-set per source, `/admin/search-sources`'s form —
+ * see `source-registry.ts`'s `SearchSource.detailedLogging` doc comment), because this is meaningfully
+ * more log volume than the rest of the pipeline produces: every step of every candidate on every
+ * search against that source, not just aggregate stats. Meant for actively answering "why does this
+ * source return zero/wrong results" (read via Vercel runtime logs — filter on the domain-tagged
+ * prefix this emits), not as a standing setting every source carries. `console.log` rather than the
+ * `errors[]` array `runSearch` already returns: `errors` is a *user-facing-adjacent* diagnostic
+ * surfaced through `search_runs`/the discover page's degraded banner, sized for "what went wrong",
+ * while this is a developer-facing trace sized for "what happened, step by step" — mixing the two
+ * would spam `search_runs` with routine, expected detail on every search from a logging-enabled
+ * source, not just failures.
+ */
+function logDetail(source: SearchSource, message: string, detail?: Record<string, unknown>): void {
+  if (!source.detailedLogging) return;
+  if (detail) console.log(`[generic:${source.domain}] ${message}`, detail);
+  else console.log(`[generic:${source.domain}] ${message}`);
+}
+
+/**
  * In-process cache of AI classification, keyed by page-content hash — same pattern and same reason
  * as brilions' `amenitiesCache` (survives one warm process, cuts repeat Anthropic spend for
  * byte-identical pages seen again within it). Module-level, not inside `createGenericProvider`'s
@@ -376,6 +395,10 @@ async function fetchCandidate(
     if (locationNeedsRecheck(cached, criteria)) {
       const page = await fetchWithCache(url, PAGE_CACHE_MS);
       if (page.ok && page.html) result = reconfirmCachedLocation(result, criteria, page.html);
+      logDetail(source, "cached location distrusted (JSON_LD) — re-checked against this query", {
+        url,
+        confirmed: { country: result.location.country, city: result.location.city },
+      });
     }
     return {
       result,
@@ -405,6 +428,10 @@ async function fetchCandidate(
       });
       if (locationNeedsRecheck(stale, criteria) && revalidation.html) {
         result = reconfirmCachedLocation(result, criteria, revalidation.html);
+        logDetail(source, "revalidated-unchanged location distrusted (JSON_LD) — re-checked against this query", {
+          url,
+          confirmed: { country: result.location.country, city: result.location.city },
+        });
       }
       return {
         result,
@@ -464,6 +491,33 @@ async function fetchCandidates(
       try {
         const { result, usedAi, pageOk, contentHash, note, fieldSource, confidence, fromIndex, revalidatedUnchanged } =
           await fetchCandidate(url, source, criteria, allowAi);
+        const matched = result !== null && matchesKnownCriteria(result, criteria);
+        logDetail(source, "candidate fetched", {
+          url,
+          outcome: fromIndex
+            ? "served-from-index"
+            : revalidatedUnchanged
+              ? "revalidated-unchanged"
+              : pageOk
+                ? "live-fetch"
+                : "fetch-failed",
+          fieldSource,
+          hasResult: result !== null,
+          location: result ? { country: result.location.country, city: result.location.city } : null,
+          matched,
+          rejectedReason:
+            result && !matched
+              ? (criteria.location?.country || criteria.location?.city) &&
+                !result.location.country &&
+                !result.location.city
+                ? "no confirmed location for this query"
+                : criteria.vesselType && result.vesselType && result.vesselType !== criteria.vesselType
+                  ? "vessel type mismatch"
+                  : criteria.capacity?.persons && result.capacity.guests !== null && result.capacity.guests < criteria.capacity.persons
+                    ? "capacity too small"
+                    : "unknown"
+              : null,
+        });
         if (fromIndex) {
           stats.pagesServedFromIndex += 1;
         } else if (revalidatedUnchanged) {
@@ -475,7 +529,7 @@ async function fetchCandidates(
         if (note) errors.push(note);
         if (result) {
           stats.offersExtracted += 1;
-          if (matchesKnownCriteria(result, criteria)) results.push(result);
+          if (matched) results.push(result);
           if (!fromIndex && !revalidatedUnchanged && fieldSource && confidence !== null) {
             const persistedFields = resultToListingFields(result);
             // The JSON-LD tier's location is confirmed only against *this request's own* criteria
@@ -546,10 +600,23 @@ function buildRunSearch(source: SearchSource) {
     const errors: string[] = [];
     const deadline = Date.now() + context.timeoutMs;
 
+    logDetail(source, "search started", {
+      query: {
+        country: criteria.location?.country ?? null,
+        region: criteria.location?.region ?? null,
+        city: criteria.location?.city ?? null,
+        vesselType: criteria.vesselType ?? null,
+        persons: criteria.capacity?.persons ?? null,
+      },
+      timeoutMs: context.timeoutMs,
+    });
+
     const robotsInfo = await fetchRobotsInfo(source.baseUrl);
     const allowed = await resolveRobotsAllowed(source, robotsInfo);
+    logDetail(source, "robots.txt check", { found: robotsInfo.found, allowed });
     if (!allowed) {
       errors.push(`${source.domain}: robots.txt disallows / — skipping`);
+      logDetail(source, "search stopped — robots.txt disallows /");
       return { results: [], stats, errors };
     }
 
@@ -563,11 +630,16 @@ function buildRunSearch(source: SearchSource) {
     if (registryCandidates.length > 0) {
       stats.sourcesVisited = 1;
       toFetch = registryCandidates.map((c): Candidate => ({ url: c.url, registryRowId: c.id }));
+      logDetail(source, "candidates selected from URL registry", {
+        count: toFetch.length,
+        urls: toFetch.map((c) => c.url),
+      });
     } else {
       const origin = new URL(source.baseUrl).origin;
       const sitemap = await loadCachedSitemap(origin, robotsInfo);
       if (!sitemap) {
         errors.push(`${source.domain}: could not find or parse a sitemap`);
+        logDetail(source, "search stopped — URL registry empty and no sitemap found");
         return { results: [], stats, errors };
       }
       stats.sourcesVisited = 1;
@@ -576,6 +648,12 @@ function buildRunSearch(source: SearchSource) {
       const sampled = selectGenericCandidates(allEntries, MAX_CANDIDATE_POOL);
       stats.pagesRejected = allEntries.length - sampled.length;
       toFetch = sampled.map((url): Candidate => ({ url }));
+      logDetail(source, "URL registry empty — fell back to a live sitemap sample", {
+        sitemapUrl: sitemap.url,
+        totalEntries: allEntries.length,
+        sampledCount: sampled.length,
+        urls: toFetch.map((c) => c.url),
+      });
     }
 
     const allowAi = source.processingType !== "HTML";
@@ -597,6 +675,8 @@ function buildRunSearch(source: SearchSource) {
     // so neither must count as rejected.
     stats.pagesRejected +=
       toFetch.length - stats.pagesVisited - stats.pagesServedFromIndex - stats.pagesRevalidatedUnchanged;
+
+    logDetail(source, "search finished", { resultCount: results.length, stats, errors });
 
     return { results, stats, errors };
   };

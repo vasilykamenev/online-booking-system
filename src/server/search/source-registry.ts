@@ -40,6 +40,11 @@ export interface SearchSource {
    *  globesailor.ru's listings link to images on static.theglobesailor.com); without this, every
    *  photo from such a source gets rejected by the proxy even though `domain` itself is correct. */
   imageDomains: string[];
+  /** Admin-set per source (`/admin/search-sources`'s form) — when true, `providers/generic/provider.ts`
+   *  logs step-by-step diagnostic detail for this source's live search runs to stdout (read via
+   *  Vercel runtime logs). Off by default: meant for actively debugging one misbehaving source, not
+   *  standing observability every source carries all the time. */
+  detailedLogging: boolean;
 }
 
 /**
@@ -53,7 +58,7 @@ export const listEnabledSources = cache(async (): Promise<SearchSource[]> => {
   const { data, error } = await supabase
     .from("search_sources")
     .select(
-      "id, name, domain, base_url, enabled, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, selector_config, image_domains",
+      "id, name, domain, base_url, enabled, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, selector_config, image_domains, detailed_logging",
     )
     .eq("enabled", true)
     // Belt-and-suspenders: `enabled` should only ever be true alongside status = 'active' (that's
@@ -93,6 +98,7 @@ export const listEnabledSources = cache(async (): Promise<SearchSource[]> => {
       lastCheckedAt: row.last_checked_at,
       selectorConfig: parsedSelectorConfig.success ? parsedSelectorConfig.data : null,
       imageDomains: row.image_domains ?? [],
+      detailedLogging: row.detailed_logging,
     };
   });
 });

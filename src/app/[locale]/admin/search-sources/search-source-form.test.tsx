@@ -45,6 +45,7 @@ const BASE_DEFAULTS: SearchSourceFormDefaultValues = {
   selectorConfig: "",
   imageDomains: "",
   autoSelectClassifications: ["HIGH"],
+  detailedLogging: false,
 };
 
 afterEach(() => {

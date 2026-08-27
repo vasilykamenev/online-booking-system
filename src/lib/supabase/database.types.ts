@@ -1071,6 +1071,7 @@ export type Database = {
           auto_select_classifications: Database["public"]["Enums"]["search_url_classification"][]
           base_url: string
           created_at: string
+          detailed_logging: boolean
           domain: string
           enabled: boolean
           id: string
@@ -1091,6 +1092,7 @@ export type Database = {
           auto_select_classifications?: Database["public"]["Enums"]["search_url_classification"][]
           base_url: string
           created_at?: string
+          detailed_logging?: boolean
           domain: string
           enabled?: boolean
           id?: string
@@ -1111,6 +1113,7 @@ export type Database = {
           auto_select_classifications?: Database["public"]["Enums"]["search_url_classification"][]
           base_url?: string
           created_at?: string
+          detailed_logging?: boolean
           domain?: string
           enabled?: boolean
           id?: string

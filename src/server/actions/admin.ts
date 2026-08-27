@@ -362,6 +362,7 @@ export async function createSearchSource(
     selectorConfig: formData.get("selectorConfig") ?? "",
     imageDomains: formData.get("imageDomains") ?? "",
     autoSelectClassifications: formData.getAll("autoSelectClassifications"),
+    detailedLogging: formData.get("detailedLogging"),
   });
   if (!parsed.success) return { error: "invalid" };
 
@@ -387,6 +388,7 @@ export async function createSearchSource(
       selector_config: selectorConfig.value as Json,
       image_domains: imageDomains.value,
       auto_select_classifications: parsed.data.autoSelectClassifications,
+      detailed_logging: parsed.data.detailedLogging,
       // Every new source starts unreviewed — `approveSearchSource` is the only path to `enabled`.
       status: "draft",
       enabled: false,
@@ -427,6 +429,7 @@ export async function updateSearchSource(
     selectorConfig: formData.get("selectorConfig") ?? "",
     imageDomains: formData.get("imageDomains") ?? "",
     autoSelectClassifications: formData.getAll("autoSelectClassifications"),
+    detailedLogging: formData.get("detailedLogging"),
   });
   if (!parsed.success) return { error: "invalid" };
 
@@ -461,6 +464,7 @@ export async function updateSearchSource(
       selector_config: selectorConfig.value as Json,
       image_domains: imageDomains.value,
       auto_select_classifications: parsed.data.autoSelectClassifications,
+      detailed_logging: parsed.data.detailedLogging,
     })
     .eq("id", sourceId);
   if (error) return { error: error.code === "23505" ? "domainTaken" : "generic" };

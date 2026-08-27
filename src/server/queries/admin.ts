@@ -154,10 +154,11 @@ export interface AdminSearchSource {
   autoSelectClassifications: Database["public"]["Enums"]["search_url_classification"][];
   notes: string | null;
   createdAt: string;
+  detailedLogging: boolean;
 }
 
 const SEARCH_SOURCE_COLUMNS =
-  "id, name, domain, base_url, enabled, status, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, selector_config, image_domains, auto_select_classifications, notes, created_at";
+  "id, name, domain, base_url, enabled, status, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, selector_config, image_domains, auto_select_classifications, notes, created_at, detailed_logging";
 
 /** Parses `selector_config` the same defensively-null-on-failure way `listEnabledSources`
  *  (`source-registry.ts`) does — an admin-authored value should always be valid (the form validates
@@ -197,6 +198,7 @@ export async function getAllSearchSourcesAdmin(): Promise<AdminSearchSource[]> {
     autoSelectClassifications: row.auto_select_classifications,
     notes: row.notes,
     createdAt: row.created_at,
+    detailedLogging: row.detailed_logging,
   }));
 }
 
@@ -233,6 +235,7 @@ export async function getSearchSourceById(id: string): Promise<AdminSearchSource
     autoSelectClassifications: data.auto_select_classifications,
     notes: data.notes,
     createdAt: data.created_at,
+    detailedLogging: data.detailed_logging,
   };
 }
 

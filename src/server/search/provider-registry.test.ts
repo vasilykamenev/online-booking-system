@@ -31,6 +31,7 @@ function source(
     lastCheckedAt: null,
     selectorConfig,
     imageDomains: [],
+    detailedLogging: false,
   };
 }
 

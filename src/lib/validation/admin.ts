@@ -103,6 +103,11 @@ export const searchSourceSchema = z.object({
   // manual override (`search_source_urls.selection_override`). Empty is valid — "nothing
   // auto-selected, pick URLs by hand" is a legitimate (if unusual) choice, not an error.
   autoSelectClassifications: z.array(z.enum(urlClassificationValues)).default([]),
+  // Single checkbox — absent from FormData when unchecked, "on" when checked (never a real
+  // boolean from a native form submit, hence the preprocess). Gates `providers/generic/provider.ts`'s
+  // step-by-step diagnostic logging for this source (see `source-registry.ts`'s `detailedLogging`
+  // doc comment) — off by default.
+  detailedLogging: z.preprocess((value) => value === "on" || value === true, z.boolean()),
 });
 export type SearchSourceInput = z.infer<typeof searchSourceSchema>;
 

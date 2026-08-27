@@ -1136,6 +1136,8 @@
         "imageDomainsHint": "Comma-separated hostnames, only needed when photos are served from a different host than the site itself (a separate CDN, for instance) — the source's own domain is always allowed. Photos from any other host are rejected, not just hidden.",
         "autoSelectClassifications": "Auto-select for crawling",
         "autoSelectClassificationsHint": "URL Registry classifications (docs/CLAUDE_SITEMAP_AI_CRAWLER_RULE.md §4) that get fetched automatically. Leave a classification unchecked to keep it out of search unless an admin picks specific URLs by hand on the URL registry page. \"High\" is the sane default for actual listing pages.",
+        "detailedLogging": "Detailed logging",
+        "detailedLoggingHint": "Logs (Vercel Runtime Logs) a step-by-step trace of every search run against this source: robots.txt check, where candidates came from (URL registry or sitemap fallback), per-page outcome (which tier matched, why accepted/rejected), location confirmation, final result count. Noticeably more log volume than usual — turn on to debug one specific source issue, not as a standing setting.",
         "priority": "Priority",
         "priorityHint": "Higher runs earlier when the search's crawl budget is limited.",
         "notes": "Notes",
