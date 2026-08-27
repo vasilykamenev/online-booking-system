@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from "next-intl";
 import type { Locale } from "@/i18n/routing";
 import { Link } from "@/i18n/navigation";
 import type { VesselSearchResult } from "@/lib/search/result";
+import { encodeExternalImageUrl } from "@/lib/search/external-image-url";
 import { formatPrice } from "@/lib/pricing/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -25,14 +26,17 @@ export function GlobalResultCard({ result, index = 0 }: { result: VesselSearchRe
   const image = result.images[0];
   const isInternal = result.origin === "INTERNAL";
   const place = [result.location.city, result.location.country].filter(Boolean).join(", ");
-  // External photos are proxied through our own origin (`api/external-image`) rather than passed
-  // to `next/image` directly — a raw external `src` would need its host added to
+  // External photos are proxied through our own origin (`api/external-image/[encoded]`) rather than
+  // passed to `next/image` directly — a raw external `src` would need its host added to
   // `next.config.ts`'s `images.remotePatterns` before every newly approved search source, which is
   // exactly the deploy-per-source dependency `/admin/search-sources` registration is meant to avoid.
+  // The target URL is base64url-encoded into the path, not a `?url=` query string — see
+  // `lib/search/external-image-url.ts`'s doc comment for why that's what lets Next's built-in image
+  // optimizer actually run for these instead of serving every external photo unoptimized.
   const imageSrc = image
     ? isInternal
       ? image.url
-      : `/api/external-image?url=${encodeURIComponent(image.url)}`
+      : `/api/external-image/${encodeExternalImageUrl(image.url)}`
     : null;
 
   return (
@@ -51,12 +55,6 @@ export function GlobalResultCard({ result, index = 0 }: { result: VesselSearchRe
             fill
             sizes="(min-width: 1024px) 33vw, (min-width: 640px) 50vw, 100vw"
             className="object-cover transition-transform duration-500 ease-out group-hover:scale-105"
-            // Vercel's image optimizer can't allow-list `/api/external-image?url=...` (the proxied
-            // URL varies per photo, and next.config.ts's `localPatterns.search` only matches one
-            // literal string — see that file's doc comment). The proxy already streams the source's
-            // original bytes, so skipping optimization here costs resizing/reformatting, not
-            // correctness — the alternative is every external photo 400ing.
-            unoptimized={!isInternal}
           />
         ) : (
           <div className="flex h-full items-center justify-center text-muted-foreground">

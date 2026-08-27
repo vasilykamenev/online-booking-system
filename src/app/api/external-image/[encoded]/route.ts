@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { safeFetchBinary } from "@/server/search/crawl/safe-fetch";
 import { listEnabledSources } from "@/server/search/source-registry";
+import { decodeExternalImageUrl } from "@/lib/search/external-image-url";
 
 /**
  * Proxies a vessel photo from an external search source (spec §14's provenance requirement means
@@ -12,6 +13,12 @@ import { listEnabledSources } from "@/server/search/source-registry";
  * before its photos would render — the opposite of the registration flow being "real-time". A
  * relative `src` (this route) isn't "remote" as far as `next/image` is concerned, so nothing needs
  * adding to `next.config.ts` again.
+ *
+ * The target URL lives in the path (`[encoded]`, base64url via `lib/search/external-image-url.ts`),
+ * not a `?url=...` query string — `next.config.ts`'s `images.localPatterns` can only allow-list one
+ * literal `search` value, never a wildcard, so a query string would force every proxied photo to skip
+ * Next's built-in image optimizer (`unoptimized`, resize/reformat done). `pathname` *does* support a
+ * wildcard, so this scheme gets real optimization back for external photos, same as internal ones.
  *
  * Guarded the same way the rest of the crawler is: `safeFetchBinary` gives SSRF protection (private
  * IPs, redirect re-validation, size/time limits), and the target host must belong to a source that
@@ -31,8 +38,12 @@ function isAllowedHost(hostname: string, sourceDomains: string[]): boolean {
   return sourceDomains.some((domain) => hostname === domain || hostname.endsWith(`.${domain}`));
 }
 
-export async function GET(request: Request): Promise<NextResponse> {
-  const rawUrl = new URL(request.url).searchParams.get("url");
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ encoded: string }> },
+): Promise<NextResponse> {
+  const { encoded } = await params;
+  const rawUrl = decodeExternalImageUrl(encoded);
   if (!rawUrl) return new NextResponse(null, { status: 400 });
 
   let target: URL;

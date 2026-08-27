@@ -192,7 +192,7 @@ export function parseSelectorConfig(raw: string): ParsedSelectorConfig {
 export type ParsedImageDomains = { ok: true; value: string[] } | { ok: false };
 
 /**
- * Trusted image-CDN hostnames for a source, beyond its own `domain` — `api/external-image/route.ts`'s
+ * Trusted image-CDN hostnames for a source, beyond its own `domain` — `api/external-image/[encoded]/route.ts`'s
  * proxy allows either. Split on commas/whitespace/newlines so admins can paste a list in whatever
  * shape is convenient; each entry must itself be a valid domain (same `DOMAIN_PATTERN` as the
  * source's own `domain` field — a proxy allowlist entry is exactly as security-sensitive as that

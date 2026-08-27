@@ -64,7 +64,7 @@ export interface SourceValidationReport {
 
 /**
  * Whether an image this candidate published lives on the source's own domain — the exact question
- * `api/external-image/route.ts`'s proxy allow-list needs answered before registration, not after: a
+ * `api/external-image/[encoded]/route.ts`'s proxy allow-list needs answered before registration, not after: a
  * source whose photos are hosted on a separate CDN (globesailor.ru → static.theglobesailor.com,
  * sailica.com → sailica-media.fsn1.your-objectstorage.com — both found live, both cost every result
  * from the source a broken image until an admin noticed and added the host to `imageDomains`) looks

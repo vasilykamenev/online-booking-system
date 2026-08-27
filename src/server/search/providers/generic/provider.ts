@@ -17,7 +17,12 @@ import {
   recordFetchOutcome,
 } from "@/server/search/registry/url-registry-sync";
 import { recordExtraction, resultToListingFields, touchExtraction } from "@/server/search/registry/extracted-listings";
-import { getFreshListing, getStaleListing, listingRowToResult } from "@/server/search/registry/listing-index";
+import {
+  getFreshListing,
+  getStaleListing,
+  listingRowToResult,
+  type FreshListingRow,
+} from "@/server/search/registry/listing-index";
 import type { FieldSource } from "@/server/search/registry/listing-merge";
 import { selectGenericCandidates } from "@/server/search/providers/generic/select-candidates";
 import { normalizeGenericResult } from "@/server/search/providers/generic/normalize";
@@ -305,6 +310,44 @@ async function fetchAndNormalize(
 }
 
 /**
+ * Whether a cached row's `country`/`city` is exactly the kind `listingRowToResult` now distrusts
+ * (JSON_LD provenance — a leftover per-query breadcrumb confirmation, not a stable fact about the
+ * page, see that function's doc comment) *and* the current query actually asked for a location. When
+ * both hold, serving the row as-is means this candidate can never satisfy a location-qualified query
+ * again until `INDEX_FRESHNESS_MS` elapses — for a JSON-LD-tier source that's every result, every
+ * time, the moment its top candidates get cached (observed live: sailica.com went from "wrong country
+ * sometimes" to "zero results for any location query" the moment that guard shipped). Worth a cheap
+ * re-check rather than accepting that as a permanent blind spot.
+ */
+function locationNeedsRecheck(row: FreshListingRow, criteria: SearchCriteria): boolean {
+  if (!criteria.location?.country && !criteria.location?.city) return false;
+  return row.field_provenance.country?.source === "JSON_LD" || row.field_provenance.city?.source === "JSON_LD";
+}
+
+/**
+ * Re-confirms a cache-served candidate's location against *this* query from already-fetched HTML —
+ * no extra network round-trip beyond what the caller already did (a fresh page-cache read, or the
+ * conditional-GET revalidation it was already performing), and never AI, just the same free
+ * breadcrumb match `fetchAndNormalize`'s JSON-LD tier itself uses. Ephemeral like that confirmation
+ * too: the caller must never persist this back to `search_extracted_listings` (see this file's own
+ * persistence comment in `fetchCandidates` for why).
+ */
+function reconfirmCachedLocation(
+  result: VesselSearchResult,
+  criteria: SearchCriteria,
+  html: string,
+): VesselSearchResult {
+  const structured = extractJsonLdFields(html);
+  if (!structured) return result;
+
+  const confirmed = matchBreadcrumbLocation(structured.breadcrumbLabels, {
+    country: criteria.location?.country ?? null,
+    city: criteria.location?.city ?? null,
+  });
+  return { ...result, location: { ...result.location, country: confirmed.country, city: confirmed.city } };
+}
+
+/**
  * Checks `search_extracted_listings` before falling back to a live fetch (design doc §4 P3), then
  * — if that missed — tries one cheaper thing before a full re-extraction (design doc §5.4): a
  * conditional GET against whatever validator (`etag`/`last-modified`) the last fetch of this page
@@ -323,13 +366,17 @@ async function fetchCandidate(
 ): Promise<FetchedCandidate> {
   const cached = await getFreshListing(source.id, url, INDEX_FRESHNESS_MS);
   if (cached) {
-    const result = listingRowToResult(cached, {
+    let result = listingRowToResult(cached, {
       type: "WEBSITE",
       name: source.name,
       domain: source.domain,
       url,
       retrievedAt: cached.last_extracted_at,
     });
+    if (locationNeedsRecheck(cached, criteria)) {
+      const page = await fetchWithCache(url, PAGE_CACHE_MS);
+      if (page.ok && page.html) result = reconfirmCachedLocation(result, criteria, page.html);
+    }
     return {
       result,
       usedAi: false,
@@ -349,13 +396,16 @@ async function fetchCandidate(
     if (revalidation.ok && revalidation.contentUnchanged) {
       const retrievedAt = new Date().toISOString();
       await touchExtraction(source.id, url, retrievedAt);
-      const result = listingRowToResult(stale, {
+      let result = listingRowToResult(stale, {
         type: "WEBSITE",
         name: source.name,
         domain: source.domain,
         url,
         retrievedAt,
       });
+      if (locationNeedsRecheck(stale, criteria) && revalidation.html) {
+        result = reconfirmCachedLocation(result, criteria, revalidation.html);
+      }
       return {
         result,
         usedAi: false,

@@ -35,7 +35,7 @@ export interface SearchSource {
   /** Null means the generic provider still can't attempt `HTML`/`HYBRID` for this source — see
    *  `provider-registry.ts`'s `isGenericEligible`. */
   selectorConfig: SelectorConfig | null;
-  /** Trusted image-CDN hostnames beyond `domain` itself — `api/external-image/route.ts`'s proxy
+  /** Trusted image-CDN hostnames beyond `domain` itself — `api/external-image/[encoded]/route.ts`'s proxy
    *  allowlist checks both. A source's own pages and its photos are often on different hosts (e.g.
    *  globesailor.ru's listings link to images on static.theglobesailor.com); without this, every
    *  photo from such a source gets rejected by the proxy even though `domain` itself is correct. */
