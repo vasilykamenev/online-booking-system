@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { SearchCriteria } from "@/lib/search/criteria";
 import type { VesselSearchResult } from "@/lib/search/result";
 import { matchesKnownCriteria } from "@/lib/search/match-criteria";
-import { extractJsonLdFields, matchBreadcrumbLocation } from "@/lib/search/structured-data";
+import { extractBreadcrumbTrail, extractJsonLdFields, matchBreadcrumbLocation } from "@/lib/search/structured-data";
 import { extractPageSummary } from "@/lib/search/page-text";
 import { fetchWithCache } from "@/server/search/crawl/cached-fetch";
 import { fetchRobotsInfo, type RobotsInfo } from "@/server/search/crawl/robots";
@@ -24,6 +24,7 @@ import {
   type FreshListingRow,
 } from "@/server/search/registry/listing-index";
 import type { FieldSource } from "@/server/search/registry/listing-merge";
+import { recordBreadcrumbTrail, resolveSeedUrl } from "@/server/search/registry/source-breadcrumbs";
 import { selectGenericCandidates } from "@/server/search/providers/generic/select-candidates";
 import { normalizeGenericResult } from "@/server/search/providers/generic/normalize";
 import { extractBySelectors } from "@/server/search/providers/generic/extract-by-selectors";
@@ -111,6 +112,24 @@ function logDetail(source: SearchSource, message: string, detail?: Record<string
   if (!source.detailedLogging) return;
   if (detail) console.log(`[generic:${source.domain}] ${message}`, detail);
   else console.log(`[generic:${source.domain}] ${message}`);
+}
+
+/** `null` for a malformed URL — a stored seed should never be malformed, but this is one bad row away
+ *  from a crashed search otherwise. */
+function safePathname(url: string): string | null {
+  try {
+    return new URL(url).pathname;
+  } catch {
+    return null;
+  }
+}
+
+/** Whether `url`'s own path falls under `prefixPath` — malformed candidate URLs never match rather
+ *  than throwing (a candidate list already came from our own sitemap parsing, but this runs on
+ *  arbitrary third-party strings, not worth trusting blindly). */
+function matchesUrlPrefix(url: string, prefixPath: string): boolean {
+  const pathname = safePathname(url);
+  return pathname !== null && pathname.startsWith(prefixPath);
 }
 
 /**
@@ -226,6 +245,18 @@ async function fetchAndNormalize(
   const contentHash = hashContent(page.html);
 
   const retrievedAt = new Date().toISOString();
+
+  // Recorded unconditionally, independent of which tier (or none) ends up handling this page as a
+  // listing: a category/hub page (sailica.com's /catalog/turkey) is exactly the page
+  // `registry/source-breadcrumbs.ts` most wants to learn from, and such pages are deliberately
+  // excluded from `extractJsonLdFields`'s listing detection (`NON_LISTING_TYPES`) — so their
+  // breadcrumb would never be seen at all if this only ran inside the JSON-LD listing branch below.
+  // Best-effort, additive — never read back by this same request, so a write failure here must never
+  // affect the response.
+  const breadcrumbTrail = extractBreadcrumbTrail(page.html);
+  if (breadcrumbTrail.length > 0) {
+    recordBreadcrumbTrail(source.id, breadcrumbTrail).catch(() => {});
+  }
 
   // Selectors first, when configured (tier 0, cheapest and most precise — an admin told us exactly
   // where this source's fields live) — before JSON-LD, since a hand-picked selector for a page that
@@ -620,11 +651,23 @@ function buildRunSearch(source: SearchSource) {
       return { results: [], stats, errors };
     }
 
+    // Self-learning location seed (design discussion: `registry/source-breadcrumbs.ts`) — a URL this
+    // source has already shown us for the query's own country (or a city resolved to its single,
+    // unambiguous parent), if any. `null` on a cold start (never seen this place on this source yet):
+    // everything below then behaves exactly as it did before this existed.
+    const seed = await resolveSeedUrl(source.id, criteria);
+    const seedPrefix = seed ? safePathname(seed.url) : null;
+    logDetail(source, "location seed lookup", { seed, seedPrefix });
+
     // URL Registry first (docs/CLAUDE_SITEMAP_AI_CRAWLER_RULE.md §3, §4): only ever fetch URLs an
     // admin's rules (or explicit override) actually selected, not a blind sample of the whole
     // sitemap. Falls back to the pre-registry live-sampling behavior below when the registry is
     // still empty for this source (never synced yet) — nothing breaks for a source mid-migration.
-    const registryCandidates = await selectCandidatesFromRegistry(source.id, MAX_CANDIDATE_POOL);
+    const registryCandidates = await selectCandidatesFromRegistry(
+      source.id,
+      MAX_CANDIDATE_POOL,
+      seedPrefix ?? undefined,
+    );
     let toFetch: Candidate[];
 
     if (registryCandidates.length > 0) {
@@ -632,6 +675,7 @@ function buildRunSearch(source: SearchSource) {
       toFetch = registryCandidates.map((c): Candidate => ({ url: c.url, registryRowId: c.id }));
       logDetail(source, "candidates selected from URL registry", {
         count: toFetch.length,
+        seeded: seedPrefix !== null,
         urls: toFetch.map((c) => c.url),
       });
     } else {
@@ -645,12 +689,24 @@ function buildRunSearch(source: SearchSource) {
       stats.sourcesVisited = 1;
 
       const allEntries = sampleSitemapLocs(sitemap.xml, RAW_ENTRY_CAP, source.baseUrl);
-      const sampled = selectGenericCandidates(allEntries, MAX_CANDIDATE_POOL);
+      // Same "prefer the seeded prefix, top up from the rest" shape as the registry branch above —
+      // deliberately not just reordering `allEntries` before `selectGenericCandidates`'s even-stride
+      // sample: a small prefix-matching subset would barely change which *indices* an even stride
+      // lands on across the whole (still mostly-unrelated) array, so this samples the two groups
+      // separately instead.
+      const seededEntries = seedPrefix ? allEntries.filter((entryUrl) => matchesUrlPrefix(entryUrl, seedPrefix)) : [];
+      const seededSample = seededEntries.slice(0, MAX_CANDIDATE_POOL);
+      const remainingEntries = seedPrefix
+        ? allEntries.filter((entryUrl) => !matchesUrlPrefix(entryUrl, seedPrefix))
+        : allEntries;
+      const topUpSample = selectGenericCandidates(remainingEntries, MAX_CANDIDATE_POOL - seededSample.length);
+      const sampled = [...seededSample, ...topUpSample];
       stats.pagesRejected = allEntries.length - sampled.length;
       toFetch = sampled.map((url): Candidate => ({ url }));
       logDetail(source, "URL registry empty — fell back to a live sitemap sample", {
         sitemapUrl: sitemap.url,
         totalEntries: allEntries.length,
+        seededMatches: seededEntries.length,
         sampledCount: sampled.length,
         urls: toFetch.map((c) => c.url),
       });

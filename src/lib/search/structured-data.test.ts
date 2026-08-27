@@ -42,7 +42,7 @@ describe("extractJsonLdTypes", () => {
 });
 
 describe("extractJsonLdFields", () => {
-  const NO_PRICE = { price: null, currency: null, priceConflict: false, breadcrumbLabels: [] };
+  const NO_PRICE = { price: null, currency: null, priceConflict: false, breadcrumbLabels: [], breadcrumbTrail: [] };
 
   it("extracts name/description/image from a plain Product node", () => {
     const html = `<script type="application/ld+json">
@@ -265,6 +265,44 @@ describe("extractJsonLdFields", () => {
     it("returns an empty array when the page has no BreadcrumbList", () => {
       const html = `<script type="application/ld+json">{"@type":"Product","name":"First 45"}</script>`;
       expect(extractJsonLdFields(html)?.breadcrumbLabels).toEqual([]);
+    });
+
+    it("pairs each label with its own item URL in breadcrumbTrail", () => {
+      const html = `
+        <script type="application/ld+json">
+          {"@type":"BreadcrumbList","itemListElement":[
+            {"@type":"ListItem","position":1,"name":"Home","item":"https://example.com"},
+            {"@type":"ListItem","position":2,"name":"Croatia","item":"https://example.com/catalog/croatia"}
+          ]}
+        </script>
+        <script type="application/ld+json">{"@type":"Product","name":"First 45"}</script>
+      `;
+      expect(extractJsonLdFields(html)?.breadcrumbTrail).toEqual([
+        { name: "Home", url: "https://example.com" },
+        { name: "Croatia", url: "https://example.com/catalog/croatia" },
+      ]);
+    });
+
+    it("resolves an item given only as an @id reference", () => {
+      const html = `<script type="application/ld+json">
+        {"@type":"BreadcrumbList","itemListElement":[
+          {"@type":"ListItem","position":1,"name":"Croatia","item":{"@id":"https://example.com/catalog/croatia"}}
+        ]}
+      </script>
+      <script type="application/ld+json">{"@type":"Product","name":"First 45"}</script>`;
+      expect(extractJsonLdFields(html)?.breadcrumbTrail).toEqual([
+        { name: "Croatia", url: "https://example.com/catalog/croatia" },
+      ]);
+    });
+
+    it("keeps a label with a null url when item is missing or unusable", () => {
+      const html = `<script type="application/ld+json">
+        {"@type":"BreadcrumbList","itemListElement":[
+          {"@type":"ListItem","position":1,"name":"Croatia"}
+        ]}
+      </script>
+      <script type="application/ld+json">{"@type":"Product","name":"First 45"}</script>`;
+      expect(extractJsonLdFields(html)?.breadcrumbTrail).toEqual([{ name: "Croatia", url: null }]);
     });
 
     it("treats a page-wide CreativeWorkSeries block as non-listing, same as Organization/TravelAgency", () => {

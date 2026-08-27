@@ -26,12 +26,30 @@ function collectTypes(node: unknown, into: Set<string>): void {
   if ("@graph" in record) collectTypes(record["@graph"], into);
 }
 
+export interface BreadcrumbEntry {
+  name: string;
+  /** `null` when this crumb's `item` is missing or isn't a plain URL string — the label is still
+   *  collected (still useful for `matchBreadcrumbLocation`), just not usable as a seed URL. */
+  url: string | null;
+}
+
+/** schema.org's `item` is usually a bare URL string, but occasionally an `{"@id": "..."}` reference
+ *  — same shape `resolveOffers`/`collectNodesById` already deal with elsewhere in this file. */
+function breadcrumbItemUrl(item: unknown): string | null {
+  if (typeof item === "string" && item.trim()) return item.trim();
+  if (item && typeof item === "object") {
+    const id = (item as Record<string, unknown>)["@id"];
+    if (typeof id === "string" && id.trim()) return id.trim();
+  }
+  return null;
+}
+
 /** Walks every node looking for `BreadcrumbList` blocks and collects each `itemListElement`'s
- *  `name`, in document order — a page can carry more than one breadcrumb trail (rare, but cheaper
- *  to collect from all of them than to assume there's exactly one). */
-function collectBreadcrumbLabels(node: unknown, into: string[]): void {
+ *  `name`/`item`, in document order — a page can carry more than one breadcrumb trail (rare, but
+ *  cheaper to collect from all of them than to assume there's exactly one). */
+function collectBreadcrumbTrail(node: unknown, into: BreadcrumbEntry[]): void {
   if (Array.isArray(node)) {
-    for (const item of node) collectBreadcrumbLabels(item, into);
+    for (const item of node) collectBreadcrumbTrail(item, into);
     return;
   }
   if (node === null || typeof node !== "object") return;
@@ -41,12 +59,14 @@ function collectBreadcrumbLabels(node: unknown, into: string[]): void {
     for (const entry of record.itemListElement) {
       if (entry && typeof entry === "object") {
         const name = (entry as Record<string, unknown>).name;
-        if (typeof name === "string" && name.trim()) into.push(name.trim());
+        if (typeof name === "string" && name.trim()) {
+          into.push({ name: name.trim(), url: breadcrumbItemUrl((entry as Record<string, unknown>).item) });
+        }
       }
     }
   }
 
-  if ("@graph" in record) collectBreadcrumbLabels(record["@graph"], into);
+  if ("@graph" in record) collectBreadcrumbTrail(record["@graph"], into);
 }
 
 const SCRIPT_PATTERN = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
@@ -65,6 +85,25 @@ export function extractJsonLdTypes(html: string): string[] {
     }
   }
   return [...types];
+}
+
+/**
+ * Every `BreadcrumbList` entry across a page's JSON-LD, independent of whether the page also has a
+ * recognized listing node (unlike `extractJsonLdFields`, which returns `null` entirely for a page
+ * `NON_LISTING_TYPES` excludes — e.g. sailica.com's category/hub pages, `/catalog/turkey`). Those
+ * pages are exactly the ones `registry/source-breadcrumbs.ts` most wants to learn a country/city's
+ * own URL from, so this reads independently of listing detection.
+ */
+export function extractBreadcrumbTrail(html: string): BreadcrumbEntry[] {
+  const trail: BreadcrumbEntry[] = [];
+  for (const match of html.matchAll(SCRIPT_PATTERN)) {
+    try {
+      collectBreadcrumbTrail(JSON.parse(match[1]), trail);
+    } catch {
+      continue;
+    }
+  }
+  return trail;
 }
 
 export interface JsonLdFields {
@@ -90,6 +129,13 @@ export interface JsonLdFields {
    *  per-yacht `Product` block has no location, but whose `BreadcrumbList` reads
    *  Home → All yachts → Croatia → Split → Kastel Gomilica → Marina Kastela. */
   breadcrumbLabels: string[];
+  /** The same trail as `breadcrumbLabels`, paired with each crumb's own `item` URL when the page
+   *  stated one — `registry/source-breadcrumbs.ts` persists these (label → url → parent label) so a
+   *  *later* search on this source can seed candidate selection from a place it already knows a URL
+   *  for, instead of sampling the whole catalog blind. `null` per-entry `url` (not the whole array)
+   *  when a crumb had a name but no usable `item` — still worth keeping for `breadcrumbLabels`-style
+   *  matching, just not usable as a seed. */
+  breadcrumbTrail: BreadcrumbEntry[];
 }
 
 function firstString(value: unknown): string | null {
@@ -385,8 +431,8 @@ export function extractJsonLdFields(html: string): JsonLdFields | null {
 
   const offer = priceConflict ? { price: null, currency: null } : resolveOffers(primaryNode, idIndex);
 
-  const breadcrumbLabels: string[] = [];
-  for (const parsed of parsedBlocks) collectBreadcrumbLabels(parsed, breadcrumbLabels);
+  const breadcrumbTrail: BreadcrumbEntry[] = [];
+  for (const parsed of parsedBlocks) collectBreadcrumbTrail(parsed, breadcrumbTrail);
 
   return {
     name: firstString(primaryNode.name),
@@ -395,7 +441,8 @@ export function extractJsonLdFields(html: string): JsonLdFields | null {
     price: offer.price,
     currency: offer.currency,
     priceConflict,
-    breadcrumbLabels,
+    breadcrumbTrail,
+    breadcrumbLabels: breadcrumbTrail.map((entry) => entry.name),
   };
 }
 

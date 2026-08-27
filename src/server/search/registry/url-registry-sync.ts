@@ -416,23 +416,58 @@ export interface RegistryCandidate {
  * on `search_source_urls_public_read`'s `selected or is_admin()` policy rather than service-role
  * privileges, since this is public website metadata, not a secret.
  */
-export async function selectCandidatesFromRegistry(sourceId: string, limit: number): Promise<RegistryCandidate[]> {
+/**
+ * `urlPrefix` (design discussion: self-learning per-source location map, `registry/source-breadcrumbs.ts`)
+ * biases the pool toward a place the current query named and this source has already shown us a URL
+ * for — e.g. sailica.com's own `/catalog/estonia` — without narrowing to *just* that: a first pass
+ * fetches up to `limit` prefix-matching rows, and only if that falls short does a second pass top up
+ * with the normal (unfiltered) ordering, excluding what the first pass already picked. A location the
+ * registry happens to have no candidates under must never *reduce* the total fetched below what an
+ * unseeded search would have gotten.
+ */
+export async function selectCandidatesFromRegistry(
+  sourceId: string,
+  limit: number,
+  urlPrefix?: string,
+): Promise<RegistryCandidate[]> {
   const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("search_source_urls")
-    .select("id, url")
-    .eq("source_id", sourceId)
-    .eq("selected", true)
-    // Postgres orders an enum column by its declaration position, not alphabetically — the migration
-    // declares `search_url_classification` as ('HIGH', 'MEDIUM', 'LOW', 'SKIP'), so ascending here
-    // really does mean "most worth fetching first".
-    .order("classification", { ascending: true })
-    .order("priority", { ascending: false })
-    .order("last_seen_at", { ascending: false })
-    .limit(limit);
 
-  if (error) return [];
-  return data ?? [];
+  function baseQuery() {
+    return supabase
+      .from("search_source_urls")
+      .select("id, url")
+      .eq("source_id", sourceId)
+      .eq("selected", true)
+      // Postgres orders an enum column by its declaration position, not alphabetically — the
+      // migration declares `search_url_classification` as ('HIGH', 'MEDIUM', 'LOW', 'SKIP'), so
+      // ascending here really does mean "most worth fetching first".
+      .order("classification", { ascending: true })
+      .order("priority", { ascending: false })
+      .order("last_seen_at", { ascending: false });
+  }
+
+  if (!urlPrefix) {
+    const { data, error } = await baseQuery().limit(limit);
+    return error ? [] : (data ?? []);
+  }
+
+  const { data: seeded, error: seededError } = await baseQuery()
+    .ilike("url", `${urlPrefix}%`)
+    .limit(limit);
+  if (seededError) return [];
+  if (seeded.length >= limit) return seeded;
+
+  // No `.not("id", "in", "()")` when `seeded` is empty: an empty Postgres `IN (...)` list makes every
+  // row's membership test NULL rather than false, which `NOT` then leaves NULL too — silently
+  // excluding every row from the top-up query instead of none of them.
+  let topUpQuery = baseQuery().limit(limit - seeded.length);
+  if (seeded.length > 0) {
+    topUpQuery = topUpQuery.not("id", "in", `(${seeded.map((row) => `"${row.id}"`).join(",")})`);
+  }
+  const { data: rest, error: restError } = await topUpQuery;
+  if (restError) return seeded;
+
+  return [...seeded, ...(rest ?? [])];
 }
 
 export interface FetchOutcome {

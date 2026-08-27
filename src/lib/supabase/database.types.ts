@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.15"
-  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -717,154 +712,6 @@ export type Database = {
           },
         ]
       }
-      search_page_cache: {
-        Row: {
-          content_hash: string
-          etag: string | null
-          fetched_at: string
-          html: string
-          http_status: number
-          last_modified: string | null
-          updated_at: string
-          url: string
-        }
-        Insert: {
-          content_hash: string
-          etag?: string | null
-          fetched_at?: string
-          html: string
-          http_status: number
-          last_modified?: string | null
-          updated_at?: string
-          url: string
-        }
-        Update: {
-          content_hash?: string
-          etag?: string | null
-          fetched_at?: string
-          html?: string
-          http_status?: number
-          last_modified?: string | null
-          updated_at?: string
-          url?: string
-        }
-        Relationships: []
-      }
-      search_source_crawl_rules: {
-        Row: {
-          classification: Database["public"]["Enums"]["search_url_classification"]
-          created_at: string
-          enabled: boolean
-          id: string
-          pattern: string
-          pattern_type: Database["public"]["Enums"]["search_crawl_rule_pattern_type"]
-          priority: number
-          source_id: string
-          updated_at: string
-        }
-        Insert: {
-          classification: Database["public"]["Enums"]["search_url_classification"]
-          created_at?: string
-          enabled?: boolean
-          id?: string
-          pattern: string
-          pattern_type?: Database["public"]["Enums"]["search_crawl_rule_pattern_type"]
-          priority?: number
-          source_id: string
-          updated_at?: string
-        }
-        Update: {
-          classification?: Database["public"]["Enums"]["search_url_classification"]
-          created_at?: string
-          enabled?: boolean
-          id?: string
-          pattern?: string
-          pattern_type?: Database["public"]["Enums"]["search_crawl_rule_pattern_type"]
-          priority?: number
-          source_id?: string
-          updated_at?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "search_source_crawl_rules_source_id_fkey"
-            columns: ["source_id"]
-            isOneToOne: false
-            referencedRelation: "search_sources"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
-      search_source_urls: {
-        Row: {
-          classification: Database["public"]["Enums"]["search_url_classification"]
-          content_hash: string | null
-          crawl_status: Database["public"]["Enums"]["search_url_crawl_status"]
-          created_at: string
-          discovered_at: string
-          http_status: number | null
-          id: string
-          last_ai_processed_at: string | null
-          last_fetched_at: string | null
-          last_seen_at: string
-          priority: number
-          selected: boolean
-          selection_override: boolean | null
-          sitemap_lastmod: string | null
-          source_id: string
-          source_sitemap: string | null
-          updated_at: string
-          url: string
-        }
-        Insert: {
-          classification?: Database["public"]["Enums"]["search_url_classification"]
-          content_hash?: string | null
-          crawl_status?: Database["public"]["Enums"]["search_url_crawl_status"]
-          created_at?: string
-          discovered_at?: string
-          http_status?: number | null
-          id?: string
-          last_ai_processed_at?: string | null
-          last_fetched_at?: string | null
-          last_seen_at?: string
-          priority?: number
-          selected?: boolean
-          selection_override?: boolean | null
-          sitemap_lastmod?: string | null
-          source_id: string
-          source_sitemap?: string | null
-          updated_at?: string
-          url: string
-        }
-        Update: {
-          classification?: Database["public"]["Enums"]["search_url_classification"]
-          content_hash?: string | null
-          crawl_status?: Database["public"]["Enums"]["search_url_crawl_status"]
-          created_at?: string
-          discovered_at?: string
-          http_status?: number | null
-          id?: string
-          last_ai_processed_at?: string | null
-          last_fetched_at?: string | null
-          last_seen_at?: string
-          priority?: number
-          selected?: boolean
-          selection_override?: boolean | null
-          sitemap_lastmod?: string | null
-          source_id?: string
-          source_sitemap?: string | null
-          updated_at?: string
-          url?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "search_source_urls_source_id_fkey"
-            columns: ["source_id"]
-            isOneToOne: false
-            referencedRelation: "search_sources"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       search_extracted_listings: {
         Row: {
           cabins: number | null
@@ -980,6 +827,39 @@ export type Database = {
           },
         ]
       }
+      search_page_cache: {
+        Row: {
+          content_hash: string
+          etag: string | null
+          fetched_at: string
+          html: string
+          http_status: number
+          last_modified: string | null
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          content_hash: string
+          etag?: string | null
+          fetched_at?: string
+          html: string
+          http_status: number
+          last_modified?: string | null
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          content_hash?: string
+          etag?: string | null
+          fetched_at?: string
+          html?: string
+          http_status?: number
+          last_modified?: string | null
+          updated_at?: string
+          url?: string
+        }
+        Relationships: []
+      }
       search_runs: {
         Row: {
           ai_calls: number
@@ -1062,6 +942,162 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      search_source_breadcrumbs: {
+        Row: {
+          created_at: string
+          id: string
+          label: string
+          last_seen_at: string
+          normalized_label: string
+          normalized_parent_label: string
+          source_id: string
+          url: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          label: string
+          last_seen_at?: string
+          normalized_label: string
+          normalized_parent_label?: string
+          source_id: string
+          url: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          label?: string
+          last_seen_at?: string
+          normalized_label?: string
+          normalized_parent_label?: string
+          source_id?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "search_source_breadcrumbs_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "search_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      search_source_crawl_rules: {
+        Row: {
+          classification: Database["public"]["Enums"]["search_url_classification"]
+          created_at: string
+          enabled: boolean
+          id: string
+          pattern: string
+          pattern_type: Database["public"]["Enums"]["search_crawl_rule_pattern_type"]
+          priority: number
+          source_id: string
+          updated_at: string
+        }
+        Insert: {
+          classification: Database["public"]["Enums"]["search_url_classification"]
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          pattern: string
+          pattern_type?: Database["public"]["Enums"]["search_crawl_rule_pattern_type"]
+          priority?: number
+          source_id: string
+          updated_at?: string
+        }
+        Update: {
+          classification?: Database["public"]["Enums"]["search_url_classification"]
+          created_at?: string
+          enabled?: boolean
+          id?: string
+          pattern?: string
+          pattern_type?: Database["public"]["Enums"]["search_crawl_rule_pattern_type"]
+          priority?: number
+          source_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "search_source_crawl_rules_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "search_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      search_source_urls: {
+        Row: {
+          classification: Database["public"]["Enums"]["search_url_classification"]
+          content_hash: string | null
+          crawl_status: Database["public"]["Enums"]["search_url_crawl_status"]
+          created_at: string
+          discovered_at: string
+          http_status: number | null
+          id: string
+          last_ai_processed_at: string | null
+          last_fetched_at: string | null
+          last_seen_at: string
+          priority: number
+          selected: boolean
+          selection_override: boolean | null
+          sitemap_lastmod: string | null
+          source_id: string
+          source_sitemap: string | null
+          updated_at: string
+          url: string
+        }
+        Insert: {
+          classification?: Database["public"]["Enums"]["search_url_classification"]
+          content_hash?: string | null
+          crawl_status?: Database["public"]["Enums"]["search_url_crawl_status"]
+          created_at?: string
+          discovered_at?: string
+          http_status?: number | null
+          id?: string
+          last_ai_processed_at?: string | null
+          last_fetched_at?: string | null
+          last_seen_at?: string
+          priority?: number
+          selected?: boolean
+          selection_override?: boolean | null
+          sitemap_lastmod?: string | null
+          source_id: string
+          source_sitemap?: string | null
+          updated_at?: string
+          url: string
+        }
+        Update: {
+          classification?: Database["public"]["Enums"]["search_url_classification"]
+          content_hash?: string | null
+          crawl_status?: Database["public"]["Enums"]["search_url_crawl_status"]
+          created_at?: string
+          discovered_at?: string
+          http_status?: number | null
+          id?: string
+          last_ai_processed_at?: string | null
+          last_fetched_at?: string | null
+          last_seen_at?: string
+          priority?: number
+          selected?: boolean
+          selection_override?: boolean | null
+          sitemap_lastmod?: string | null
+          source_id?: string
+          source_sitemap?: string | null
+          updated_at?: string
+          url?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "search_source_urls_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "search_sources"
             referencedColumns: ["id"]
           },
         ]
@@ -1513,3 +1549,4 @@ export const Constants = {
     },
   },
 } as const
+
