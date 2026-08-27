@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { SearchCriteria } from "@/lib/search/criteria";
 import type { VesselSearchResult } from "@/lib/search/result";
 import { matchesKnownCriteria } from "@/lib/search/match-criteria";
-import { extractJsonLdFields } from "@/lib/search/structured-data";
+import { extractJsonLdFields, matchBreadcrumbLocation } from "@/lib/search/structured-data";
 import { extractPageSummary } from "@/lib/search/page-text";
 import { fetchWithCache } from "@/server/search/crawl/cached-fetch";
 import { fetchRobotsInfo, type RobotsInfo } from "@/server/search/crawl/robots";
@@ -192,6 +192,7 @@ interface FetchedCandidate {
 async function fetchAndNormalize(
   url: string,
   source: SearchSource,
+  criteria: SearchCriteria,
   allowAi: boolean,
 ): Promise<Omit<FetchedCandidate, "fromIndex" | "revalidatedUnchanged">> {
   const page = await fetchWithCache(url, PAGE_CACHE_MS);
@@ -229,6 +230,16 @@ async function fetchAndNormalize(
   // reading prose, when the page actually publishes it.
   const structured = extractJsonLdFields(page.html);
   if (structured?.name) {
+    // Most sites' per-listing JSON-LD has no address of its own (observed live on sailica.com —
+    // see `JsonLdFields.breadcrumbLabels`'s doc comment) — without this, `country`/`city` would
+    // always be null here, and `matchesKnownCriteria` then hard-filters every result out the moment
+    // a query names a place, zeroing out the source's results for exactly the queries it should
+    // answer. Confirms rather than guesses: only the wanted country/city the query actually asked
+    // for, and only when the page's own breadcrumb trail literally states it.
+    const confirmedLocation = matchBreadcrumbLocation(structured.breadcrumbLabels, {
+      country: criteria.location?.country ?? null,
+      city: criteria.location?.city ?? null,
+    });
     const result = normalizeGenericResult({
       sourceUrl: url,
       sourceName: source.name,
@@ -241,8 +252,8 @@ async function fetchAndNormalize(
         guests: null,
         cabins: null,
         vesselTypeRaw: null,
-        country: null,
-        city: null,
+        country: confirmedLocation.country,
+        city: confirmedLocation.city,
         price: structured.price,
         currency: structured.currency,
       },
@@ -307,6 +318,7 @@ async function fetchAndNormalize(
 async function fetchCandidate(
   url: string,
   source: SearchSource,
+  criteria: SearchCriteria,
   allowAi: boolean,
 ): Promise<FetchedCandidate> {
   const cached = await getFreshListing(source.id, url, INDEX_FRESHNESS_MS);
@@ -358,7 +370,7 @@ async function fetchCandidate(
     }
   }
 
-  const live = await fetchAndNormalize(url, source, allowAi);
+  const live = await fetchAndNormalize(url, source, criteria, allowAi);
   return { ...live, fromIndex: false, revalidatedUnchanged: false };
 }
 
@@ -401,7 +413,7 @@ async function fetchCandidates(
 
       try {
         const { result, usedAi, pageOk, contentHash, note, fieldSource, confidence, fromIndex, revalidatedUnchanged } =
-          await fetchCandidate(url, source, allowAi);
+          await fetchCandidate(url, source, criteria, allowAi);
         if (fromIndex) {
           stats.pagesServedFromIndex += 1;
         } else if (revalidatedUnchanged) {

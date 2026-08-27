@@ -6,6 +6,8 @@
  * source registration (`src/server/search/source-validation.ts`).
  */
 
+import { normalizeForMatch } from "@/lib/search/text";
+
 function collectTypes(node: unknown, into: Set<string>): void {
   if (Array.isArray(node)) {
     for (const item of node) collectTypes(item, into);
@@ -22,6 +24,29 @@ function collectTypes(node: unknown, into: Set<string>): void {
 
   // `@graph` is JSON-LD's way of packing multiple entities into one script block.
   if ("@graph" in record) collectTypes(record["@graph"], into);
+}
+
+/** Walks every node looking for `BreadcrumbList` blocks and collects each `itemListElement`'s
+ *  `name`, in document order — a page can carry more than one breadcrumb trail (rare, but cheaper
+ *  to collect from all of them than to assume there's exactly one). */
+function collectBreadcrumbLabels(node: unknown, into: string[]): void {
+  if (Array.isArray(node)) {
+    for (const item of node) collectBreadcrumbLabels(item, into);
+    return;
+  }
+  if (node === null || typeof node !== "object") return;
+
+  const record = node as Record<string, unknown>;
+  if (record["@type"] === "BreadcrumbList" && Array.isArray(record.itemListElement)) {
+    for (const entry of record.itemListElement) {
+      if (entry && typeof entry === "object") {
+        const name = (entry as Record<string, unknown>).name;
+        if (typeof name === "string" && name.trim()) into.push(name.trim());
+      }
+    }
+  }
+
+  if ("@graph" in record) collectBreadcrumbLabels(record["@graph"], into);
 }
 
 const SCRIPT_PATTERN = /<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi;
@@ -56,6 +81,15 @@ export interface JsonLdFields {
    *  listing node — a real failure mode sites produce (duplicated/stale `Product` blocks). `price`
    *  and `currency` are `null` whenever this is true. */
   priceConflict: boolean;
+  /** Every item name from any `BreadcrumbList` block(s) on the page, in trail order. Schema.org has
+   *  no standard mapping from breadcrumb position to admin level (country vs. region vs. city), so
+   *  this is raw material, not a location field — `matchBreadcrumbLocation` below confirms a
+   *  *specific* wanted value against it rather than guessing which crumb means what. Many charter/
+   *  travel sites publish a geographic drill-down here even when the listing's own JSON-LD node
+   *  (e.g. a plain `Product`) carries no address at all — observed live on sailica.com, whose
+   *  per-yacht `Product` block has no location, but whose `BreadcrumbList` reads
+   *  Home → All yachts → Croatia → Split → Kastel Gomilica → Marina Kastela. */
+  breadcrumbLabels: string[];
 }
 
 function firstString(value: unknown): string | null {
@@ -85,6 +119,17 @@ function firstString(value: unknown): string | null {
  * the page's actual `Product` block in every listing page's HTML). Not a positive `@type` allowlist
  * (see this file's other doc comment for why) — just the types that are structurally never the
  * page's showcased item, regardless of what that item's own type turns out to be.
+ *
+ * `CreativeWorkSeries` joins this list for the same reason: observed live on sailica.com, whose
+ * category/destination hub pages (`/catalog/turkey/sailing-yacht`, `/destinations/turkey` — a list
+ * of many boats or a country guide, not one vessel) carry a page-wide `CreativeWorkSeries` block
+ * (just a `name` and an `aggregateRating`, no vessel fields at all) and nothing else with a `name`.
+ * Before this exclusion those hub pages were misread as single-vessel listings with every field but
+ * `name` null — which then leaked into results for *any* query with no location filter to catch
+ * them (a hub page has no location either), and were the reverse case for a query that did name a
+ * place: the "listing" they produced had no location field, so `matchesKnownCriteria` — right to be
+ * suspicious of an admittedly-locationless result — rejected it, silently costing the source a slot
+ * it never should have occupied in the first place.
  */
 const NON_LISTING_TYPES = new Set([
   "Organization",
@@ -95,6 +140,7 @@ const NON_LISTING_TYPES = new Set([
   "WebPage",
   "BreadcrumbList",
   "SiteNavigationElement",
+  "CreativeWorkSeries",
 ]);
 
 function isNonListingNode(record: Record<string, unknown>): boolean {
@@ -273,6 +319,9 @@ export function extractJsonLdFields(html: string): JsonLdFields | null {
 
   const offer = priceConflict ? { price: null, currency: null } : resolveOffers(primaryNode, idIndex);
 
+  const breadcrumbLabels: string[] = [];
+  for (const parsed of parsedBlocks) collectBreadcrumbLabels(parsed, breadcrumbLabels);
+
   return {
     name: firstString(primaryNode.name),
     description: firstString(primaryNode.description),
@@ -280,5 +329,32 @@ export function extractJsonLdFields(html: string): JsonLdFields | null {
     price: offer.price,
     currency: offer.currency,
     priceConflict,
+    breadcrumbLabels,
   };
+}
+
+/**
+ * Confirms — never invents — a wanted country/city against a page's own breadcrumb trail: a field
+ * comes back non-null only when the trail literally states that exact name somewhere (compared via
+ * `normalizeForMatch`, so case/diacritics/punctuation don't matter). Deliberately does not attempt
+ * to guess which crumb *is* "the country" in general — breadcrumb position has no standard meaning
+ * across sites — so a page whose trail doesn't mention the wanted place at all yields `null` rather
+ * than a wrong guess, same as if the page had published no location data.
+ *
+ * Exists for `providers/generic/provider.ts`'s JSON-LD extraction tier: without this, any source
+ * whose listing pages lack a structured address (no `PostalAddress`, common — see
+ * `JsonLdFields.breadcrumbLabels`'s doc comment) always yields `location.country`/`location.city:
+ * null`, which `matchesKnownCriteria` then hard-filters out of every location-qualified search —
+ * silently zeroing out a source's results the moment a query names a place, even though the page
+ * itself does state that place in its breadcrumb.
+ */
+export function matchBreadcrumbLocation(
+  breadcrumbLabels: string[],
+  wanted: { country: string | null; city: string | null },
+): { country: string | null; city: string | null } {
+  const normalizedLabels = breadcrumbLabels.map(normalizeForMatch);
+  const confirms = (value: string | null) =>
+    value !== null && normalizedLabels.includes(normalizeForMatch(value)) ? value : null;
+
+  return { country: confirms(wanted.country), city: confirms(wanted.city) };
 }

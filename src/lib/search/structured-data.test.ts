@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractJsonLdFields, extractJsonLdTypes } from "./structured-data";
+import { extractJsonLdFields, extractJsonLdTypes, matchBreadcrumbLocation } from "./structured-data";
 
 describe("extractJsonLdTypes", () => {
   it("extracts a single @type", () => {
@@ -42,7 +42,7 @@ describe("extractJsonLdTypes", () => {
 });
 
 describe("extractJsonLdFields", () => {
-  const NO_PRICE = { price: null, currency: null, priceConflict: false };
+  const NO_PRICE = { price: null, currency: null, priceConflict: false, breadcrumbLabels: [] };
 
   it("extracts name/description/image from a plain Product node", () => {
     const html = `<script type="application/ld+json">
@@ -206,6 +206,75 @@ describe("extractJsonLdFields", () => {
         {"@type":"Product","name":"Catamaran X","offers":{"price":"9500","priceCurrency":"EUR"}}
       </script>`;
       expect(extractJsonLdFields(html)?.priceConflict).toBe(false);
+    });
+  });
+
+  describe("breadcrumbLabels", () => {
+    it("collects item names from a BreadcrumbList in trail order", () => {
+      // Reproduces sailica.com: the per-yacht Product node itself has no address, but the page's
+      // own BreadcrumbList states the full geographic trail.
+      const html = `
+        <script type="application/ld+json">
+          {"@type":"BreadcrumbList","itemListElement":[
+            {"@type":"ListItem","position":1,"name":"Home","item":"https://example.com"},
+            {"@type":"ListItem","position":2,"name":"All yachts","item":"https://example.com/catalog"},
+            {"@type":"ListItem","position":3,"name":"Croatia","item":"https://example.com/catalog/croatia"},
+            {"@type":"ListItem","position":4,"name":"Split","item":"https://example.com/catalog/croatia/split"}
+          ]}
+        </script>
+        <script type="application/ld+json">
+          {"@type":"Product","name":"First 45"}
+        </script>
+      `;
+      expect(extractJsonLdFields(html)?.breadcrumbLabels).toEqual(["Home", "All yachts", "Croatia", "Split"]);
+    });
+
+    it("returns an empty array when the page has no BreadcrumbList", () => {
+      const html = `<script type="application/ld+json">{"@type":"Product","name":"First 45"}</script>`;
+      expect(extractJsonLdFields(html)?.breadcrumbLabels).toEqual([]);
+    });
+
+    it("treats a page-wide CreativeWorkSeries block as non-listing, same as Organization/TravelAgency", () => {
+      // Reproduces sailica.com's destination/catalog hub pages (/destinations/turkey,
+      // /catalog/turkey/sailing-yacht): a CreativeWorkSeries with just a name and an
+      // aggregateRating, no vessel fields — describes a whole category, not one boat.
+      const html = `<script type="application/ld+json">
+        {"@type":"CreativeWorkSeries","name":"Sailing vacation in Turkey","aggregateRating":{"@type":"AggregateRating","ratingValue":"4.75"}}
+      </script>`;
+      expect(extractJsonLdFields(html)).toBeNull();
+    });
+  });
+});
+
+describe("matchBreadcrumbLocation", () => {
+  it("confirms a wanted country/city that literally appears in the breadcrumb trail", () => {
+    const labels = ["Home", "All yachts", "Croatia", "Split", "Kastel Gomilica", "Marina Kastela"];
+    expect(matchBreadcrumbLocation(labels, { country: "Croatia", city: "Split" })).toEqual({
+      country: "Croatia",
+      city: "Split",
+    });
+  });
+
+  it("is case- and diacritic-insensitive, matching normalizeForMatch's rules", () => {
+    const labels = ["Home", "TÜRKIYE"];
+    expect(matchBreadcrumbLocation(labels, { country: "turkiye", city: null })).toEqual({
+      country: "turkiye",
+      city: null,
+    });
+  });
+
+  it("never invents a value the trail doesn't state", () => {
+    const labels = ["Home", "All yachts", "Croatia", "Split"];
+    expect(matchBreadcrumbLocation(labels, { country: "Turkey", city: "Antalya" })).toEqual({
+      country: null,
+      city: null,
+    });
+  });
+
+  it("returns nulls when nothing was wanted in the first place", () => {
+    expect(matchBreadcrumbLocation(["Home", "Croatia"], { country: null, city: null })).toEqual({
+      country: null,
+      city: null,
     });
   });
 });
