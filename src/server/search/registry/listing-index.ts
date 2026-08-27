@@ -82,6 +82,18 @@ const PROVENANCE_FIELDS: { row: keyof ListingFieldProvenance; result: string }[]
  * Provenance: the ephemeral `FieldProvenance` convention (`result.ts`) is "present only for
  * AI-derived fields" — a stored field whose last extraction came from `SELECTOR`/`JSON_LD`/`MANUAL`
  * gets no entry here, same as it wouldn't on a freshly-extracted result from that same tier.
+ *
+ * `country`/`city` get an extra guard on top of that: `providers/generic/provider.ts`'s JSON-LD tier
+ * confirms location only against *the query that was running when the page was fetched*
+ * (`matchBreadcrumbLocation`'s doc comment) — it stopped persisting that confirmation once this was
+ * understood, but a row written *before* that fix can still carry it forward here, since this table
+ * never deletes a field on its own (`listing-merge.ts`: "no opinion", never "clear"). A stored
+ * `country`/`city` whose own provenance says `JSON_LD` is therefore exactly that kind of leftover,
+ * not a stable fact about the page — observed live: a Turkey-query's confirmation on a sailica.com
+ * candidate, indexed before the fix, kept being served as that page's location to later, unrelated
+ * queries (an Estonia query among them) until this guard went in. Dropping it here self-heals every
+ * already-corrupted row without a data migration — the next live confirmation (if any) still writes
+ * through `AI`/`SELECTOR` normally, which this guard leaves untouched.
  */
 export function listingRowToResult(row: FreshListingRow, source: ResultSource): VesselSearchResult {
   const result = emptyResult(`${source.domain}:${source.url}`, "EXTERNAL", source);
@@ -94,15 +106,18 @@ export function listingRowToResult(row: FreshListingRow, source: ResultSource): 
     }
   }
 
+  const countryIsStaleJsonLd = row.field_provenance.country?.source === "JSON_LD";
+  const cityIsStaleJsonLd = row.field_provenance.city?.source === "JSON_LD";
+
   return {
     ...result,
     name: row.name,
     vesselTypeRaw: row.vessel_type_raw,
     capacity: { guests: row.guests, cabins: row.cabins, beds: null },
     location: {
-      country: row.country,
+      country: countryIsStaleJsonLd ? null : row.country,
       region: null,
-      city: row.city,
+      city: cityIsStaleJsonLd ? null : row.city,
       marina: null,
       latitude: null,
       longitude: null,
