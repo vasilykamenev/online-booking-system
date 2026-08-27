@@ -113,10 +113,17 @@
   "search": {
     "eyebrow": "Каталог флота",
     "title": "Найдите своё судно",
-    "subtitle": "Фильтруйте по направлению, типу судна, числу гостей и бюджету.",
+    "subtitle": "Фильтруйте по направлению, датам, типу судна, числу гостей и бюджету.",
     "empty": "По этим фильтрам судов не найдено — попробуйте изменить критерии.",
     "loading": "Загрузка...",
     "loadMore": "Показать ещё",
+    "resultsCount": "Показано: {count}",
+    "sort": {
+      "rating_desc": "Сначала с высоким рейтингом",
+      "price_asc": "Сначала дешевле",
+      "price_desc": "Сначала дороже",
+      "length_desc": "Сначала длиннее"
+    },
     "filters": {
       "location": "Направление",
       "anyLocation": "Любое направление",
@@ -124,9 +131,33 @@
       "anyType": "Любой тип",
       "guests": "Гостей, от",
       "guestsPlaceholder": "Например, 4",
+      "dates": "Даты",
+      "anyDates": "Любые даты",
+      "applyDates": "Применить",
+      "clearDates": "Сбросить",
+      "more": "Ещё фильтры",
+      "done": "Готово",
+      "priceMin": "Цена за сутки, от",
+      "priceMinPlaceholder": "Например, 100",
       "priceMax": "Цена за сутки, до",
       "priceMaxPlaceholder": "Например, 1000",
-      "apply": "Применить"
+      "lengthMin": "Длина, от (м)",
+      "lengthMinPlaceholder": "Например, 10",
+      "lengthMax": "Длина, до (м)",
+      "lengthMaxPlaceholder": "Например, 25",
+      "cabinsMin": "Кают, от",
+      "cabinsMinPlaceholder": "Например, 2",
+      "apply": "Применить",
+      "chips": {
+        "guests": "Гостей: от {count}",
+        "priceMin": "Цена: от {value}",
+        "priceMax": "Цена: до {value}",
+        "lengthMin": "Длина: от {value} м",
+        "lengthMax": "Длина: до {value} м",
+        "cabinsMin": "Кают: от {count}",
+        "dates": "{from} — {to}",
+        "remove": "Убрать фильтр"
+      }
     }
   },
   "discover": {

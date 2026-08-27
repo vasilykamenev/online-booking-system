@@ -3,19 +3,25 @@
 import { useState, useTransition } from "react";
 import { useTranslations } from "next-intl";
 import type { FeaturedVessel, SearchFilters } from "@/server/queries/vessels";
+import type { SearchParams } from "@/lib/validation/search";
 import { loadMoreVessels } from "@/server/actions/vessels";
 import { Button } from "@/components/ui/button";
 import { VesselCard } from "@/components/vessels/vessel-card";
+import { SortSelect } from "./sort-select";
 
 export function SearchResults({
   initialVessels,
   initialCursor,
   filters,
+  urlFilters,
   favoritedVesselIds,
 }: {
   initialVessels: FeaturedVessel[];
   initialCursor: string | null;
   filters: Omit<SearchFilters, "cursor">;
+  /** Same criteria as `filters`, in the URL's shape — `SortSelect` needs this to build the next URL,
+   *  which is a different shape than the DB-column-named `SearchFilters` this component queries with. */
+  urlFilters: SearchParams;
   favoritedVesselIds: Set<string>;
 }) {
   const t = useTranslations("search");
@@ -41,6 +47,13 @@ export function SearchResults({
 
   return (
     <div>
+      <div className="mb-6 flex items-center justify-between">
+        <p className="text-sm font-light text-muted-foreground">
+          {t("resultsCount", { count: vessels.length })}
+        </p>
+        <SortSelect filters={urlFilters} />
+      </div>
+
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
         {vessels.map((vessel, index) => (
           <VesselCard

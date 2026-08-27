@@ -113,10 +113,17 @@
   "search": {
     "eyebrow": "Fleet catalog",
     "title": "Find your vessel",
-    "subtitle": "Filter by destination, vessel type, guest count, and budget.",
+    "subtitle": "Filter by destination, dates, vessel type, guest count, and budget.",
     "empty": "No vessels match these filters — try adjusting your criteria.",
     "loading": "Loading...",
     "loadMore": "Show more",
+    "resultsCount": "Showing: {count}",
+    "sort": {
+      "rating_desc": "Highest rated first",
+      "price_asc": "Price: low to high",
+      "price_desc": "Price: high to low",
+      "length_desc": "Longest first"
+    },
     "filters": {
       "location": "Destination",
       "anyLocation": "Any destination",
@@ -124,9 +131,33 @@
       "anyType": "Any type",
       "guests": "Guests, at least",
       "guestsPlaceholder": "e.g. 4",
+      "dates": "Dates",
+      "anyDates": "Any dates",
+      "applyDates": "Apply",
+      "clearDates": "Clear",
+      "more": "More filters",
+      "done": "Done",
+      "priceMin": "Price per night, from",
+      "priceMinPlaceholder": "e.g. 100",
       "priceMax": "Price per night, up to",
       "priceMaxPlaceholder": "e.g. 1000",
-      "apply": "Apply"
+      "lengthMin": "Length, from (m)",
+      "lengthMinPlaceholder": "e.g. 10",
+      "lengthMax": "Length, up to (m)",
+      "lengthMaxPlaceholder": "e.g. 25",
+      "cabinsMin": "Cabins, at least",
+      "cabinsMinPlaceholder": "e.g. 2",
+      "apply": "Apply",
+      "chips": {
+        "guests": "Guests: {count}+",
+        "priceMin": "Price: from {value}",
+        "priceMax": "Price: up to {value}",
+        "lengthMin": "Length: from {value} m",
+        "lengthMax": "Length: up to {value} m",
+        "cabinsMin": "Cabins: {count}+",
+        "dates": "{from} — {to}",
+        "remove": "Remove filter"
+      }
     }
   },
   "discover": {
