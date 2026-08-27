@@ -110,6 +110,72 @@ function firstString(value: unknown): string | null {
   return null;
 }
 
+/** Lower rank = smaller/blurrier, higher = sharper — schema.org gives no ordering guarantee for a
+ *  bare array of image URLs, and a CDN listing several resolutions of the same photo commonly names
+ *  them with exactly these path segments (observed live on sailica.com: `.../thumbnail/<hash>.jpg`,
+ *  `.../medium/<hash>.jpg`, `.../large/<hash>.jpg`, `.../original/<hash>.jpg` — same photo, thumbnail
+ *  listed first). Deliberately just this one recognizable vocabulary, not a guess at every CDN's own
+ *  convention — a URL with none of these words simply ties at rank 0 with every other untagged one,
+ *  which keeps `pickBestImageUrl` falling back to "first" exactly like before for a source that
+ *  doesn't tag sizes this way. */
+const IMAGE_SIZE_RANK: Record<string, number> = {
+  thumb: 0,
+  thumbnail: 0,
+  icon: 0,
+  small: 1,
+  medium: 2,
+  mid: 2,
+  large: 3,
+  big: 3,
+  xl: 4,
+  original: 4,
+  orig: 4,
+  full: 4,
+  huge: 4,
+};
+
+function imageSizeRank(url: string): number {
+  const segments = url.toLowerCase().split(/[/_.\-?=&]/);
+  let rank = 0;
+  for (const segment of segments) rank = Math.max(rank, IMAGE_SIZE_RANK[segment] ?? 0);
+  return rank;
+}
+
+/**
+ * Like `firstString`, but for `image` specifically: picks the sharpest-looking candidate among
+ * several rather than always the first. Without this, a page that lists its thumbnail before its
+ * full-size photo (schema.org's `image` array has no ordering rule) would have every result from
+ * that source render visibly blurry — found live on sailica.com, whose `Product.image` array is
+ * `[thumbnail, medium, large, original]` in that fixed order on every single listing.
+ */
+function pickBestImageUrl(value: unknown): string | null {
+  const candidates: string[] = [];
+  if (typeof value === "string" && value.trim()) {
+    candidates.push(value.trim());
+  } else if (Array.isArray(value)) {
+    for (const item of value) {
+      if (typeof item === "string" && item.trim()) candidates.push(item.trim());
+      else if (item && typeof item === "object" && typeof (item as Record<string, unknown>).url === "string") {
+        candidates.push((item as Record<string, unknown>).url as string);
+      }
+    }
+  } else if (value && typeof value === "object" && typeof (value as Record<string, unknown>).url === "string") {
+    candidates.push((value as Record<string, unknown>).url as string);
+  }
+  if (candidates.length === 0) return null;
+
+  let best = candidates[0];
+  let bestRank = imageSizeRank(candidates[0]);
+  for (const candidate of candidates.slice(1)) {
+    const rank = imageSizeRank(candidate);
+    if (rank > bestRank) {
+      best = candidate;
+      bestRank = rank;
+    }
+  }
+  return best;
+}
+
 /**
  * Site-wide/organizational schema types, never the listing a page is actually about. Almost every
  * commercial site injects one of these on every page (nav header, footer, or site-level SEO
@@ -325,7 +391,7 @@ export function extractJsonLdFields(html: string): JsonLdFields | null {
   return {
     name: firstString(primaryNode.name),
     description: firstString(primaryNode.description),
-    image: firstString(primaryNode.image),
+    image: pickBestImageUrl(primaryNode.image),
     price: offer.price,
     currency: offer.currency,
     priceConflict,

@@ -75,6 +75,39 @@ describe("extractJsonLdFields", () => {
     expect(extractJsonLdFields(html)?.image).toBe("https://example.com/mavi.jpg");
   });
 
+  describe("image resolution picking", () => {
+    it("prefers the sharpest-tagged variant over the array's first entry", () => {
+      // Reproduces sailica.com: every listing's `image` array is
+      // [thumbnail, medium, large, original], always in that order.
+      const html = `<script type="application/ld+json">
+        {"name":"First 45","image":[
+          "https://cdn.example.com/1/thumbnail/a.jpg",
+          "https://cdn.example.com/1/medium/a.jpg",
+          "https://cdn.example.com/1/large/a.jpg",
+          "https://cdn.example.com/1/original/a.jpg"
+        ]}
+      </script>`;
+      expect(extractJsonLdFields(html)?.image).toBe("https://cdn.example.com/1/original/a.jpg");
+    });
+
+    it("still picks the best variant regardless of array order", () => {
+      const html = `<script type="application/ld+json">
+        {"name":"First 45","image":[
+          "https://cdn.example.com/1/large/a.jpg",
+          "https://cdn.example.com/1/thumbnail/a.jpg"
+        ]}
+      </script>`;
+      expect(extractJsonLdFields(html)?.image).toBe("https://cdn.example.com/1/large/a.jpg");
+    });
+
+    it("falls back to the first entry when no size hint is present in any candidate", () => {
+      const html = `<script type="application/ld+json">
+        {"name":"First 45","image":["https://cdn.example.com/a.jpg","https://cdn.example.com/b.jpg"]}
+      </script>`;
+      expect(extractJsonLdFields(html)?.image).toBe("https://cdn.example.com/a.jpg");
+    });
+  });
+
   it("returns null when no JSON-LD node has a name", () => {
     const html = `<script type="application/ld+json">{"@type":"Organization"}</script>`;
     expect(extractJsonLdFields(html)).toBeNull();
