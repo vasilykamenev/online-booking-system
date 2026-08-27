@@ -25,7 +25,9 @@ import {
 } from "@/lib/validation/admin";
 import {
   validateSearchSource,
+  previewCandidateAtUrl,
   type SourceValidationReport,
+  type CandidatePreviewSample,
 } from "@/server/search/source-validation";
 import {
   syncSourceUrlRegistry,
@@ -302,6 +304,37 @@ export async function validateSearchSourceCandidate(
   try {
     const report = await validateSearchSource(parsed.data);
     return { report };
+  } catch {
+    return { error: "generic" };
+  }
+}
+
+export interface CandidateUrlCheckState {
+  error?: "unauthenticated" | "forbidden" | "invalid" | "generic";
+  sample?: CandidatePreviewSample;
+}
+
+/**
+ * The single-URL counterpart to `validateSearchSourceCandidate` — lets an admin check one specific
+ * page (a real listing they already found by browsing the site, not necessarily one of the
+ * sitemap's first few entries) instead of waiting on a fresh random sample. Same read-only contract:
+ * never writes to `search_sources`.
+ */
+export async function checkCandidateUrl(
+  baseUrl: string,
+  candidateUrl: string,
+): Promise<CandidateUrlCheckState> {
+  const baseParsed = searchSourceSchema.shape.baseUrl.safeParse(baseUrl);
+  const candidateParsed = searchSourceSchema.shape.baseUrl.safeParse(candidateUrl);
+  if (!baseParsed.success || !candidateParsed.success) return { error: "invalid" };
+
+  const supabase = await createClient();
+  const admin = await requireAdmin(supabase);
+  if ("error" in admin) return { error: admin.error };
+
+  try {
+    const sample = await previewCandidateAtUrl(baseParsed.data, candidateParsed.data);
+    return { sample };
   } catch {
     return { error: "generic" };
   }

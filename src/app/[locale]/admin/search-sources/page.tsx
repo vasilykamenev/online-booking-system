@@ -15,7 +15,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import type { Database } from "@/lib/supabase/database.types";
-import { SearchSourceForm } from "./search-source-form";
+import { NewSearchSourceSection } from "./new-search-source-section";
 import { SearchSourceToggleButton } from "./search-source-toggle-button";
 import { SearchSourceStatusActions } from "./search-source-status-actions";
 import { SearchSourceDeleteButton } from "./search-source-delete-button";
@@ -61,9 +61,7 @@ export default async function AdminSearchSourcesPage({
       <p className="mt-1 text-sm font-light text-muted-foreground">{t("subtitle")}</p>
       <p className="mt-1 text-xs font-light text-muted-foreground">{t("wiringHint")}</p>
 
-      <div className="mt-6 rounded-2xl border border-border bg-card p-5 shadow-soft">
-        <SearchSourceForm />
-      </div>
+      <NewSearchSourceSection />
 
       {sources.length === 0 ? (
         <p className="mt-6 rounded-2xl border border-dashed border-border p-10 text-center text-sm font-light text-muted-foreground">

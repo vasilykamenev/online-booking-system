@@ -9,9 +9,12 @@ import {
   createSearchSource,
   updateSearchSource,
   validateSearchSourceCandidate,
+  checkCandidateUrl,
   type SearchSourceActionState,
   type SearchSourceValidationState,
+  type CandidateUrlCheckState,
 } from "@/server/actions/admin";
+import type { CandidatePreviewSample } from "@/server/search/source-validation";
 import {
   searchProcessingTypeValues,
   searchSourceTypeValues,
@@ -50,6 +53,112 @@ export interface SearchSourceFormDefaultValues {
 
 const GENERIC_SELECTOR_TYPES = new Set<(typeof searchProcessingTypeValues)[number]>(["HTML", "HYBRID"]);
 
+/**
+ * One candidate page's full analysis — shared between the auto-sampled list (`candidatePreview`)
+ * and the admin-picked single-URL check (`customUrlCheck`), so both show the same depth of detail
+ * rather than the sample list getting a summary and the custom check getting something richer (or
+ * vice versa).
+ */
+function CandidateSampleCard({
+  sample,
+  onApplyImageDomain,
+}: {
+  sample: CandidatePreviewSample;
+  onApplyImageDomain: (domain: string) => void;
+}) {
+  const tValidation = useTranslations("admin.searchSources.validation");
+
+  if (!sample.fetched) {
+    return <p>{tValidation("candidatePreview.fetchFailed")}</p>;
+  }
+
+  const fields = sample.extractedFields;
+
+  return (
+    <>
+      {sample.structuredDataTypes.length > 0 && (
+        <p>
+          {tValidation("candidatePreview.structuredMatch", { types: sample.structuredDataTypes.join(", ") })}
+        </p>
+      )}
+      {sample.classification &&
+        (sample.classification.looksLikeVesselListing ? (
+          <p>{tValidation("candidatePreview.aiMatch")}</p>
+        ) : (
+          <p>{tValidation("candidatePreview.aiNoMatch")}</p>
+        ))}
+      {fields && (
+        <div className="mt-1 flex flex-col gap-0.5 border-t border-border/60 pt-1">
+          <p className="font-medium text-foreground">{tValidation("candidatePreview.fields.title")}</p>
+          <p>{fields.name ?? tValidation("candidatePreview.unknownField")}</p>
+          {fields.description && (
+            <p className="truncate" title={fields.description}>
+              {tValidation("candidatePreview.fields.description", { description: fields.description })}
+            </p>
+          )}
+          {fields.price !== null ? (
+            <p>
+              {tValidation("candidatePreview.fields.price", {
+                price: fields.price,
+                currency: fields.currency ?? "",
+              })}
+            </p>
+          ) : (
+            <p>{tValidation("candidatePreview.fields.priceUnknown")}</p>
+          )}
+          {fields.vesselTypeRaw && (
+            <p>{tValidation("candidatePreview.fields.vesselType", { vesselType: fields.vesselTypeRaw })}</p>
+          )}
+          {fields.country || fields.city ? (
+            <p>
+              {fields.city
+                ? tValidation("candidatePreview.fields.locationBoth", {
+                    country: fields.country ?? tValidation("candidatePreview.unknownField"),
+                    city: fields.city,
+                  })
+                : tValidation("candidatePreview.fields.location", { country: fields.country ?? "" })}
+            </p>
+          ) : (
+            <p>{tValidation("candidatePreview.fields.locationUnknown")}</p>
+          )}
+          {fields.breadcrumbLabels.length > 0 && (
+            <p className="truncate" title={fields.breadcrumbLabels.join(" → ")}>
+              {tValidation("candidatePreview.fields.breadcrumb", {
+                trail: fields.breadcrumbLabels.join(" → "),
+              })}
+            </p>
+          )}
+          <div className="mt-0.5 flex flex-wrap items-center gap-2">
+            <span className="font-medium text-foreground">{tValidation("candidatePreview.image.title")}:</span>
+            {fields.image ? (
+              <>
+                <span>
+                  {fields.image.matchesSourceDomain
+                    ? tValidation("candidatePreview.image.ok", { domain: fields.image.domain })
+                    : tValidation("candidatePreview.image.mismatch", { domain: fields.image.domain })}
+                </span>
+                {!fields.image.matchesSourceDomain && (
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    className="rounded-full"
+                    onClick={() => onApplyImageDomain(fields.image!.domain)}
+                  >
+                    {tValidation("candidatePreview.image.applyDomain")}
+                  </Button>
+                )}
+              </>
+            ) : (
+              <span>{tValidation("candidatePreview.image.none")}</span>
+            )}
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
+
 export function SearchSourceForm({
   mode = "create",
   sourceId,
@@ -80,8 +189,36 @@ export function SearchSourceForm({
   const [selectorConfigText, setSelectorConfigText] = useState(defaultValues?.selectorConfig ?? "");
   const [name, setName] = useState(defaultValues?.name ?? "");
   const [domain, setDomain] = useState(defaultValues?.domain ?? "");
+  const [imageDomainsText, setImageDomainsText] = useState(defaultValues?.imageDomains ?? "");
   const [validation, setValidation] = useState<SearchSourceValidationState | null>(null);
   const [isValidating, startValidation] = useTransition();
+  const [customUrl, setCustomUrl] = useState("");
+  const [customUrlCheck, setCustomUrlCheck] = useState<CandidateUrlCheckState | null>(null);
+  const [isCheckingUrl, startUrlCheck] = useTransition();
+
+  /** Appends `domain` to the Image domains field, skipping it if already present — the one-click
+   *  counterpart to the mismatch warning `CandidatePreviewCard` shows (see its own doc comment for
+   *  why a source's photos can live on a different host than its pages). */
+  function handleApplyImageDomain(domain: string) {
+    setImageDomainsText((current) => {
+      const existing = current
+        .split(/[,\n]/)
+        .map((entry) => entry.trim())
+        .filter(Boolean);
+      if (existing.includes(domain)) return current;
+      return existing.length > 0 ? `${current.trim()}, ${domain}` : domain;
+    });
+  }
+
+  function handleCheckUrl() {
+    const input = formRef.current?.elements.namedItem("baseUrl");
+    const baseUrl = input instanceof HTMLInputElement ? input.value : "";
+    const trimmedCandidate = customUrl.trim();
+    startUrlCheck(async () => {
+      const result = await checkCandidateUrl(baseUrl, trimmedCandidate);
+      setCustomUrlCheck(result);
+    });
+  }
 
   /** Best-effort hostname for the Domain field's autofill — the same `DOMAIN_PATTERN` convention
    *  existing sources already follow (`globesailor.ru`, `brilions.com`: no `www.`, no scheme). Never
@@ -124,11 +261,15 @@ export function SearchSourceForm({
       setProcessingType("HTML");
       setSelectorConfigText("");
       setValidation(null);
-      // `name`/`domain` are now controlled (autofill needs to read/write them), so `formRef.reset()`
-      // below only clears the DOM — these two must be cleared here too, or the next render would
-      // put the just-submitted values right back via `value={name}`/`value={domain}`.
+      setCustomUrl("");
+      setCustomUrlCheck(null);
+      // `name`/`domain`/`imageDomainsText` are now controlled (autofill and the image-domain "apply"
+      // button both need to read/write them), so `formRef.reset()` below only clears the DOM — these
+      // must be cleared here too, or the next render would put the just-submitted values right back
+      // via `value={name}`/`value={domain}`/`value={imageDomainsText}`.
       setName("");
       setDomain("");
+      setImageDomainsText("");
     }
   }
 
@@ -295,38 +436,48 @@ export function SearchSourceForm({
                           <p className="truncate text-xs" title={sample.url}>
                             {sample.url}
                           </p>
-                          {!sample.fetched ? (
-                            <p>{tValidation("candidatePreview.fetchFailed")}</p>
-                          ) : sample.structuredDataTypes.length > 0 ? (
-                            <p>
-                              {tValidation("candidatePreview.structuredMatch", {
-                                types: sample.structuredDataTypes.join(", "),
-                              })}
-                            </p>
-                          ) : sample.classification?.looksLikeVesselListing ? (
-                            <>
-                              <p>{tValidation("candidatePreview.aiMatch")}</p>
-                              <p>
-                                {tValidation("candidatePreview.extracted", {
-                                  name:
-                                    sample.classification.extracted.name ??
-                                    tValidation("candidatePreview.unknownField"),
-                                  guests:
-                                    sample.classification.extracted.guests ??
-                                    tValidation("candidatePreview.unknownField"),
-                                  cabins:
-                                    sample.classification.extracted.cabins ??
-                                    tValidation("candidatePreview.unknownField"),
-                                })}
-                              </p>
-                            </>
-                          ) : (
-                            <p>{tValidation("candidatePreview.aiNoMatch")}</p>
-                          )}
+                          <CandidateSampleCard sample={sample} onApplyImageDomain={handleApplyImageDomain} />
                         </li>
                       ))}
                     </ul>
                   </>
+                )}
+              </div>
+
+              <div className="mt-2 flex flex-col gap-1.5 border-t border-border pt-2">
+                <p className="font-medium">{tValidation("customUrlCheck.title")}</p>
+                <p className="text-xs font-light text-muted-foreground">
+                  {tValidation("customUrlCheck.hint")}
+                </p>
+                <div className="flex gap-2">
+                  <Input
+                    value={customUrl}
+                    onChange={(event) => setCustomUrl(event.target.value)}
+                    placeholder={tValidation("customUrlCheck.placeholder")}
+                    className="flex-1"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="shrink-0 rounded-full"
+                    disabled={isCheckingUrl || !customUrl.trim()}
+                    onClick={handleCheckUrl}
+                  >
+                    {isCheckingUrl ? tValidation("customUrlCheck.checking") : tValidation("customUrlCheck.button")}
+                  </Button>
+                </div>
+                {customUrlCheck?.error && (
+                  <p className="text-destructive">{tValidation(`errors.${customUrlCheck.error}`)}</p>
+                )}
+                {customUrlCheck?.sample && (
+                  <ul className="flex flex-col gap-1">
+                    <li className="rounded-lg border border-border bg-card px-3 py-2 font-light text-muted-foreground">
+                      <p className="truncate text-xs" title={customUrlCheck.sample.url}>
+                        {customUrlCheck.sample.url}
+                      </p>
+                      <CandidateSampleCard sample={customUrlCheck.sample} onApplyImageDomain={handleApplyImageDomain} />
+                    </li>
+                  </ul>
                 )}
               </div>
             </>
@@ -394,7 +545,8 @@ export function SearchSourceForm({
           id="imageDomains"
           name="imageDomains"
           placeholder={t("imageDomainsPlaceholder")}
-          defaultValue={defaultValues?.imageDomains}
+          value={imageDomainsText}
+          onChange={(event) => setImageDomainsText(event.target.value)}
         />
         <p className="text-xs font-light text-muted-foreground">{t("imageDomainsHint")}</p>
       </div>

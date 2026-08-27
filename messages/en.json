@@ -1041,6 +1041,8 @@
       "subtitle": "External sites the smart search can use as an additional source of listings.",
       "wiringHint": "A new source is added as a draft and stays out of search until it's checked (\"Check\" — reachability, robots.txt, sitemap, structured data, a candidate-card preview) and approved. Approving a source with the \"Structured data\" or \"AI extraction\" strategy starts crawling it immediately — no deploy needed, through a generic provider with no site-specific code. For \"HTML parsing\" and \"Hybrid\", filling in the selector configuration in the form (or applying the AI suggestion from the check result) is enough — without it the source still isn't crawled. The \"API\" strategy, and any source with no purpose-built provider in code (see src/server/search/providers/, provider-registry.ts), still needs one written. Enabling or disabling an already-active source takes effect immediately.",
       "empty": "No sources yet.",
+      "addNew": "Add source",
+      "collapseForm": "Collapse",
       "edit": "Edit",
       "urlRegistryLink": "URL registry",
       "enable": "Enable",
@@ -1194,7 +1196,32 @@
           "aiMatch": "Looks like a vessel listing",
           "aiNoMatch": "Doesn't look like a vessel listing",
           "extracted": "{name} · guests: {guests} · cabins: {cabins}",
-          "unknownField": "—"
+          "unknownField": "—",
+          "fields": {
+            "title": "What this page actually hands over",
+            "description": "Description: {description}",
+            "price": "Price: {price} {currency}",
+            "priceUnknown": "Price: not stated",
+            "vesselType": "Vessel type (site's own words): {vesselType}",
+            "location": "Location: {country}",
+            "locationBoth": "Location: {country}, {city}",
+            "locationUnknown": "Location: not extracted",
+            "breadcrumb": "Breadcrumb trail on page: {trail}"
+          },
+          "image": {
+            "title": "Image",
+            "none": "No image found",
+            "ok": "{domain} — matches the source's own domain",
+            "mismatch": "{domain} — a different domain, photos won't render until it's added to \"Trusted photo hosts\"",
+            "applyDomain": "Add domain"
+          }
+        },
+        "customUrlCheck": {
+          "title": "Check a specific URL",
+          "hint": "One URL is enough to see what fields the source actually hands over — no need to wait on a sitemap sample.",
+          "placeholder": "https://example.com/yacht/123",
+          "button": "Check URL",
+          "checking": "Checking…"
         },
         "errors": {
           "invalid": "Enter a valid base URL before checking",

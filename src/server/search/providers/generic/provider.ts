@@ -427,12 +427,31 @@ async function fetchCandidates(
           stats.offersExtracted += 1;
           if (matchesKnownCriteria(result, criteria)) results.push(result);
           if (!fromIndex && !revalidatedUnchanged && fieldSource && confidence !== null) {
+            const persistedFields = resultToListingFields(result);
+            // The JSON-LD tier's location is confirmed only against *this request's own* criteria
+            // (`matchBreadcrumbLocation`'s doc comment: "яхта в Турции" confirms "Turkey" because
+            // *that query* asked about Turkey and the page's breadcrumb happens to say so — it is
+            // not a claim that this page's country is Turkey in general). `search_extracted_listings`
+            // is query-independent and reused by every future search regardless of what it asks for
+            // (`getFreshListing` is age-gated only, not criteria-aware), and a stored field's `null`
+            // never overwrites an existing value (`listing-merge.ts`: "no opinion", never "clear").
+            // Persisting this confirmation would therefore permanently mislabel the page with
+            // whichever place the *first* query that ever indexed it happened to ask about — observed
+            // live: a Turkey-query confirmation on a sailica.com candidate then got served, unchanged,
+            // as that page's location to a later, unrelated Estonia query, passing
+            // `matchesKnownCriteria`'s presence check on a value that was simply wrong for it. Every
+            // other JSON-LD field here (name/price/description) *is* a stable, query-independent fact
+            // and keeps persisting as before — only location is query-scoped for this tier.
+            if (fieldSource === "JSON_LD") {
+              delete persistedFields.country;
+              delete persistedFields.city;
+            }
             // Best-effort, additive persistence (design doc data-merger-provenance-design.md phase P1) —
             // never read back by this same request, so a failure here must never affect the response.
             recordExtraction({
               sourceId: source.id,
               url,
-              fields: resultToListingFields(result),
+              fields: persistedFields,
               fieldSource,
               confidence,
               sourceUrl: url,

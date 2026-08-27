@@ -4,7 +4,7 @@ import { isAllowedByRobots } from "@/server/search/crawl/robots-rules";
 import { fetchRobotsInfo } from "@/server/search/crawl/robots";
 import { discoverSitemap } from "@/server/search/crawl/sitemap-discovery";
 import { sampleSitemapLocs } from "@/server/search/crawl/sitemap-rules";
-import { extractJsonLdTypes } from "@/lib/search/structured-data";
+import { extractJsonLdFields, extractJsonLdTypes } from "@/lib/search/structured-data";
 import { extractPageSummary } from "@/lib/search/page-text";
 import {
   classifyCandidatePage,
@@ -62,6 +62,47 @@ export interface SourceValidationReport {
   candidatePreview: CandidatePreview;
 }
 
+/**
+ * Whether an image this candidate published lives on the source's own domain — the exact question
+ * `api/external-image/route.ts`'s proxy allow-list needs answered before registration, not after: a
+ * source whose photos are hosted on a separate CDN (globesailor.ru → static.theglobesailor.com,
+ * sailica.com → sailica-media.fsn1.your-objectstorage.com — both found live, both cost every result
+ * from the source a broken image until an admin noticed and added the host to `imageDomains`) looks
+ * identical to a working source in every other part of this preview, so nothing else would have
+ * caught it before the source went live.
+ */
+export interface CandidateImageCheck {
+  url: string;
+  domain: string;
+  matchesSourceDomain: boolean;
+}
+
+/**
+ * The actual payload a live search would extract from this page — the same tiers and fields
+ * `providers/generic/provider.ts`'s `fetchAndNormalize` uses, run here read-only so an admin can see
+ * *what* the source will hand over before committing to it, not just *whether* it looks like a
+ * listing. `null` when the page wasn't recognized as a listing at all (see `classification`/
+ * `structuredDataTypes` for why).
+ */
+export interface CandidateExtractedFields {
+  name: string | null;
+  description: string | null;
+  price: number | null;
+  currency: string | null;
+  guests: number | null;
+  cabins: number | null;
+  vesselTypeRaw: string | null;
+  country: string | null;
+  city: string | null;
+  /** Raw `BreadcrumbList` trail, when the page's JSON-LD published one — shown as-is, not mapped to
+   *  country/city here: breadcrumb position has no standard meaning across sites (see
+   *  `matchBreadcrumbLocation`'s doc comment in `lib/search/structured-data.ts`), so this is what an
+   *  admin reviews to judge for themselves whether a crawl rule or a live query could reasonably
+   *  confirm a location from it. */
+  breadcrumbLabels: string[];
+  image: CandidateImageCheck | null;
+}
+
 export interface CandidatePreviewSample {
   url: string;
   fetched: boolean;
@@ -77,6 +118,8 @@ export interface CandidatePreviewSample {
    *  model produced nothing usable; always a suggestion for the admin to review, never applied on
    *  its own. */
   suggestedSelectors: SelectorConfig | null;
+  /** Null when the page couldn't be fetched or wasn't recognized as a listing by either tier. */
+  extractedFields: CandidateExtractedFields | null;
 }
 
 export interface CandidatePreview {
@@ -92,46 +135,123 @@ const PROBE_TIMEOUTS = { connectTimeoutMs: 4_000, readTimeoutMs: 6_000 };
  *  quick registration-time check, not a crawl of the catalog. */
 const MAX_CANDIDATE_SAMPLES = 3;
 
+/** `null` for a relative/malformed image URL — same "absent beats invented" treatment as every
+ *  other field here, not a thrown error. */
+function buildImageCheck(imageUrl: string | null, sourceDomain: string): CandidateImageCheck | null {
+  if (!imageUrl) return null;
+  try {
+    const domain = new URL(imageUrl).hostname.replace(/^www\./, "");
+    return { url: imageUrl, domain, matchesSourceDomain: domain === sourceDomain };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetches, classifies, and — when the page reads as a listing — fully extracts one candidate detail
+ * page, mirroring `providers/generic/provider.ts`'s own JSON-LD-before-AI tiers so this preview
+ * shows exactly what a live search would get from the page, not just whether it looks promising.
+ *
+ * Structured data is trusted only once it actually names something (`extractJsonLdFields(...)?.name`,
+ * not merely `extractJsonLdTypes(...).length > 0` — a page-wide `BreadcrumbList`/`Organization` block
+ * with no listing node used to short-circuit straight past AI classification here, reporting a false
+ * "structured match" for a page that in fact had nothing usable); only then does it fall back to the
+ * AI classifier, same JSON-LD-before-AI priority as spec §11.
+ */
+async function previewCandidateSample(url: string, sourceDomain: string): Promise<CandidatePreviewSample> {
+  const result = await safeFetch(url, PROBE_TIMEOUTS);
+  if (!result.ok) {
+    return {
+      url,
+      fetched: false,
+      structuredDataTypes: [],
+      classification: null,
+      suggestedSelectors: null,
+      extractedFields: null,
+    };
+  }
+
+  const structuredDataTypes = extractJsonLdTypes(result.body);
+  const structured = extractJsonLdFields(result.body);
+  if (structured?.name) {
+    return {
+      url,
+      fetched: true,
+      structuredDataTypes,
+      classification: null,
+      suggestedSelectors: null,
+      extractedFields: {
+        name: structured.name,
+        description: structured.description,
+        price: structured.price,
+        currency: structured.currency,
+        // Not stated by this tier's own JSON-LD node — same gap `providers/generic/provider.ts`'s
+        // JSON-LD tier has, not a bug specific to this preview.
+        guests: null,
+        cabins: null,
+        vesselTypeRaw: null,
+        country: null,
+        city: null,
+        breadcrumbLabels: structured.breadcrumbLabels,
+        image: buildImageCheck(structured.image, sourceDomain),
+      },
+    };
+  }
+
+  const classification = await classifyCandidatePage(result.body);
+  // Only worth proposing selectors once we already know this page is a vessel listing — nothing
+  // to point them at otherwise, and it's an extra AI call, not a free one.
+  const suggestedSelectors =
+    classification.looksLikeVesselListing && classification.confidence >= 0.5
+      ? await suggestSelectors(result.body)
+      : null;
+
+  const extractedFields = classification.looksLikeVesselListing
+    ? {
+        name: classification.extracted.name,
+        description: extractPageSummary(result.body).description,
+        // Never asked of this tier's model (same reasoning as the live provider's AI tier) —
+        // JSON-LD is the only price source today.
+        price: null,
+        currency: null,
+        guests: classification.extracted.guests,
+        cabins: classification.extracted.cabins,
+        vesselTypeRaw: classification.extracted.vesselTypeRaw,
+        country: classification.extracted.country,
+        city: classification.extracted.city,
+        breadcrumbLabels: [],
+        // `og:image`, read deterministically rather than asked of the model — same reasoning as the
+        // live provider's AI tier: an AI-stated image URL risks being invented/malformed.
+        image: buildImageCheck(extractPageSummary(result.body).image, sourceDomain),
+      }
+    : null;
+
+  return { url, fetched: true, structuredDataTypes: [], classification, suggestedSelectors, extractedFields };
+}
+
 /**
  * Fetches and classifies a handful of candidate detail pages found in the sitemap (spec §9: "does
- * it contain vessel rental offers?"). Structured data on the sample page itself is trusted over the
- * homepage's (a listing index can carry different markup than its detail pages), and only falls
- * back to the AI classifier when a page has none — same JSON-LD-before-AI priority as spec §11.
+ * it contain vessel rental offers?").
  */
-async function previewCandidates(sampleUrls: string[]): Promise<CandidatePreview> {
+async function previewCandidates(sampleUrls: string[], sourceDomain: string): Promise<CandidatePreview> {
   if (sampleUrls.length === 0) return { attempted: false, samples: [] };
 
-  const samples = await Promise.all(
-    sampleUrls.map(async (url): Promise<CandidatePreviewSample> => {
-      const result = await safeFetch(url, PROBE_TIMEOUTS);
-      if (!result.ok) {
-        return {
-          url,
-          fetched: false,
-          structuredDataTypes: [],
-          classification: null,
-          suggestedSelectors: null,
-        };
-      }
-
-      const structuredDataTypes = extractJsonLdTypes(result.body);
-      if (structuredDataTypes.length > 0) {
-        return { url, fetched: true, structuredDataTypes, classification: null, suggestedSelectors: null };
-      }
-
-      const classification = await classifyCandidatePage(result.body);
-      // Only worth proposing selectors once we already know this page is a vessel listing — nothing
-      // to point them at otherwise, and it's an extra AI call, not a free one.
-      const suggestedSelectors =
-        classification.looksLikeVesselListing && classification.confidence >= 0.5
-          ? await suggestSelectors(result.body)
-          : null;
-
-      return { url, fetched: true, structuredDataTypes: [], classification, suggestedSelectors };
-    }),
-  );
-
+  const samples = await Promise.all(sampleUrls.map((url) => previewCandidateSample(url, sourceDomain)));
   return { attempted: true, samples };
+}
+
+/**
+ * The single-URL counterpart to `previewCandidates` (spec §9): an admin who already knows which
+ * page matters — a real listing found by browsing the site, not necessarily one of the sitemap's
+ * first few entries — checks exactly that one page rather than waiting on a fresh random sample.
+ * One page is enough to answer "what will this source actually hand over, including its photos".
+ */
+export async function previewCandidateAtUrl(
+  baseUrl: string,
+  candidateUrl: string,
+): Promise<CandidatePreviewSample> {
+  const sourceDomain = new URL(baseUrl).hostname.replace(/^www\./, "");
+  return previewCandidateSample(candidateUrl, sourceDomain);
 }
 
 /**
@@ -182,7 +302,8 @@ export async function validateSearchSource(baseUrl: string): Promise<SourceValid
   const sampleUrls = sitemap
     ? sampleSitemapLocs(sitemap.xml, MAX_CANDIDATE_SAMPLES, pageResult.ok ? pageResult.finalUrl : undefined)
     : [];
-  const candidatePreview = await previewCandidates(sampleUrls);
+  const sourceDomain = parsedUrl.hostname.replace(/^www\./, "");
+  const candidatePreview = await previewCandidates(sampleUrls, sourceDomain);
 
   return {
     reachable: pageResult.ok,

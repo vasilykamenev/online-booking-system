@@ -31,6 +31,7 @@ vi.mock("@/server/actions/admin", () => ({
   createSearchSource: vi.fn(async () => ({})),
   updateSearchSource: vi.fn(async () => ({})),
   validateSearchSourceCandidate: vi.fn(async () => ({})),
+  checkCandidateUrl: vi.fn(async () => ({})),
 }));
 
 const BASE_DEFAULTS: SearchSourceFormDefaultValues = {
