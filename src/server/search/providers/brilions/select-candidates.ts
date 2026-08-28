@@ -50,7 +50,7 @@ const CITY_LABELS: Record<string, string> = {
  * against, so it isn't worth the request budget.
  */
 function hasFilterableCriteria(criteria: SearchCriteria): boolean {
-  return Boolean(criteria.vesselType) || Boolean(criteria.capacity?.persons);
+  return criteria.vesselTypes.length > 0 || Boolean(criteria.capacity?.persons);
 }
 
 /**

@@ -1,5 +1,10 @@
 import { currencyCodes } from "@/lib/currencies";
-import { searchCriteriaSchema, type SearchCriteria } from "@/lib/search/criteria";
+import {
+  searchCriteriaSchema,
+  type CrewType,
+  type PriceUnit,
+  type SearchCriteria,
+} from "@/lib/search/criteria";
 import { containsTerm, normalizeForMatch, parseLooseNumber, stem } from "@/lib/search/text";
 import type { SearchVocabulary, VocabularyEntry } from "@/lib/search/vocabulary";
 
@@ -45,6 +50,9 @@ const MIN_MARKERS = ["от", "from", "минимум", "min", "starting"];
 
 const CAPTAIN_MARKERS = ["капитан", "captain", "skipper", "шкипер", "crewed", "с капитаном"];
 const CREW_MARKERS = ["экипаж", "crew", "команд", "стюард", "steward"];
+/** Explicit "no crew" phrasing — `crewType` must never default to `BAREBOAT` just because neither
+ *  captain nor crew was mentioned; that's simply "unstated", not "stated as bareboat". */
+const BAREBOAT_MARKERS = ["bareboat", "без экипажа", "своими силами", "без капитана"];
 
 /**
  * Spelled-out small numbers, so "two week survey" and "две недели" are read as quantities.
@@ -290,6 +298,94 @@ function extractPrice(
   };
 }
 
+const PRICE_UNIT_STEMS: Record<Exclude<PriceUnit, "TRIP">, readonly string[]> = {
+  HOUR: UNIT_STEMS.hours,
+  DAY: UNIT_STEMS.days,
+  WEEK: UNIT_STEMS.weeks,
+  MONTH: UNIT_STEMS.months,
+};
+
+/**
+ * Finds a rate marker ("за неделю", "per week", "/week") directly following a stated price, and
+ * says how the budget is metered. Deliberately narrow — only fires immediately after `priceEnd`,
+ * gated on an explicit rate word ("за"/"per"/"/"): without that gate, any unrelated later mention
+ * of a day/week/month ("бюджет 3000 EUR, следующая неделя свободна") would be misread as a rate.
+ *
+ * Consuming the matched span is what keeps this from double-counting: without it, "3000 EUR за
+ * неделю" would *also* satisfy the bare-duration fallback below and produce a phantom 7-day trip
+ * that was never actually stated (only a weekly rate was).
+ */
+function extractPriceUnit(text: string, priceEnd: number): { unit: PriceUnit | null; range: Range | null } {
+  const window = text.slice(priceEnd, priceEnd + 24);
+  const match = /^\s*(?:за|per|\/)\s*([\p{L}]+)/iu.exec(window);
+  if (!match || match.index === undefined) return { unit: null, range: null };
+
+  const wordStem = stem(match[1]);
+  for (const [unit, stems] of Object.entries(PRICE_UNIT_STEMS) as [PriceUnit, readonly string[]][]) {
+    const matches = stems.some((candidate) => {
+      const candidateStem = stem(candidate);
+      return wordStem.startsWith(candidateStem) || candidateStem.startsWith(wordStem);
+    });
+    if (matches) {
+      return { unit, range: { start: priceEnd + match.index, end: priceEnd + match.index + match[0].length } };
+    }
+  }
+  return { unit: null, range: null };
+}
+
+/**
+ * Length and radius get their own dedicated extraction, unlike guests/cabins/duration, which share
+ * `extractNumberUnits`'s generic stem-matching. Their unit words are too short to matching safely
+ * there: "м" (meter) is a character-for-character prefix of half the Cyrillic alphabet under
+ * stem-prefix comparison, and "км" (kilometer) collides the same way with "кают" (cabins) — both
+ * would silently steal numbers meant for an unrelated field. Exact alternation with an explicit
+ * non-letter lookahead avoids that entirely.
+ */
+const LENGTH_UNIT = "(?:м|метр(?:а|ов|ы)?|meters?|metres?)(?![\\p{L}])";
+const RADIUS_UNIT = "(?:км|километр\\w*|kms?|kilometers?|kilometres?)(?![\\p{L}])";
+
+/** "12-14 м" → {min:12, max:14}; "от 12 м" → {min:12, max:null}; a bare "14 м" → {min:null, max:14},
+ *  mirroring `extractPrice`'s min/max-marker convention. */
+function extractLength(text: string): { length: { min: number | null; max: number | null } | null; range: Range | null } {
+  const rangeRe = new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*(?:[-–—]|to|до)\\s*(\\d+(?:[.,]\\d+)?)\\s*${LENGTH_UNIT}`, "iu");
+  const rangeMatch = rangeRe.exec(text);
+  if (rangeMatch?.index !== undefined) {
+    const min = parseLooseNumber(rangeMatch[1]);
+    const max = parseLooseNumber(rangeMatch[2]);
+    return {
+      length: min !== null || max !== null ? { min, max } : null,
+      range: { start: rangeMatch.index, end: rangeMatch.index + rangeMatch[0].length },
+    };
+  }
+
+  const singleRe = new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*${LENGTH_UNIT}`, "iu");
+  const singleMatch = singleRe.exec(text);
+  if (singleMatch?.index !== undefined) {
+    const value = parseLooseNumber(singleMatch[1]);
+    if (value === null) return { length: null, range: null };
+    const before = normalizeForMatch(text.slice(Math.max(0, singleMatch.index - 14), singleMatch.index));
+    const isMinimum = MIN_MARKERS.some((marker) => containsTerm(before, marker));
+    return {
+      length: isMinimum ? { min: value, max: null } : { min: null, max: value },
+      range: { start: singleMatch.index, end: singleMatch.index + singleMatch[0].length },
+    };
+  }
+
+  return { length: null, range: null };
+}
+
+/** "50 км" / "50 km" → 50. Resolving *which* point that radius centers on is not this module's
+ *  job (see `criteria.ts`'s doc comment on `location.latitude`) — a stated place name is still
+ *  picked up independently by the vocabulary matching below. */
+function extractRadiusKm(text: string): { radiusKm: number | null; range: Range | null } {
+  const re = new RegExp(`(\\d+(?:[.,]\\d+)?)\\s*${RADIUS_UNIT}`, "iu");
+  const match = re.exec(text);
+  if (match?.index === undefined) return { radiusKm: null, range: null };
+  const value = parseLooseNumber(match[1]);
+  if (value === null) return { radiusKm: null, range: null };
+  return { radiusKm: value, range: { start: match.index, end: match.index + match[0].length } };
+}
+
 interface NumberUnit {
   /** Upper bound of a range ("8-10 человек" → 10): the vessel must fit the whole group. */
   value: number;
@@ -355,6 +451,23 @@ export function interpretQueryDeterministic({
   const { price, ranges: priceRanges } = extractPrice(query, locales);
   consumed.push(...priceRanges);
 
+  // A rate marker ("за неделю") only makes sense directly after the price itself was found —
+  // scanning for one first, before anything else consumes text, is what lets it see "3000 EUR за
+  // неделю" as one phrase rather than two independent mentions.
+  let priceUnit: PriceUnit | null = null;
+  if (price) {
+    const priceEnd = Math.max(...priceRanges.map((range) => range.end));
+    const found = extractPriceUnit(query, priceEnd);
+    priceUnit = found.unit;
+    if (found.range) consumed.push(found.range);
+  }
+
+  const { length, range: lengthRange } = extractLength(blankRanges(query, consumed));
+  if (lengthRange) consumed.push(lengthRange);
+
+  const { radiusKm, range: radiusRange } = extractRadiusKm(blankRanges(query, consumed));
+  if (radiusRange) consumed.push(radiusRange);
+
   const afterPrice = substituteWordNumerals(blankRanges(query, consumed));
   const numberUnits = extractNumberUnits(afterPrice);
   consumed.push(...numberUnits.map((entry) => entry.range));
@@ -376,8 +489,11 @@ export function interpretQueryDeterministic({
   else if (hours) duration = { value: hours.value, unit: "HOUR" };
   // "на неделю" carries a duration with no number attached. Matched via `containsTerm`, not a
   // `\b`-anchored regex: JavaScript's `\b` is defined against ASCII `\w`, so `\bнедел` never
-  // matches — there is no word boundary before a Cyrillic letter.
-  else if (containsTerm(query, "неделя") || containsTerm(query, "week")) {
+  // matches — there is no word boundary before a Cyrillic letter. Checked against `afterPrice`
+  // (already blanked of anything `extractPriceUnit` consumed), not the raw query — otherwise
+  // "3000 EUR за неделю" would double-count as *both* a weekly rate and a separate 7-day trip
+  // that was never actually stated.
+  else if (containsTerm(afterPrice, "неделя") || containsTerm(afterPrice, "week")) {
     duration = { value: 7, unit: "DAY" };
   }
 
@@ -397,17 +513,36 @@ export function interpretQueryDeterministic({
   // in the query still wins (checked first), same precedence as the literal-month case above.
   const year = yearMatch ? Number(yearMatch[1]) : (relativeMonth?.year ?? null);
 
-  const captainRequired = CAPTAIN_MARKERS.some((marker) => containsTerm(query, marker)) || null;
-  const crewRequired = CREW_MARKERS.some((marker) => containsTerm(query, marker)) || null;
+  const bareboat = BAREBOAT_MARKERS.some((marker) => containsTerm(query, marker));
+  // A bareboat marker ("без экипажа") contains the word "экипаж" itself, which `CREW_MARKERS`
+  // would otherwise also match — checked and short-circuited first so "без экипажа" reads as "no
+  // crew", not as a self-contradictory "no crew, crew required".
+  const captainRequired = !bareboat && CAPTAIN_MARKERS.some((marker) => containsTerm(query, marker)) || null;
+  const crewRequired = !bareboat && CREW_MARKERS.some((marker) => containsTerm(query, marker)) || null;
+  // "Skippered" and "captain required" are the same request from the customer's side, so a
+  // captain marker doubles as the `crewType` signal too — but only when the query didn't
+  // explicitly say bareboat, which must win regardless of what else is mentioned.
+  const crewType: CrewType | null = bareboat
+    ? "BAREBOAT"
+    : crewRequired
+      ? "CREWED"
+      : captainRequired
+        ? "SKIPPERED"
+        : null;
 
-  const vesselType =
-    vocabulary.vesselTypes.find((entry) =>
-      entry.aliases.some((alias) => containsTerm(query, alias)),
-    )?.value ?? null;
-
-  const features = vocabulary.features
+  // Every matching type, not just the first (Арх §5's `vesselTypes[]`) — "яхта или катамаран"
+  // names two acceptable types, and picking one arbitrarily would silently exclude the other.
+  const vesselTypes = vocabulary.vesselTypes
     .filter((entry) => entry.aliases.some((alias) => containsTerm(query, alias)))
     .map((entry) => entry.value);
+
+  const amenities = vocabulary.features
+    .filter((entry) => entry.aliases.some((alias) => containsTerm(query, alias)))
+    .map((entry) => entry.value);
+  // No reference vocabulary to match "diving"/"family holiday"-style phrases against yet (see
+  // `criteria.ts`'s doc comment on `activities`) — the deterministic path leaves this to the AI
+  // interpreter rather than guessing at free text with no controlled list to check it against.
+  const activities: string[] = [];
 
   const country = bestVocabularyMatch(query, vocabulary.countries);
   const city = bestVocabularyMatch(query, vocabulary.cities);
@@ -416,7 +551,7 @@ export function interpretQueryDeterministic({
   // Leftover long words. Noise ("желательно") is tolerated: an unmatched keyword contributes
   // nothing to ranking, so a permissive filter costs precision nowhere.
   const matchedTerms = new Set(
-    [country, city, marina, ...features].filter((value): value is string => value !== null).flatMap((value) =>
+    [country, city, marina, ...amenities].filter((value): value is string => value !== null).flatMap((value) =>
       normalizeForMatch(value).split(" "),
     ),
   );
@@ -438,10 +573,14 @@ export function interpretQueryDeterministic({
         : null,
     capacity: guests !== null || cabins !== null ? { persons: guests, cabins } : null,
     price,
+    priceUnit,
     duration,
-    crew: captainRequired || crewRequired ? { captainRequired, crewRequired } : null,
-    vesselType,
-    features,
+    length,
+    crew: captainRequired || crewRequired || crewType ? { captainRequired, crewRequired, crewType } : null,
+    vesselTypes,
+    amenities,
+    activities,
+    searchRadiusKm: radiusKm,
     keywords,
   });
 }

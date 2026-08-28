@@ -216,9 +216,14 @@
       "duration": "Duration",
       "durationValue": "{unit, select, HOUR {{value} h} DAY {{value} d} WEEK {{value} wk} MONTH {{value} mo} other {{value}}}",
       "priceMax": "Up to",
+      "lengthMin": "Length from",
+      "lengthMax": "Length up to",
+      "searchRadiusKm": "Radius, km",
       "captain": "With captain",
       "crew": "With crew",
-      "feature": "Feature"
+      "crewType": "Crewing",
+      "feature": "Feature",
+      "activity": "Activity"
     }
   },
   "features": {

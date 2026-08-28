@@ -18,7 +18,7 @@ export interface RankingWeights {
   price: number;
   vesselType: number;
   date: number;
-  features: number;
+  amenities: number;
   completeness: number;
   sourceReliability: number;
 }
@@ -29,7 +29,7 @@ export const defaultRankingWeights: RankingWeights = {
   price: 0.15,
   vesselType: 0.12,
   date: 0.13,
-  features: 0.1,
+  amenities: 0.1,
   completeness: 0.08,
   sourceReliability: 0.07,
 };
@@ -103,10 +103,12 @@ export function scorePrice(result: VesselSearchResult, criteria: SearchCriteria)
   return clamp01(1 - (price - budget) / budget);
 }
 
+/** Any of the requested types is a full match — "яхта или катамаран" doesn't rank a catamaran
+ *  below a motor yacht just because it wasn't listed first. */
 export function scoreVesselType(result: VesselSearchResult, criteria: SearchCriteria): number | null {
-  if (!criteria.vesselType) return null;
+  if (criteria.vesselTypes.length === 0) return null;
   if (result.vesselType === null) return null;
-  return result.vesselType === criteria.vesselType ? 1 : 0;
+  return criteria.vesselTypes.includes(result.vesselType) ? 1 : 0;
 }
 
 /** ISO `YYYY-MM-DD` strings compare correctly as plain strings — no Date parsing needed. */
@@ -150,11 +152,17 @@ export function scoreDate(result: VesselSearchResult, criteria: SearchCriteria):
   return null;
 }
 
-export function scoreFeatures(result: VesselSearchResult, criteria: SearchCriteria): number | null {
-  if (criteria.features.length === 0) return null;
+/**
+ * Scores against `criteria.amenities` only — matched against the same controlled vocabulary as
+ * `result.features` (both trace back to `amenities.key`). `criteria.activities` has no comparable
+ * data on results yet (no reference table, see `criteria.ts`'s doc comment on `activities`), so it
+ * isn't scored here; adding it is future work once offers actually carry activity data.
+ */
+export function scoreAmenities(result: VesselSearchResult, criteria: SearchCriteria): number | null {
+  if (criteria.amenities.length === 0) return null;
   const present = new Set(result.features.map(normalizeForMatch));
-  const matched = criteria.features.filter((feature) => present.has(normalizeForMatch(feature)));
-  return matched.length / criteria.features.length;
+  const matched = criteria.amenities.filter((amenity) => present.has(normalizeForMatch(amenity)));
+  return matched.length / criteria.amenities.length;
 }
 
 export interface RankingOptions {
@@ -187,7 +195,7 @@ export function scoreResult(
     ["price", scorePrice(result, criteria)],
     ["vesselType", scoreVesselType(result, criteria)],
     ["date", scoreDate(result, criteria)],
-    ["features", scoreFeatures(result, criteria)],
+    ["amenities", scoreAmenities(result, criteria)],
     // These two always apply: they describe the result itself, not its fit to the query.
     ["completeness", dataCompleteness(result)],
     ["sourceReliability", reliability],

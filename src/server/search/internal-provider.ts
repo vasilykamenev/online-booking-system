@@ -155,6 +155,11 @@ function toResult(row: VesselRow, locale: Locale, retrievedAt: string): VesselSe
 
   return {
     ...result,
+    // Read live from our own tables at request time — the query *is* the verification, so this is
+    // never inferred the way an external offer's status will be (Э7).
+    availabilityStatus: "VERIFIED",
+    verifiedAt: retrievedAt,
+    contactCapability: "PLATFORM_MESSAGE",
     internalVesselId: row.id,
     slug: row.slug,
     name: row.name,
@@ -211,7 +216,7 @@ export async function searchInternalVessels(
   let query = supabase.from("vessels").select(SELECT_COLUMNS).eq("status", "published");
 
   if (locationIds) query = query.in("location_id", locationIds);
-  if (criteria.vesselType) query = query.eq("type", criteria.vesselType);
+  if (criteria.vesselTypes.length > 0) query = query.in("type", criteria.vesselTypes);
   if (criteria.capacity?.persons) query = query.gte("guests_capacity", criteria.capacity.persons);
   if (criteria.capacity?.cabins) query = query.gte("cabins", criteria.capacity.cabins);
   if (criteria.price?.maxMinor) {

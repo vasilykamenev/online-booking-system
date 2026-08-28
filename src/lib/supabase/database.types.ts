@@ -883,6 +883,7 @@ export type Database = {
           pages_rejected: number
           pages_revalidated_unchanged: number
           pages_visited: number
+          request_version: number
           sources_visited: number
           user_id: string | null
         }
@@ -908,6 +909,7 @@ export type Database = {
           pages_rejected?: number
           pages_revalidated_unchanged?: number
           pages_visited?: number
+          request_version?: number
           sources_visited?: number
           user_id?: string | null
         }
@@ -933,6 +935,7 @@ export type Database = {
           pages_rejected?: number
           pages_revalidated_unchanged?: number
           pages_visited?: number
+          request_version?: number
           sources_visited?: number
           user_id?: string | null
         }

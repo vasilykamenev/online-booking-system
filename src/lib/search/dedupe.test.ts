@@ -135,6 +135,29 @@ describe("mergeResults", () => {
     expect(merged.features).toEqual(expect.arrayContaining(["wifi", "diving"]));
     expect(merged.images).toHaveLength(2);
   });
+
+  it("keeps the primary's availability status rather than filling it from the duplicate", () => {
+    const merged = mergeResults(
+      makeResult({ id: "a", name: "X", availabilityStatus: "VERIFIED" }),
+      makeResult({ id: "b", name: "X", availabilityStatus: "UNKNOWN", source: otherSource }),
+    );
+    expect(merged.availabilityStatus).toBe("VERIFIED");
+  });
+
+  it("fills gaps for the other new offer fields from the duplicate", () => {
+    const merged = mergeResults(
+      makeResult({ id: "a", name: "X", confidence: null, contactCapability: null }),
+      makeResult({
+        id: "b",
+        name: "X",
+        confidence: "HIGH",
+        contactCapability: "EMAIL",
+        source: otherSource,
+      }),
+    );
+    expect(merged.confidence).toBe("HIGH");
+    expect(merged.contactCapability).toBe("EMAIL");
+  });
 });
 
 describe("dedupeResults", () => {

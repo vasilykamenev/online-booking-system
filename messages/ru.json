@@ -216,9 +216,14 @@
       "duration": "Длительность",
       "durationValue": "{unit, select, HOUR {{value} ч} DAY {{value} дн.} WEEK {{value} нед.} MONTH {{value} мес.} other {{value}}}",
       "priceMax": "До",
+      "lengthMin": "Длина от",
+      "lengthMax": "Длина до",
+      "searchRadiusKm": "Радиус, км",
       "captain": "С капитаном",
       "crew": "С экипажем",
-      "feature": "Удобство"
+      "crewType": "Экипаж",
+      "feature": "Удобство",
+      "activity": "Активность"
     }
   },
   "features": {

@@ -46,7 +46,8 @@ describe("interpretQueryDeterministic — spec §4 worked examples", () => {
     expect(criteria.price?.maxMinor).toBe(500_000);
     expect(criteria.price?.currency).toBe("EUR");
     expect(criteria.crew?.captainRequired).toBe(true);
-    expect(criteria.vesselType).toBe("MOTOR_YACHT");
+    expect(criteria.crew?.crewType).toBe("SKIPPERED");
+    expect(criteria.vesselTypes).toEqual(["MOTOR_YACHT"]);
   });
 
   it("interprets the Svalbard expedition example, taking the top of a guest range", () => {
@@ -56,7 +57,7 @@ describe("interpretQueryDeterministic — spec §4 worked examples", () => {
 
     // The vessel has to fit the whole party, so a range resolves to its upper bound.
     expect(criteria.capacity?.persons).toBe(10);
-    expect(criteria.vesselType).toBe("EXPEDITION_YACHT");
+    expect(criteria.vesselTypes).toEqual(["EXPEDITION_YACHT"]);
     // Nothing in the text names a country in our reference data — it must not invent one.
     expect(criteria.location).toBeNull();
     expect(criteria.price).toBeNull();
@@ -70,7 +71,7 @@ describe("interpretQueryDeterministic — never invents criteria (spec §4)", ()
     expect(criteria.capacity).toBeNull();
     expect(criteria.price).toBeNull();
     expect(criteria.date).toBeNull();
-    expect(criteria.vesselType).toBeNull();
+    expect(criteria.vesselTypes).toEqual([]);
   });
 
   it("does not infer a year when only a month was named", () => {
@@ -232,10 +233,14 @@ describe("interpretQueryDeterministic — vocabulary matching", () => {
     );
   });
 
-  it("collects requested features as amenity slugs", () => {
-    expect(interpret("катамаран с дайвингом и вайфаем").features).toEqual(
+  it("collects requested amenities as slugs", () => {
+    expect(interpret("катамаран с дайвингом и вайфаем").amenities).toEqual(
       expect.arrayContaining(["diving", "wifi"]),
     );
+  });
+
+  it("never populates activities — no reference vocabulary exists yet for them", () => {
+    expect(interpret("катамаран для дайвинга").activities).toEqual([]);
   });
 
   it("does not read a marina name as the month of May", () => {
@@ -253,5 +258,81 @@ describe("interpretQueryDeterministic — crew", () => {
   it("leaves the captain flag null rather than false when unmentioned", () => {
     // "not mentioned" is not the same as "explicitly not wanted" — only the former is knowable here.
     expect(interpret("яхта в Греции").crew).toBeNull();
+  });
+
+  it("reads an explicit bareboat request, overriding any captain marker", () => {
+    expect(interpret("яхта без экипажа").crew?.crewType).toBe("BAREBOAT");
+  });
+
+  it("reads a crew requirement as CREWED", () => {
+    expect(interpret("яхта с полным экипажем").crew?.crewType).toBe("CREWED");
+  });
+});
+
+describe("interpretQueryDeterministic — length", () => {
+  it("reads a length range in meters", () => {
+    expect(interpret("яхта 12-14 метров").length).toEqual({ min: 12, max: 14 });
+  });
+
+  it("reads a length range with the short Cyrillic abbreviation and an en dash", () => {
+    expect(interpret("яхта 12–14 м").length).toEqual({ min: 12, max: 14 });
+  });
+
+  it("treats a bare length as a ceiling, and one introduced by 'от' as a floor", () => {
+    expect(interpret("яхта до 14 м").length).toEqual({ min: null, max: 14 });
+    expect(interpret("яхта от 12 м").length).toEqual({ min: 12, max: null });
+  });
+
+  it("does not confuse a duration month with a length", () => {
+    // Regression guard for the UNIT_STEMS collision this module's length extraction was written
+    // to avoid — "3 месяца" must stay a 90-day duration, never a 3-meter length.
+    expect(interpret("экспедиция на 3 месяца").length).toBeNull();
+  });
+});
+
+describe("interpretQueryDeterministic — search radius", () => {
+  it("reads a stated radius in kilometers", () => {
+    expect(interpret("яхта в 50 км от Сплита").searchRadiusKm).toBe(50);
+  });
+
+  it("does not confuse a radius with a cabin count", () => {
+    // Regression guard: "км" and "кают" (cabins) share a one-letter stem prefix, which the
+    // generic number/unit matcher would conflate if radius went through it.
+    const criteria = interpret("яхта в 50 км от Сплита, 3 каюты");
+    expect(criteria.searchRadiusKm).toBe(50);
+    expect(criteria.capacity?.cabins).toBe(3);
+  });
+});
+
+describe("interpretQueryDeterministic — price unit", () => {
+  it("reads a weekly rate marker attached to the price, without inventing a separate trip length", () => {
+    const criteria = interpret("яхта до 3000 EUR за неделю");
+    expect(criteria.price?.maxMinor).toBe(300_000);
+    expect(criteria.priceUnit).toBe("WEEK");
+    // The week was consumed as the *rate*, not a separately stated trip duration.
+    expect(criteria.duration).toBeNull();
+  });
+
+  it("does not infer a price unit when no rate marker follows the price", () => {
+    const criteria = interpret("яхта до 3000 EUR, свободна на следующей неделе");
+    expect(criteria.priceUnit).toBeNull();
+  });
+});
+
+describe("interpretQueryDeterministic — the Э2 worked example", () => {
+  it("parses every stated criterion from a single dense query", () => {
+    const criteria = interpret(
+      "яхта в 50 км от Сплита, 12–14 м, до 3000 EUR за неделю, с капитаном",
+    );
+
+    expect(criteria.location?.city).toBe("Split");
+    expect(criteria.searchRadiusKm).toBe(50);
+    expect(criteria.length).toEqual({ min: 12, max: 14 });
+    expect(criteria.price?.maxMinor).toBe(300_000);
+    expect(criteria.price?.currency).toBe("EUR");
+    expect(criteria.priceUnit).toBe("WEEK");
+    expect(criteria.duration).toBeNull();
+    expect(criteria.crew?.captainRequired).toBe(true);
+    expect(criteria.crew?.crewType).toBe("SKIPPERED");
   });
 });

@@ -137,6 +137,8 @@ export function mergeResults(
     ...primary,
     internalVesselId: fillScalar(primary.internalVesselId, duplicate.internalVesselId),
     slug: fillScalar(primary.slug, duplicate.slug),
+    sourceId: fillScalar(primary.sourceId, duplicate.sourceId),
+    externalId: fillScalar(primary.externalId, duplicate.externalId),
     name: fillScalar(primary.name, duplicate.name),
     vesselType: fillScalar(primary.vesselType, duplicate.vesselType),
     vesselTypeRaw: fillScalar(primary.vesselTypeRaw, duplicate.vesselTypeRaw),
@@ -189,6 +191,14 @@ export function mergeResults(
       (source, index, all) => all.findIndex((candidate) => candidate.url === source.url) === index,
     ),
     fieldProvenance: { ...duplicate.fieldProvenance, ...primary.fieldProvenance },
+    // `availabilityStatus` is intentionally left at `...primary`'s value above rather than filled
+    // from `duplicate` — it isn't a "gap" the way a null field is, and picking whichever status
+    // happens to be more optimistic would misrepresent the primary listing (Э7 owns real rules for
+    // reconciling two sources that disagree on availability).
+    confidence: fillScalar(primary.confidence, duplicate.confidence),
+    indexedAt: fillScalar(primary.indexedAt, duplicate.indexedAt),
+    verifiedAt: fillScalar(primary.verifiedAt, duplicate.verifiedAt),
+    contactCapability: fillScalar(primary.contactCapability, duplicate.contactCapability),
   };
 }
 

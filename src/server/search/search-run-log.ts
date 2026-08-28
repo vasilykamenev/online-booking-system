@@ -15,6 +15,11 @@ import { getCurrentProfile } from "@/server/queries/profile";
  * `payments` (CLAUDE.md §8).
  */
 
+/** Current shape of `interpreted_criteria` — bump alongside `SearchCriteria` whenever its shape
+ *  changes again, so old rows in `search_runs` stay distinguishable (see the migration adding
+ *  `request_version`). */
+export const CURRENT_REQUEST_VERSION = 2;
+
 export interface SearchRunRecord {
   id: string;
   locale: Locale;
@@ -44,6 +49,7 @@ export async function recordSearchRun(record: SearchRunRecord): Promise<void> {
         locale: record.locale,
         original_query: record.query,
         interpreted_criteria: record.criteria,
+        request_version: CURRENT_REQUEST_VERSION,
         interpretation_mode: record.interpretation.mode,
         degraded_reason: record.interpretation.degradedReason ?? null,
         sources_visited: record.externalStats.sourcesVisited,

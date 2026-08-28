@@ -1,5 +1,5 @@
 import type { Database } from "@/lib/supabase/database.types";
-import type { DurationUnit } from "@/lib/search/criteria";
+import type { DurationUnit, PriceUnit } from "@/lib/search/criteria";
 
 /**
  * The canonical shape every result is normalized into (spec §13), whether it came from our own
@@ -18,6 +18,36 @@ export type VesselType = Database["public"]["Enums"]["vessel_type"];
 export type ResultOrigin = "INTERNAL" | "EXTERNAL";
 
 export type SourceType = "INTERNAL" | "WEBSITE" | "API";
+
+/**
+ * Арх §15's availability state machine. Full rule derivation (index freshness + live-verification
+ * result + source reliability → this value) is Э7's job — this stage only adds the field and its
+ * one unconditional rule: an internal offer is read straight from our own `availability`/`bookings`
+ * tables at request time, so it is `VERIFIED` by construction, never inferred.
+ */
+export type OfferAvailabilityStatus = "VERIFIED" | "LIKELY_AVAILABLE" | "UNKNOWN" | "UNAVAILABLE";
+
+/**
+ * Extraction confidence for the offer as a whole (Арх §11's `confidence`) — distinct from
+ * `RankingInfo.score`, which measures fit to the query, not trust in the data itself. `null` for
+ * deterministic data (our own DB, a source's structured JSON-LD) — the same "absence is the signal"
+ * rule `FieldProvenance.confidence` already follows, just at the offer level.
+ */
+export type OfferConfidence = "HIGH" | "MEDIUM" | "LOW" | null;
+
+/**
+ * How a user can reach out about this offer (Э3/Э9's `search_contact_capability`, not a DB enum
+ * yet — same deferred-until-a-column-needs-it pattern as `PriceUnit`). `PLATFORM_MESSAGE` for
+ * internal offers (existing `conversations`/`messages`); external offers leave this `null` until
+ * Э3 gives `SourceProfile` a real capability to report.
+ */
+export type ContactCapability =
+  | "EMAIL"
+  | "PROVIDER_API"
+  | "CONTACT_FORM"
+  | "EXTERNAL_BOOKING_URL"
+  | "PLATFORM_MESSAGE"
+  | "REDIRECT_ONLY";
 
 /**
  * Mandatory on every external result (spec §14): the user must always be able to open the page a
@@ -70,7 +100,7 @@ export interface ResultRental {
   /** Minor units, matching `vessels.base_price_minor` (CLAUDE.md §7). Never a float. */
   priceMinor: number | null;
   currency: string | null;
-  priceUnit: DurationUnit | "TRIP" | null;
+  priceUnit: PriceUnit | null;
   minDuration: number | null;
   minDurationUnit: DurationUnit | null;
   captainIncluded: boolean | null;
@@ -103,6 +133,12 @@ export interface VesselSearchResult {
   /** Set for internal results so the UI can deep-link into the real booking flow. */
   internalVesselId: string | null;
   slug: string | null;
+  /** `search_sources.id` this offer came from (Арх §11). `null` for internal offers — they have no
+   *  row in that registry, `origin: "INTERNAL"` already says where they're from. */
+  sourceId: string | null;
+  /** The offer's id on the source's own system, for `getDetails`/`checkAvailability` (Э4). `null`
+   *  for internal offers, which use `internalVesselId` instead. */
+  externalId: string | null;
 
   name: string | null;
   /** Constrained to our own enum so it stays directly filterable. `null` when unmappable. */
@@ -138,6 +174,18 @@ export interface VesselSearchResult {
   /** Keyed by dotted field path, e.g. `"rental.priceMinor"`. Sparse by design. */
   fieldProvenance: Record<string, FieldProvenance>;
   ranking?: RankingInfo;
+
+  /** `VERIFIED` by construction for internal offers (read live from our own tables); `UNKNOWN`
+   *  default for external ones until Э7 wires up real inference. */
+  availabilityStatus: OfferAvailabilityStatus;
+  confidence: OfferConfidence;
+  /** When this offer was last written to `external_vessel_index` (Э5). `null` for internal offers
+   *  and for any external offer still coming from the live-crawl path rather than the index. */
+  indexedAt: string | null;
+  /** When this offer's availability/price was last confirmed against the live source. Internal
+   *  offers set this to the moment they were queried — the DB read *is* the verification. */
+  verifiedAt: string | null;
+  contactCapability: ContactCapability | null;
 }
 
 /**
@@ -150,6 +198,8 @@ export function emptyResult(id: string, origin: ResultOrigin, source: ResultSour
     origin,
     internalVesselId: null,
     slug: null,
+    sourceId: null,
+    externalId: null,
     name: null,
     vesselType: null,
     vesselTypeRaw: null,
@@ -177,6 +227,13 @@ export function emptyResult(id: string, origin: ResultOrigin, source: ResultSour
     source,
     alternateSources: [],
     fieldProvenance: {},
+    // Honest default for a result nobody has verified yet — `searchInternalVessels` overrides this
+    // to `"VERIFIED"`, since reading it live from our own tables *is* the verification.
+    availabilityStatus: "UNKNOWN",
+    confidence: null,
+    indexedAt: null,
+    verifiedAt: null,
+    contactCapability: null,
   };
 }
 

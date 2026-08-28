@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest";
 import { emptyResult, type ResultSource, type VesselSearchResult } from "./result";
 import { searchCriteriaSchema, type SearchCriteria } from "./criteria";
-import { INTERNAL_ORIGIN_BONUS, rankResults, scoreCapacity, scoreDate, scorePrice, scoreResult } from "./ranking";
+import {
+  INTERNAL_ORIGIN_BONUS,
+  rankResults,
+  scoreAmenities,
+  scoreCapacity,
+  scoreDate,
+  scorePrice,
+  scoreResult,
+  scoreVesselType,
+} from "./ranking";
 
 const internalSource: ResultSource = {
   type: "INTERNAL",
@@ -89,6 +98,35 @@ describe("scoreDate", () => {
 
   it("is not applicable when availability is unknown", () => {
     expect(scoreDate(makeResult(), criteria({ date: { month: 9 } }))).toBeNull();
+  });
+});
+
+describe("scoreVesselType", () => {
+  it("matches when the result's type is any of several requested ones", () => {
+    const catamaran = makeResult({ vesselType: "CATAMARAN" });
+    expect(scoreVesselType(catamaran, criteria({ vesselTypes: ["MOTOR_YACHT", "CATAMARAN"] }))).toBe(1);
+  });
+
+  it("scores zero for a type outside the requested list", () => {
+    const catamaran = makeResult({ vesselType: "CATAMARAN" });
+    expect(scoreVesselType(catamaran, criteria({ vesselTypes: ["MOTOR_YACHT"] }))).toBe(0);
+  });
+
+  it("is not applicable when the query named no vessel type", () => {
+    const catamaran = makeResult({ vesselType: "CATAMARAN" });
+    expect(scoreVesselType(catamaran, criteria({}))).toBeNull();
+  });
+});
+
+describe("scoreAmenities", () => {
+  it("scores the fraction of requested amenities the result actually has", () => {
+    const result = makeResult({ features: ["wifi", "aircon"] });
+    expect(scoreAmenities(result, criteria({ amenities: ["wifi", "diving"] }))).toBe(0.5);
+  });
+
+  it("is not applicable when the query named no amenities", () => {
+    const result = makeResult({ features: ["wifi"] });
+    expect(scoreAmenities(result, criteria({}))).toBeNull();
   });
 });
 

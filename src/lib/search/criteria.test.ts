@@ -32,12 +32,47 @@ describe("searchCriteriaSchema — tolerating untrusted model output", () => {
     expect(searchCriteriaSchema.parse({ date: { month: 33 } }).date?.month).toBeNull();
   });
 
-  it("rejects a vessel type outside the project's own enum", () => {
-    expect(searchCriteriaSchema.parse({ vesselType: "submarine" }).vesselType).toBeNull();
+  it("drops a vessel type outside the project's own enum, keeping the rest of the list", () => {
+    expect(
+      searchCriteriaSchema.parse({ vesselTypes: ["CATAMARAN", "submarine"] }).vesselTypes,
+    ).toEqual(["CATAMARAN"]);
   });
 
-  it("falls back to an empty list when features is not an array", () => {
-    expect(searchCriteriaSchema.parse({ features: "wifi" }).features).toEqual([]);
+  it("falls back to an empty list when vesselTypes is not an array", () => {
+    expect(searchCriteriaSchema.parse({ vesselTypes: "CATAMARAN" }).vesselTypes).toEqual([]);
+  });
+
+  it("falls back to an empty list when amenities is not an array", () => {
+    expect(searchCriteriaSchema.parse({ amenities: "wifi" }).amenities).toEqual([]);
+  });
+
+  it("keeps amenities and activities independent", () => {
+    const criteria = searchCriteriaSchema.parse({ amenities: ["wifi"], activities: ["diving"] });
+    expect(criteria.amenities).toEqual(["wifi"]);
+    expect(criteria.activities).toEqual(["diving"]);
+  });
+
+  it("accepts a length range", () => {
+    const criteria = searchCriteriaSchema.parse({ length: { min: 12, max: 14 } });
+    expect(criteria.length).toEqual({ min: 12, max: 14 });
+  });
+
+  it("rejects a price unit outside the enum", () => {
+    expect(searchCriteriaSchema.parse({ priceUnit: "YEAR" }).priceUnit).toBeNull();
+  });
+
+  it("accepts a crew type alongside the existing crew booleans", () => {
+    const criteria = searchCriteriaSchema.parse({
+      crew: { captainRequired: true, crewType: "SKIPPERED" },
+    });
+    expect(criteria.crew).toEqual({ captainRequired: true, crewRequired: null, crewType: "SKIPPERED" });
+  });
+
+  it("degrades an out-of-range coordinate to null rather than rejecting the whole location", () => {
+    expect(searchCriteriaSchema.parse({ searchRadiusKm: -5 }).searchRadiusKm).toBeNull();
+    const criteria = searchCriteriaSchema.parse({ location: { latitude: 999, longitude: 16 } });
+    expect(criteria.location?.latitude).toBeNull();
+    expect(criteria.location?.longitude).toBe(16);
   });
 });
 
@@ -59,9 +94,27 @@ describe("criteriaToChips", () => {
     expect(exact.map((chip) => chip.path)).not.toContain("date.month");
   });
 
-  it("emits one chip per requested feature", () => {
-    const chips = criteriaToChips(searchCriteriaSchema.parse({ features: ["wifi", "diving"] }));
-    expect(chips.map((chip) => chip.path)).toEqual(["features.wifi", "features.diving"]);
+  it("emits one chip per requested amenity", () => {
+    const chips = criteriaToChips(searchCriteriaSchema.parse({ amenities: ["wifi", "diving"] }));
+    expect(chips.map((chip) => chip.path)).toEqual(["amenities.wifi", "amenities.diving"]);
+  });
+
+  it("emits one chip per vessel type", () => {
+    const chips = criteriaToChips(
+      searchCriteriaSchema.parse({ vesselTypes: ["CATAMARAN", "TRIMARAN"] }),
+    );
+    expect(chips.map((chip) => chip.path)).toEqual(["vesselTypes.CATAMARAN", "vesselTypes.TRIMARAN"]);
+    expect(chips.every((chip) => chip.labelKey === "vesselType")).toBe(true);
+  });
+
+  it("emits a chip for the search radius", () => {
+    const chips = criteriaToChips(searchCriteriaSchema.parse({ searchRadiusKm: 50 }));
+    expect(chips.map((chip) => chip.path)).toEqual(["searchRadiusKm"]);
+  });
+
+  it("emits chips for a length range", () => {
+    const chips = criteriaToChips(searchCriteriaSchema.parse({ length: { min: 12, max: 14 } }));
+    expect(chips.map((chip) => chip.path)).toEqual(["length.min", "length.max"]);
   });
 
   it("carries the duration's unit, so '2 weeks' is never rendered as '2 days'", () => {
@@ -109,14 +162,24 @@ describe("removeCriterion", () => {
     expect(removeCriterion(criteria, "capacity.persons").capacity).toBeNull();
   });
 
-  it("clears a top-level field", () => {
-    const criteria = searchCriteriaSchema.parse({ vesselType: "CATAMARAN" });
-    expect(removeCriterion(criteria, "vesselType").vesselType).toBeNull();
+  it("clears a bare top-level scalar field", () => {
+    const criteria = searchCriteriaSchema.parse({ searchRadiusKm: 50 });
+    expect(removeCriterion(criteria, "searchRadiusKm").searchRadiusKm).toBeNull();
   });
 
-  it("removes one feature and leaves the others", () => {
-    const criteria = searchCriteriaSchema.parse({ features: ["wifi", "diving"] });
-    expect(removeCriterion(criteria, "features.wifi").features).toEqual(["diving"]);
+  it("removes one vessel type and leaves the others", () => {
+    const criteria = searchCriteriaSchema.parse({ vesselTypes: ["CATAMARAN", "TRIMARAN"] });
+    expect(removeCriterion(criteria, "vesselTypes.CATAMARAN").vesselTypes).toEqual(["TRIMARAN"]);
+  });
+
+  it("removes one amenity and leaves the others", () => {
+    const criteria = searchCriteriaSchema.parse({ amenities: ["wifi", "diving"] });
+    expect(removeCriterion(criteria, "amenities.wifi").amenities).toEqual(["diving"]);
+  });
+
+  it("removes one activity and leaves the others", () => {
+    const criteria = searchCriteriaSchema.parse({ activities: ["diving", "fishing"] });
+    expect(removeCriterion(criteria, "activities.diving").activities).toEqual(["fishing"]);
   });
 
   it("ignores an unknown path instead of throwing — paths round-trip through the URL", () => {
@@ -135,9 +198,12 @@ describe("removeCriterion", () => {
     const criteria = searchCriteriaSchema.parse({
       location: { country: "Greece" },
       capacity: { persons: 6 },
-      vesselType: "MOTOR_YACHT",
+      vesselTypes: ["MOTOR_YACHT"],
     });
-    const next = ["location.country", "capacity.persons", "vesselType"].reduce(removeCriterion, criteria);
+    const next = ["location.country", "capacity.persons", "vesselTypes.MOTOR_YACHT"].reduce(
+      removeCriterion,
+      criteria,
+    );
     expect(isEmptyCriteria(next)).toBe(true);
   });
 });

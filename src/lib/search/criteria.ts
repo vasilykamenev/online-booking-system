@@ -30,6 +30,24 @@ export const durationUnits = ["HOUR", "DAY", "WEEK", "MONTH"] as const;
 export type DurationUnit = (typeof durationUnits)[number];
 
 /**
+ * How a stated price is metered (Арх §5's `priceUnit`, Арх §7's "normalization also required for
+ * ... price unit"). Distinct from `duration` — "до 3000 EUR за неделю" is a *rate* (priceUnit
+ * WEEK), not a stated trip length, and the two must not collapse into each other (see
+ * `interpret-fallback.ts`'s `extractPriceUnit`). `TRIP` covers a stated total/package price and is
+ * never inferred from a bare duration word — only an explicit total-price marker would justify it,
+ * which neither interpreter attempts yet.
+ */
+export const priceUnitValues = ["HOUR", "DAY", "WEEK", "MONTH", "TRIP"] as const;
+export type PriceUnit = (typeof priceUnitValues)[number];
+
+/** Charter crewing arrangement (Арх §5's `crewType`), alongside the existing `crew.captainRequired`
+ *  / `crewRequired` booleans rather than replacing them — a request can state both ("skippered,
+ *  captain required") and the two questions aren't redundant: `crewType` is how the charter is
+ *  run, the booleans are what the user is asking for. */
+export const crewTypeValues = ["BAREBOAT", "SKIPPERED", "CREWED"] as const;
+export type CrewType = (typeof crewTypeValues)[number];
+
+/**
  * Minor units per major unit. The codebase already assumes 2 decimals everywhere money is handled
  * (`formatPrice` divides by 100, the search page multiplies by 100), so this stays consistent with
  * that rather than introducing per-currency exponents only this module would honour.
@@ -73,6 +91,15 @@ const dateCriteria = orNull(
   }),
 );
 
+/** Vessel length in meters — a range, since a query like "12-14 м" states both ends, unlike
+ *  `price`'s single ceiling (Арх §5's `lengthMin`/`lengthMax`). */
+const lengthCriteria = orNull(
+  z.object({
+    min: orNull(z.number().positive().max(500)),
+    max: orNull(z.number().positive().max(500)),
+  }),
+);
+
 export const searchCriteriaSchema = z.object({
   location: orNull(
     z.object({
@@ -80,6 +107,16 @@ export const searchCriteriaSchema = z.object({
       region: orNull(freeText(100)),
       city: orNull(freeText(100)),
       marina: orNull(freeText(120)),
+      /**
+       * A resolved search-center point (Арх §5), not something either interpreter extracts from
+       * free text — inventing exact coordinates for a place name is a precision-looking guess
+       * (CLAUDE.md's "never guess" rule applies doubly hard to numbers that look authoritative).
+       * Populated only by a direct-geolocation input path (not built yet) or a downstream
+       * place-name → coordinates resolution step (Э3/Э6's coverage prefilter); `searchRadiusKm`
+       * below is extracted from text on its own, independent of whether a center is known yet.
+       */
+      latitude: orNull(z.number().min(-90).max(90)),
+      longitude: orNull(z.number().min(-180).max(180)),
     }),
   ),
   date: dateCriteria,
@@ -90,22 +127,58 @@ export const searchCriteriaSchema = z.object({
     }),
   ),
   price: priceCriteria,
+  /** How the stated price is metered — see `PriceUnit`'s doc comment. Independent of `duration`. */
+  priceUnit: orNull(z.enum(priceUnitValues)),
   duration: orNull(
     z.object({
       value: orNull(z.number().positive().max(365)),
       unit: orNull(z.enum(durationUnits)),
     }),
   ),
+  length: lengthCriteria,
   crew: orNull(
     z.object({
       captainRequired: orNull(z.boolean()),
       crewRequired: orNull(z.boolean()),
+      crewType: orNull(z.enum(crewTypeValues)),
     }),
   ),
-  /** Constrained to the project's own enum so the value is directly usable as a DB filter. */
-  vesselType: orNull(z.enum(vesselTypeValues)),
-  /** Amenity-like wishes ("wifi", "diving gear") — matched loosely against `amenities.key`. */
-  features: z.array(freeText(60)).max(20).catch([]).default([]),
+  /**
+   * Every type the request accepts, in priority order — replaces the old single `vesselType`
+   * (Арх §5's `vesselTypes[]`): "яхта или катамаран" names two acceptable types, and a single
+   * field can't represent that without picking one arbitrarily.
+   *
+   * Filters out-of-enum entries rather than degrading the whole list the way `.catch` would: one
+   * hallucinated type among several real ones is exactly the "salvageable half of the
+   * interpretation" this module's whole `orNull` discipline exists to keep (see the module doc
+   * comment) — losing every valid type because of one bad one would be worse than the AI output it
+   * is guarding against.
+   */
+  vesselTypes: z
+    .array(z.string())
+    .max(vesselTypeValues.length)
+    .catch([])
+    .default([])
+    .transform((values) =>
+      values.filter((value): value is (typeof vesselTypeValues)[number] =>
+        (vesselTypeValues as readonly string[]).includes(value),
+      ),
+    ),
+  /** Amenity wishes ("wifi", "diving gear") matched against the controlled `amenities.key`
+   *  vocabulary — the old `features[]`, renamed now that `activities[]` exists as its
+   *  free-form sibling. */
+  amenities: z.array(freeText(60)).max(20).catch([]).default([]),
+  /**
+   * Purpose/activity phrases ("diving", "family holiday", "fishing charter") — Арх §5's
+   * `activities[]`. Unlike `amenities`, there is no reference table to match against yet, so
+   * this stays free-form text on both interpreters; it isn't wired into ranking or the internal
+   * provider's filters until a real data source exists to compare it against (see `ranking.ts`).
+   */
+  activities: z.array(freeText(60)).max(20).catch([]).default([]),
+  /** Radius around `location`'s resolved center, in kilometers (Арх §5's `searchRadiusKm`). Only
+   *  meaningful once a center is known; extracted independently of that (see `location.latitude`
+   *  above), so it can be present while the center is still unresolved. */
+  searchRadiusKm: orNull(z.number().positive().max(20000)),
   /** Leftover meaningful words, used for text matching now and external query building later. */
   keywords: z.array(freeText(60)).max(20).catch([]).default([]),
 });
@@ -126,10 +199,14 @@ export function isEmptyCriteria(criteria: SearchCriteria): boolean {
     criteria.date === null &&
     criteria.capacity === null &&
     criteria.price === null &&
+    criteria.priceUnit === null &&
     criteria.duration === null &&
+    criteria.length === null &&
     criteria.crew === null &&
-    criteria.vesselType === null &&
-    criteria.features.length === 0 &&
+    criteria.vesselTypes.length === 0 &&
+    criteria.amenities.length === 0 &&
+    criteria.activities.length === 0 &&
+    criteria.searchRadiusKm === null &&
     criteria.keywords.length === 0
   );
 }
@@ -162,7 +239,9 @@ export function criteriaToChips(criteria: SearchCriteria): CriteriaChip[] {
   push("location.region", "region", criteria.location?.region ?? null);
   push("location.city", "city", criteria.location?.city ?? null);
   push("location.marina", "marina", criteria.location?.marina ?? null);
-  push("vesselType", "vesselType", criteria.vesselType);
+  for (const vesselType of criteria.vesselTypes) {
+    push(`vesselTypes.${vesselType}`, "vesselType", vesselType);
+  }
   push("capacity.persons", "guests", criteria.capacity?.persons ?? null);
   push("capacity.cabins", "cabins", criteria.capacity?.cabins ?? null);
   push("date.from", "dateFrom", criteria.date?.from ?? null);
@@ -183,10 +262,15 @@ export function criteriaToChips(criteria: SearchCriteria): CriteriaChip[] {
       unit: criteria.duration.unit ?? undefined,
     });
   }
+  push("length.min", "lengthMin", criteria.length?.min ?? null);
+  push("length.max", "lengthMax", criteria.length?.max ?? null);
   push("price.maxMinor", "priceMax", criteria.price?.maxMinor ?? null);
+  push("searchRadiusKm", "searchRadiusKm", criteria.searchRadiusKm);
   if (criteria.crew?.captainRequired) push("crew.captainRequired", "captain", 1);
   if (criteria.crew?.crewRequired) push("crew.crewRequired", "crew", 1);
-  for (const feature of criteria.features) push(`features.${feature}`, "feature", feature);
+  push("crew.crewType", "crewType", criteria.crew?.crewType ?? null);
+  for (const amenity of criteria.amenities) push(`amenities.${amenity}`, "feature", amenity);
+  for (const activity of criteria.activities) push(`activities.${activity}`, "activity", activity);
 
   return chips;
 }
@@ -199,15 +283,30 @@ export function criteriaToChips(criteria: SearchCriteria): CriteriaChip[] {
 export function removeCriterion(criteria: SearchCriteria, path: string): SearchCriteria {
   const next = structuredClone(criteria);
 
-  if (path.startsWith("features.")) {
-    const feature = path.slice("features.".length);
-    next.features = next.features.filter((value) => value !== feature);
+  for (const [prefix, key] of [
+    ["amenities.", "amenities"],
+    ["activities.", "activities"],
+  ] as const) {
+    if (path.startsWith(prefix)) {
+      const value = path.slice(prefix.length);
+      next[key] = next[key].filter((entry) => entry !== value);
+      return next;
+    }
+  }
+
+  if (path.startsWith("vesselTypes.")) {
+    const vesselType = path.slice("vesselTypes.".length);
+    next.vesselTypes = next.vesselTypes.filter((entry) => entry !== vesselType);
     return next;
   }
 
   const [group, field] = path.split(".");
   if (!field) {
-    if (group === "vesselType") next.vesselType = null;
+    // A bare top-level scalar path (e.g. `searchRadiusKm`) — arrays and nested groups have their
+    // own branches above/below and never reach here.
+    if (group in next && !Array.isArray(next[group as keyof SearchCriteria])) {
+      (next as Record<string, unknown>)[group] = null;
+    }
     return next;
   }
 

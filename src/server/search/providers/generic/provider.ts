@@ -542,7 +542,7 @@ async function fetchCandidates(
                 !result.location.country &&
                 !result.location.city
                 ? "no confirmed location for this query"
-                : criteria.vesselType && result.vesselType && result.vesselType !== criteria.vesselType
+                : criteria.vesselTypes.length > 0 && result.vesselType && !criteria.vesselTypes.includes(result.vesselType)
                   ? "vessel type mismatch"
                   : criteria.capacity?.persons && result.capacity.guests !== null && result.capacity.guests < criteria.capacity.persons
                     ? "capacity too small"
@@ -636,7 +636,7 @@ function buildRunSearch(source: SearchSource) {
         country: criteria.location?.country ?? null,
         region: criteria.location?.region ?? null,
         city: criteria.location?.city ?? null,
-        vesselType: criteria.vesselType ?? null,
+        vesselTypes: criteria.vesselTypes,
         persons: criteria.capacity?.persons ?? null,
       },
       timeoutMs: context.timeoutMs,

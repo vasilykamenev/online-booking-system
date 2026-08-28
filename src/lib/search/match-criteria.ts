@@ -27,7 +27,7 @@ import type { VesselSearchResult } from "@/lib/search/result";
  * external-provider mirror of that same principle, hard rather than soft.
  */
 export function matchesKnownCriteria(result: VesselSearchResult, criteria: SearchCriteria): boolean {
-  if (criteria.vesselType && result.vesselType && result.vesselType !== criteria.vesselType) {
+  if (criteria.vesselTypes.length > 0 && result.vesselType && !criteria.vesselTypes.includes(result.vesselType)) {
     return false;
   }
   if (criteria.capacity?.persons && result.capacity.guests !== null) {
