@@ -17,10 +17,10 @@ const vocabulary: SearchVocabulary = {
   ],
   marinas: [{ value: "Marina Kastela", aliases: ["Marina Kastela", "Марина Каштела"] }],
   vesselTypes: [
-    { value: "yacht", aliases: ["Yacht", "Яхта", "Моторная яхта"] },
-    { value: "catamaran", aliases: ["Catamaran", "Катамаран"] },
-    { value: "expedition", aliases: ["Expedition", "Экспедиция", "Экспедиционное судно"] },
-    { value: "research", aliases: ["Research vessel", "Исследовательское судно"] },
+    { value: "MOTOR_YACHT", aliases: ["Yacht", "Яхта", "Моторная яхта"] },
+    { value: "CATAMARAN", aliases: ["Catamaran", "Катамаран"] },
+    { value: "EXPEDITION_YACHT", aliases: ["Expedition", "Экспедиция", "Экспедиционное судно"] },
+    { value: "RESEARCH_VESSEL", aliases: ["Research vessel", "Исследовательское судно"] },
   ],
   features: [
     { value: "wifi", aliases: ["Wi-Fi", "Вайфай"] },
@@ -46,7 +46,7 @@ describe("interpretQueryDeterministic — spec §4 worked examples", () => {
     expect(criteria.price?.maxMinor).toBe(500_000);
     expect(criteria.price?.currency).toBe("EUR");
     expect(criteria.crew?.captainRequired).toBe(true);
-    expect(criteria.vesselType).toBe("yacht");
+    expect(criteria.vesselType).toBe("MOTOR_YACHT");
   });
 
   it("interprets the Svalbard expedition example, taking the top of a guest range", () => {
@@ -56,7 +56,7 @@ describe("interpretQueryDeterministic — spec §4 worked examples", () => {
 
     // The vessel has to fit the whole party, so a range resolves to its upper bound.
     expect(criteria.capacity?.persons).toBe(10);
-    expect(criteria.vesselType).toBe("expedition");
+    expect(criteria.vesselType).toBe("EXPEDITION_YACHT");
     // Nothing in the text names a country in our reference data — it must not invent one.
     expect(criteria.location).toBeNull();
     expect(criteria.price).toBeNull();

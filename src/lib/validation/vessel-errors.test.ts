@@ -12,7 +12,7 @@ function vesselFormData(overrides: Record<string, string> = {}): FormData {
   const defaults: Record<string, string> = {
     name: "Adriatic Dream",
     slug: "adriatic-dream",
-    type: "yacht",
+    type: "MOTOR_YACHT",
     locationId: "loc-1",
     lengthMeters: "12.5",
     cabins: "3",

@@ -13,12 +13,12 @@ import type { AmenitiesExtraction } from "@/server/search/providers/brilions/ame
  *  Deliberately conservative: only maps what's actually been seen; an unrecognized raw type stays
  *  in `vesselTypeRaw` rather than being forced into the nearest-sounding enum value. */
 const RAW_TYPE_TO_VESSEL_TYPE: Record<string, VesselType> = {
-  "моторные яхты": "yacht",
-  "motor yacht": "yacht",
-  катамаран: "catamaran",
-  catamaran: "catamaran",
-  гулет: "yacht",
-  gulet: "yacht",
+  "моторные яхты": "MOTOR_YACHT",
+  "motor yacht": "MOTOR_YACHT",
+  катамаран: "CATAMARAN",
+  catamaran: "CATAMARAN",
+  гулет: "MOTOR_YACHT",
+  gulet: "MOTOR_YACHT",
 };
 
 function mapVesselType(raw: string | null): VesselType | null {

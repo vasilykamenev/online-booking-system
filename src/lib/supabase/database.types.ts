@@ -1233,6 +1233,44 @@ export type Database = {
           },
         ]
       }
+      vessel_type_aliases: {
+        Row: {
+          alias: string
+          confidence: number
+          created_at: string
+          id: string
+          source_id: string | null
+          updated_at: string
+          vessel_type: Database["public"]["Enums"]["vessel_type"]
+        }
+        Insert: {
+          alias: string
+          confidence?: number
+          created_at?: string
+          id?: string
+          source_id?: string | null
+          updated_at?: string
+          vessel_type: Database["public"]["Enums"]["vessel_type"]
+        }
+        Update: {
+          alias?: string
+          confidence?: number
+          created_at?: string
+          id?: string
+          source_id?: string | null
+          updated_at?: string
+          vessel_type?: Database["public"]["Enums"]["vessel_type"]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vessel_type_aliases_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "search_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vessels: {
         Row: {
           base_price_minor: number
@@ -1377,7 +1415,17 @@ export type Database = {
       search_url_crawl_status: "PENDING" | "FETCHED" | "FAILED" | "SKIPPED"
       user_role: "client" | "owner" | "admin"
       vessel_status: "draft" | "published" | "archived"
-      vessel_type: "yacht" | "catamaran" | "expedition" | "research" | "hybrid"
+      vessel_type:
+        | "MOTOR_YACHT"
+        | "SAILING_YACHT"
+        | "CATAMARAN"
+        | "TRIMARAN"
+        | "SUPERYACHT"
+        | "EXPEDITION_YACHT"
+        | "RESEARCH_VESSEL"
+        | "MOTOR_BOAT"
+        | "SAILING_BOAT"
+        | "OTHER"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1545,7 +1593,18 @@ export const Constants = {
       search_url_crawl_status: ["PENDING", "FETCHED", "FAILED", "SKIPPED"],
       user_role: ["client", "owner", "admin"],
       vessel_status: ["draft", "published", "archived"],
-      vessel_type: ["yacht", "catamaran", "expedition", "research", "hybrid"],
+      vessel_type: [
+        "MOTOR_YACHT",
+        "SAILING_YACHT",
+        "CATAMARAN",
+        "TRIMARAN",
+        "SUPERYACHT",
+        "EXPEDITION_YACHT",
+        "RESEARCH_VESSEL",
+        "MOTOR_BOAT",
+        "SAILING_BOAT",
+        "OTHER",
+      ],
     },
   },
 } as const

@@ -2,11 +2,16 @@ import { z } from "zod";
 import type { Database } from "@/lib/supabase/database.types";
 
 export const vesselTypeValues = [
-  "yacht",
-  "catamaran",
-  "expedition",
-  "research",
-  "hybrid",
+  "MOTOR_YACHT",
+  "SAILING_YACHT",
+  "CATAMARAN",
+  "TRIMARAN",
+  "SUPERYACHT",
+  "EXPEDITION_YACHT",
+  "RESEARCH_VESSEL",
+  "MOTOR_BOAT",
+  "SAILING_BOAT",
+  "OTHER",
 ] as const satisfies readonly Database["public"]["Enums"]["vessel_type"][];
 
 export const vesselSortValues = ["rating_desc", "price_asc", "price_desc", "length_desc"] as const;

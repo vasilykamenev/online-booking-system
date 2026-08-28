@@ -62,7 +62,7 @@ describe("normalizeBrilionsResult — provenance and origin", () => {
 
 describe("normalizeBrilionsResult — vessel type mapping", () => {
   it("maps a recognized raw type onto the project's own enum", () => {
-    expect(normalize().vesselType).toBe("yacht");
+    expect(normalize().vesselType).toBe("MOTOR_YACHT");
   });
 
   it("keeps an unrecognized raw type as vesselTypeRaw without forcing an enum value", () => {

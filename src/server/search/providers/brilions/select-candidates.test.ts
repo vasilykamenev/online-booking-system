@@ -50,7 +50,7 @@ describe("matchingCitySlugs", () => {
   // The bug this covers: "моторные яхты" has a vessel type but no city, and used to be skipped
   // outright, so this source never contributed to a query like that.
   it("falls back to every known city for a location-less query naming a vessel type", () => {
-    const criteria = searchCriteriaSchema.parse({ vesselType: "yacht" });
+    const criteria = searchCriteriaSchema.parse({ vesselType: "MOTOR_YACHT" });
     expect(matchingCitySlugs(criteria)).toEqual(KNOWN_CITY_SLUGS);
   });
 

@@ -23,24 +23,24 @@ function fishingBoat(overrides: Partial<VesselSearchResult> = {}): VesselSearchR
 
 describe("matchesKnownCriteria — vessel type", () => {
   it("excludes a result whose known type mismatches the requested one", () => {
-    const catamaran = fishingBoat({ vesselType: "catamaran" });
-    expect(matchesKnownCriteria(catamaran, searchCriteriaSchema.parse({ vesselType: "yacht" }))).toBe(false);
+    const catamaran = fishingBoat({ vesselType: "CATAMARAN" });
+    expect(matchesKnownCriteria(catamaran, searchCriteriaSchema.parse({ vesselType: "MOTOR_YACHT" }))).toBe(false);
   });
 
   it("does not exclude on type when the result's type is unmapped (vesselTypeRaw only)", () => {
     // "Яхта для рыбалки" (fishing charter) never mapped onto our enum, so vesselType is null —
     // there's nothing reliable to compare, so this factor must not filter it out.
     const result = fishingBoat({ vesselType: null });
-    expect(matchesKnownCriteria(result, searchCriteriaSchema.parse({ vesselType: "yacht" }))).toBe(true);
+    expect(matchesKnownCriteria(result, searchCriteriaSchema.parse({ vesselType: "MOTOR_YACHT" }))).toBe(true);
   });
 
   it("keeps a matching type", () => {
-    const result = fishingBoat({ vesselType: "yacht" });
-    expect(matchesKnownCriteria(result, searchCriteriaSchema.parse({ vesselType: "yacht" }))).toBe(true);
+    const result = fishingBoat({ vesselType: "MOTOR_YACHT" });
+    expect(matchesKnownCriteria(result, searchCriteriaSchema.parse({ vesselType: "MOTOR_YACHT" }))).toBe(true);
   });
 
   it("does not filter on type when the query didn't ask for one", () => {
-    const result = fishingBoat({ vesselType: "catamaran" });
+    const result = fishingBoat({ vesselType: "CATAMARAN" });
     expect(matchesKnownCriteria(result, searchCriteriaSchema.parse({}))).toBe(true);
   });
 });

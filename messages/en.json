@@ -51,11 +51,16 @@
     "guests": "guests",
     "cabins": "cabins",
     "types": {
-      "yacht": "Motor yacht",
-      "catamaran": "Catamaran",
-      "expedition": "Expedition vessel",
-      "research": "Research vessel",
-      "hybrid": "Hybrid vessel"
+      "MOTOR_YACHT": "Motor yacht",
+      "SAILING_YACHT": "Sailing yacht",
+      "CATAMARAN": "Catamaran",
+      "TRIMARAN": "Trimaran",
+      "SUPERYACHT": "Superyacht",
+      "EXPEDITION_YACHT": "Expedition vessel",
+      "RESEARCH_VESSEL": "Research vessel",
+      "MOTOR_BOAT": "Motor boat",
+      "SAILING_BOAT": "Sailing boat",
+      "OTHER": "Other vessel"
     },
     "amenities": {
       "wifi": "Wi-Fi",

@@ -51,11 +51,16 @@
     "guests": "гостей",
     "cabins": "каюты",
     "types": {
-      "yacht": "Моторная яхта",
-      "catamaran": "Катамаран",
-      "expedition": "Экспедиционное судно",
-      "research": "Исследовательское судно",
-      "hybrid": "Гибридное судно"
+      "MOTOR_YACHT": "Моторная яхта",
+      "SAILING_YACHT": "Парусная яхта",
+      "CATAMARAN": "Катамаран",
+      "TRIMARAN": "Тримаран",
+      "SUPERYACHT": "Суперъяхта",
+      "EXPEDITION_YACHT": "Экспедиционное судно",
+      "RESEARCH_VESSEL": "Исследовательское судно",
+      "MOTOR_BOAT": "Моторный катер",
+      "SAILING_BOAT": "Парусная лодка",
+      "OTHER": "Другое судно"
     },
     "amenities": {
       "wifi": "Wi-Fi",

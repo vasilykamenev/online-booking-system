@@ -110,7 +110,7 @@ describe("removeCriterion", () => {
   });
 
   it("clears a top-level field", () => {
-    const criteria = searchCriteriaSchema.parse({ vesselType: "catamaran" });
+    const criteria = searchCriteriaSchema.parse({ vesselType: "CATAMARAN" });
     expect(removeCriterion(criteria, "vesselType").vesselType).toBeNull();
   });
 
@@ -135,7 +135,7 @@ describe("removeCriterion", () => {
     const criteria = searchCriteriaSchema.parse({
       location: { country: "Greece" },
       capacity: { persons: 6 },
-      vesselType: "yacht",
+      vesselType: "MOTOR_YACHT",
     });
     const next = ["location.country", "capacity.persons", "vesselType"].reduce(removeCriterion, criteria);
     expect(isEmptyCriteria(next)).toBe(true);

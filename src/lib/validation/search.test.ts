@@ -15,7 +15,7 @@ describe("searchParamsSchema", () => {
 
   it("accepts any single filter present on its own", () => {
     const cases: Record<string, unknown>[] = [
-      { type: "catamaran" },
+      { type: "CATAMARAN" },
       { location: "20000000-0000-0000-0000-000000000001" },
       { guests: "4" },
       { priceMin: "500" },
@@ -64,7 +64,7 @@ describe("searchParamsSchema", () => {
 
   it("accepts every filter present at once", () => {
     const result = searchParamsSchema.safeParse({
-      type: "yacht",
+      type: "MOTOR_YACHT",
       location: "20000000-0000-0000-0000-000000000001",
       guests: "6",
       priceMin: "500",
@@ -87,8 +87,8 @@ describe("parseSearchParams", () => {
   });
 
   it("flattens array-valued searchParams to their first entry", () => {
-    const result = parseSearchParams({ type: ["catamaran", "yacht"] });
-    expect(result.type).toBe("catamaran");
+    const result = parseSearchParams({ type: ["CATAMARAN", "MOTOR_YACHT"] });
+    expect(result.type).toBe("CATAMARAN");
   });
 
   it("falls back to no filters when one field is invalid, rather than throwing", () => {
@@ -107,13 +107,13 @@ describe("buildSearchUrl", () => {
   });
 
   it("never includes a cursor even if one sneaks into the input type", () => {
-    const url = buildSearchUrl({ type: "yacht", sort: "price_asc" });
+    const url = buildSearchUrl({ type: "MOTOR_YACHT", sort: "price_asc" });
     expect(url).not.toContain("cursor");
   });
 
   it("combines every filter at once", () => {
     const url = buildSearchUrl({
-      type: "catamaran",
+      type: "CATAMARAN",
       guests: 6,
       priceMin: 500,
       priceMax: 5000,
@@ -122,7 +122,7 @@ describe("buildSearchUrl", () => {
       sort: "length_desc",
     });
     const params = new URLSearchParams(url.split("?")[1]);
-    expect(params.get("type")).toBe("catamaran");
+    expect(params.get("type")).toBe("CATAMARAN");
     expect(params.get("guests")).toBe("6");
     expect(params.get("priceMin")).toBe("500");
     expect(params.get("priceMax")).toBe("5000");
@@ -147,17 +147,17 @@ describe("activeFilterChipKeys", () => {
   });
 
   it("reports one chip per other active filter", () => {
-    const keys = activeFilterChipKeys({ type: "yacht", guests: 4, priceMax: 2000 });
+    const keys = activeFilterChipKeys({ type: "MOTOR_YACHT", guests: 4, priceMax: 2000 });
     expect(keys).toEqual(["type", "guests", "priceMax"]);
   });
 });
 
 describe("removeSearchFilterUrl", () => {
   it("drops only the requested chip, keeping every other filter", () => {
-    const filters = { type: "yacht" as const, guests: 4, priceMax: 2000 };
+    const filters = { type: "MOTOR_YACHT" as const, guests: 4, priceMax: 2000 };
     const url = removeSearchFilterUrl(filters, "guests");
     const params = new URLSearchParams(url.split("?")[1]);
-    expect(params.get("type")).toBe("yacht");
+    expect(params.get("type")).toBe("MOTOR_YACHT");
     expect(params.has("guests")).toBe(false);
     expect(params.get("priceMax")).toBe("2000");
   });

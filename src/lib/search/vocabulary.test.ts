@@ -58,10 +58,10 @@ describe("collectEntries", () => {
 describe("withDistinctiveWordAliases", () => {
   // Mirrors the real `vessels.types.*` labels, where every Russian label but one ends in "судно".
   const vesselTypes = [
-    { value: "yacht", aliases: ["Yacht", "Моторная яхта"] },
-    { value: "expedition", aliases: ["Expedition vessel", "Экспедиционное судно"] },
-    { value: "research", aliases: ["Research vessel", "Исследовательское судно"] },
-    { value: "hybrid", aliases: ["Hybrid vessel", "Гибридное судно"] },
+    { value: "MOTOR_YACHT", aliases: ["Yacht", "Моторная яхта"] },
+    { value: "EXPEDITION_YACHT", aliases: ["Expedition vessel", "Экспедиционное судно"] },
+    { value: "RESEARCH_VESSEL", aliases: ["Research vessel", "Исследовательское судно"] },
+    { value: "OTHER", aliases: ["Other vessel", "Другое судно"] },
   ];
 
   it("adds a word that belongs to exactly one entry", () => {
