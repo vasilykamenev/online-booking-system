@@ -1,7 +1,7 @@
 import type { Database } from "@/lib/supabase/database.types";
 
 /**
- * Pure merge/conflict logic for `search_extracted_listings` (docs/data-merger-provenance-design.md §3).
+ * Pure merge/conflict logic for `external_vessel_index` (docs/data-merger-provenance-design.md §3).
  * No I/O here by design (same split as `providers/generic/normalize.ts`) — `extracted-listings.ts` reads
  * the existing row and any open conflicts, calls this, and writes the result back.
  *
@@ -30,7 +30,7 @@ export const LISTING_FIELDS = [
 export type ListingFieldName = (typeof LISTING_FIELDS)[number];
 export type ListingFieldValue = string | number | null;
 
-/** Per-field value types, matching the `search_extracted_listings` columns exactly (numeric fields stay
+/** Per-field value types, matching the `external_vessel_index` columns exactly (numeric fields stay
  *  `number`, never widen to the general `ListingFieldValue` union) — so a caller spreading
  *  `Partial<ListingFields>` into a typed Supabase `Update` gets the same per-column types the generated
  *  `database.types.ts` expects, instead of every field collapsing to `string | number | null`. */

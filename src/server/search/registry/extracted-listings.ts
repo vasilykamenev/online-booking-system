@@ -84,7 +84,7 @@ export async function recordExtraction(input: RecordExtractionInput): Promise<vo
   const supabase = createAdminClient();
 
   const { data: existingRow } = await supabase
-    .from("search_extracted_listings")
+    .from("external_vessel_index")
     .select("id, name, description, price_minor, currency, guests, cabins, vessel_type_raw, country, city, field_provenance")
     .eq("source_id", input.sourceId)
     .eq("url", input.url)
@@ -122,7 +122,7 @@ export async function recordExtraction(input: RecordExtractionInput): Promise<vo
   );
 
   const { data: upserted } = await supabase
-    .from("search_extracted_listings")
+    .from("external_vessel_index")
     .upsert(
       {
         source_id: input.sourceId,
@@ -131,6 +131,16 @@ export async function recordExtraction(input: RecordExtractionInput): Promise<vo
         ...(input.image !== null ? { image: input.image } : {}),
         field_provenance: merged.fieldProvenance as Json,
         last_extracted_at: input.retrievedAt,
+        // Э5: a live extraction is itself a legitimate index visit — `external_id` defaults to the
+        // URL (see the migration's own note on why), and the three index-freshness timestamps all
+        // advance together, same as `touchExtraction`'s below. `on conflict` only ever *updates*
+        // these for a row that already exists — an insert always provides them fresh, an update
+        // always overwrites them with this same visit's timestamp, so there's no stale-value risk
+        // either way.
+        external_id: input.url,
+        indexed_at: input.retrievedAt,
+        last_checked_at: input.retrievedAt,
+        last_seen_at: input.retrievedAt,
       },
       { onConflict: "source_id,url" },
     )
@@ -161,15 +171,16 @@ export async function recordExtraction(input: RecordExtractionInput): Promise<vo
 }
 
 /**
- * Bumps `last_extracted_at` only — no field or provenance change, no conflict comparison — after a
- * `304 Not Modified` (design doc §5.4) confirms an otherwise-stale listing's page hasn't actually
- * changed. Distinct from `recordExtraction`: nothing new was learned this crawl, so there is nothing
- * to merge or compare, only the row's freshness to extend.
+ * Bumps `last_extracted_at` (plus Э5's `last_checked_at`/`last_seen_at` — this row's page was just
+ * confirmed to still exist and be unchanged) — no field or provenance change, no conflict comparison
+ * — after a `304 Not Modified` (design doc §5.4) confirms an otherwise-stale listing's page hasn't
+ * actually changed. Distinct from `recordExtraction`: nothing new was learned this crawl, so there
+ * is nothing to merge or compare, only the row's freshness to extend.
  */
 export async function touchExtraction(sourceId: string, url: string, retrievedAt: string): Promise<void> {
   await createAdminClient()
-    .from("search_extracted_listings")
-    .update({ last_extracted_at: retrievedAt })
+    .from("external_vessel_index")
+    .update({ last_extracted_at: retrievedAt, last_checked_at: retrievedAt, last_seen_at: retrievedAt })
     .eq("source_id", sourceId)
     .eq("url", url);
 }

@@ -5,7 +5,7 @@ import type { ListingFieldProvenance } from "@/server/search/registry/listing-me
 
 /**
  * Read path counterpart to `extracted-listings.ts` (design doc §4, phase P3): lets a live search
- * serve a candidate straight from `search_extracted_listings` when a fresh-enough row exists,
+ * serve a candidate straight from `external_vessel_index` when a fresh-enough row exists,
  * instead of always re-fetching and re-extracting the page. `fetchAndNormalize` in
  * `providers/generic/provider.ts` remains the only thing that ever *writes* this table — this module
  * only reads what it already wrote, on some earlier request.
@@ -38,7 +38,7 @@ export async function getFreshListing(
 ): Promise<FreshListingRow | null> {
   const cutoff = new Date(Date.now() - maxAgeMs).toISOString();
   const { data } = await createAdminClient()
-    .from("search_extracted_listings")
+    .from("external_vessel_index")
     .select(LISTING_ROW_COLUMNS)
     .eq("source_id", sourceId)
     .eq("url", url)
@@ -56,7 +56,7 @@ export async function getFreshListing(
  */
 export async function getStaleListing(sourceId: string, url: string): Promise<FreshListingRow | null> {
   const { data } = await createAdminClient()
-    .from("search_extracted_listings")
+    .from("external_vessel_index")
     .select(LISTING_ROW_COLUMNS)
     .eq("source_id", sourceId)
     .eq("url", url)

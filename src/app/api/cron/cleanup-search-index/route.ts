@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
-import { cleanupStaleListings } from "@/server/search/registry/index-retention";
+import { cleanupStaleListings, cleanupGoneListings } from "@/server/search/registry/index-retention";
 
 /**
- * Vercel Cron target (`vercel.json`'s `crons`, daily) — the only scheduled job in this project so
- * far. Deletes stale `search_extracted_listings` rows (design doc §5.1); see
- * `registry/index-retention.ts` for the retention window and why it's longer than P3's read-side
- * freshness TTL.
+ * Vercel Cron target (`vercel.json`'s `crons`, daily). Deletes stale `external_vessel_index` rows
+ * two ways (design doc §5.1, Э5): `cleanupStaleListings` for a whole source gone quiet (its
+ * `last_extracted_at`/P1-P2 cache freshness), `cleanupGoneListings` for one listing the indexer
+ * stopped re-confirming on an otherwise still-active source (its `last_seen_at`) — see
+ * `registry/index-retention.ts` for why these are two separate windows, not one.
  *
  * Requires `CRON_SECRET` in the environment: Vercel signs every cron invocation with
  * `Authorization: Bearer ${CRON_SECRET}` once that variable is set
@@ -23,6 +24,6 @@ export async function GET(request: Request): Promise<NextResponse> {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  const result = await cleanupStaleListings();
-  return NextResponse.json(result);
+  const [staleResult, goneResult] = await Promise.all([cleanupStaleListings(), cleanupGoneListings()]);
+  return NextResponse.json({ ...staleResult, ...goneResult });
 }

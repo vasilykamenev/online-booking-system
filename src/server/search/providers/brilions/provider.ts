@@ -75,8 +75,10 @@ const MAX_CANDIDATE_POOL = 60;
 // loop could fit in the same window.
 const FETCH_CONCURRENCY = 5;
 
-/** Whether this source's robots.txt currently permits `/yacht/` paths, cached on `search_sources`. */
-async function resolveRobotsAllowed(): Promise<boolean> {
+/** Whether this source's robots.txt currently permits `/yacht/` paths, cached on `search_sources`.
+ *  Exported for `index/brilions-indexer.ts` (Э5) — the same check the live path makes, asked once
+ *  per indexing run instead of once per live search. */
+export async function resolveRobotsAllowed(): Promise<boolean> {
   const admin = createAdminClient();
   const { data } = await admin
     .from("search_sources")
@@ -96,7 +98,9 @@ async function resolveRobotsAllowed(): Promise<boolean> {
   return allowed;
 }
 
-async function loadSitemapEntries(): Promise<BrilionsSitemapEntry[] | null> {
+/** Exported for `index/brilions-indexer.ts` (Э5) — the same sitemap the live path samples from
+ *  (`select-candidates.ts`), read here in full since indexing walks every entry, not a sample. */
+export async function loadSitemapEntries(): Promise<BrilionsSitemapEntry[] | null> {
   const fetched = await fetchWithCache(SITEMAP_URL, SITEMAP_CACHE_MS);
   if (!fetched.ok || !fetched.html) return null;
   return parseYachtSitemap(fetched.html);
@@ -122,19 +126,26 @@ async function extractAmenitiesCached(amenitiesText: string): Promise<{ amenitie
   return { amenities, usedAi: true };
 }
 
-async function fetchAndNormalize(
+/** Exported for `index/brilions-indexer.ts` (Э5) — the same per-page fetch+extract+normalize the
+ *  live path uses, called for every sitemap entry instead of a criteria-matched sample. Nothing
+ *  about the extraction itself is query-scoped (unlike the generic path's breadcrumb confirmation —
+ *  see `location-resolver.ts`'s own doc comment on why that one needed a separate function):
+ *  `normalizeBrilionsResult` already resolves country/vessel type unconditionally from
+ *  `citySlugGuess`/raw type text, so this is reused as-is, not duplicated. */
+export async function fetchAndNormalize(
   entry: BrilionsSitemapEntry,
   context: AdapterContext,
-): Promise<{ result: VesselSearchResult | null; usedAi: boolean }> {
+): Promise<{ result: VesselSearchResult | null; usedAi: boolean; contentHash: string | null }> {
   // The English page exists for most, not all, vessels (see sitemap.ts) — falling back to the
   // Russian canonical page keeps a vessel visible on the English UI rather than dropping it.
   const pageUrl = context.locale === "en" && entry.urlEn ? entry.urlEn : entry.urlRu;
 
   const page = await fetchWithCache(pageUrl, PAGE_CACHE_MS);
-  if (!page.ok || !page.html) return { result: null, usedAi: false };
+  if (!page.ok || !page.html) return { result: null, usedAi: false, contentHash: null };
+  const contentHash = hashContent(page.html);
 
   const deterministic = extractDeterministic(page.html);
-  if (!deterministic.name) return { result: null, usedAi: false }; // Not a real vessel page (404, moved, etc).
+  if (!deterministic.name) return { result: null, usedAi: false, contentHash }; // Not a real vessel page (404, moved, etc).
 
   const { amenities, usedAi } = deterministic.amenitiesText
     ? await extractAmenitiesCached(deterministic.amenitiesText)
@@ -152,7 +163,7 @@ async function fetchAndNormalize(
   // `usedAi` now means "an actual Anthropic call happened", not merely "there was amenities text
   // to look at" — a cache hit still enriches the result but costs nothing, so it shouldn't count
   // toward `stats.aiCalls`, which exists specifically to track spend.
-  return { result, usedAi };
+  return { result, usedAi, contentHash };
 }
 
 /**

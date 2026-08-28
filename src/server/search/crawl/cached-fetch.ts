@@ -18,7 +18,7 @@ export interface CachedFetchResult {
   /** Set only when a conditional GET actually happened (as opposed to a plain in-window cache hit)
    *  and the origin confirmed the content is byte-identical to what's already stored — the signal
    *  `providers/generic/provider.ts` uses to skip re-extraction for an otherwise-stale
-   *  `search_extracted_listings` row. Absent (not merely `false`) whenever no conditional check
+   *  `external_vessel_index` row. Absent (not merely `false`) whenever no conditional check
    *  happened, so a caller can tell "confirmed unchanged" apart from "don't know". */
   contentUnchanged?: boolean;
   reason?: string;

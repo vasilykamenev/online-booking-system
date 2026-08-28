@@ -73,6 +73,106 @@ export interface SearchSource {
   coverage: SourceCoverageRow[];
 }
 
+const SOURCE_COLUMNS =
+  "id, name, domain, base_url, enabled, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, selector_config, image_domains, detailed_logging, access_strategy, fallback_strategies, can_search, can_details, can_availability, can_pricing, can_contact, supports_location, supports_dates, supports_price, supports_guests, contact_capability, search_source_coverage(worldwide, country, region, destination, latitude, longitude, radius_km)";
+
+/** Shared row → `SearchSource` mapping between `listEnabledSources` and `getSourceById` — kept as
+ *  one function so the two never drift into subtly different shapes for the same columns. */
+function mapSourceRow(row: {
+  id: string;
+  name: string;
+  domain: string;
+  base_url: string;
+  enabled: boolean;
+  source_type: SearchSourceType;
+  processing_type: SearchProcessingType;
+  priority: number;
+  reliability_score: number | null;
+  robots_allows: boolean | null;
+  last_checked_at: string | null;
+  selector_config: unknown;
+  image_domains: string[] | null;
+  detailed_logging: boolean;
+  access_strategy: SearchAccessStrategy;
+  fallback_strategies: SearchAccessStrategy[] | null;
+  can_search: boolean;
+  can_details: boolean;
+  can_availability: boolean;
+  can_pricing: boolean;
+  can_contact: boolean;
+  supports_location: boolean;
+  supports_dates: boolean;
+  supports_price: boolean;
+  supports_guests: boolean;
+  contact_capability: SearchContactCapability | null;
+  search_source_coverage:
+    | {
+        worldwide: boolean;
+        country: string | null;
+        region: string | null;
+        destination: string | null;
+        latitude: number | null;
+        longitude: number | null;
+        radius_km: number | null;
+      }[]
+    | null;
+}): SearchSource {
+  // A read failure must not break search: a malformed `selector_config` degrades this one source
+  // back to "generic path unavailable" rather than failing the whole registry read.
+  const parsedSelectorConfig = selectorConfigSchema.safeParse(row.selector_config);
+  return {
+    id: row.id,
+    name: row.name,
+    domain: row.domain,
+    baseUrl: row.base_url,
+    enabled: row.enabled,
+    sourceType: row.source_type,
+    processingType: row.processing_type,
+    priority: row.priority,
+    reliabilityScore: row.reliability_score,
+    robotsAllows: row.robots_allows,
+    lastCheckedAt: row.last_checked_at,
+    selectorConfig: parsedSelectorConfig.success ? parsedSelectorConfig.data : null,
+    imageDomains: row.image_domains ?? [],
+    detailedLogging: row.detailed_logging,
+    accessStrategy: row.access_strategy,
+    fallbackStrategies: row.fallback_strategies ?? [],
+    capabilities: {
+      canSearch: row.can_search,
+      canDetails: row.can_details,
+      canAvailability: row.can_availability,
+      canPricing: row.can_pricing,
+      canContact: row.can_contact,
+      supportsLocation: row.supports_location,
+      supportsDates: row.supports_dates,
+      supportsPrice: row.supports_price,
+      supportsGuests: row.supports_guests,
+    },
+    contactCapability: row.contact_capability,
+    coverage: (row.search_source_coverage ?? []).map((entry) => ({
+      worldwide: entry.worldwide,
+      country: entry.country,
+      region: entry.region,
+      destination: entry.destination,
+      latitude: entry.latitude,
+      longitude: entry.longitude,
+      radiusKm: entry.radius_km,
+    })),
+  };
+}
+
+/** One source by id, regardless of `enabled`/`status` — the indexer (Э5) and admin manual
+ *  re-index trigger both need to act on a specific registered source independent of whether it's
+ *  currently live-searchable, unlike `listEnabledSources`'s search-time filter. `null` for a
+ *  missing id or a read failure — same "absence over throwing" convention as this module's other
+ *  reads. */
+export async function getSourceById(id: string): Promise<SearchSource | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.from("search_sources").select(SOURCE_COLUMNS).eq("id", id).maybeSingle();
+  if (error || !data) return null;
+  return mapSourceRow(data);
+}
+
 /**
  * Enabled sources, highest priority first. Read with the caller's own client — the registry lists
  * public websites and carries no secrets, so its RLS policy allows a public read of enabled rows
@@ -83,9 +183,7 @@ export const listEnabledSources = cache(async (): Promise<SearchSource[]> => {
 
   const { data, error } = await supabase
     .from("search_sources")
-    .select(
-      "id, name, domain, base_url, enabled, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, selector_config, image_domains, detailed_logging, access_strategy, fallback_strategies, can_search, can_details, can_availability, can_pricing, can_contact, supports_location, supports_dates, supports_price, supports_guests, contact_capability, search_source_coverage(worldwide, country, region, destination, latitude, longitude, radius_km)",
-    )
+    .select(SOURCE_COLUMNS)
     .eq("enabled", true)
     // Belt-and-suspenders: `enabled` should only ever be true alongside status = 'active' (that's
     // what `approveSearchSource` enforces), but a search-time read is exactly the place not to rely
@@ -95,7 +193,7 @@ export const listEnabledSources = cache(async (): Promise<SearchSource[]> => {
 
   // A read failure must not break search — the internal half of a global search is perfectly
   // useful on its own, and an unreachable registry only costs us the external half. Logged (not
-  // just swallowed) because this is otherwise invisible: `getActiveExternalProviders()` reads this
+  // just swallowed) because this is otherwise invisible: `listExternalAdapters()` reads this
   // as "zero enabled sources" and `global-search-service.ts` reports `externalPhase: "SKIPPED"` —
   // indistinguishable, from the outside, from a registry that's genuinely empty. A stuck migration
   // or a broken RLS policy on `search_sources` would otherwise degrade every search's external half
@@ -105,51 +203,7 @@ export const listEnabledSources = cache(async (): Promise<SearchSource[]> => {
     return [];
   }
 
-  return (data ?? []).map((row) => {
-    // A read failure must not break search (same principle as the outer `if (error) return []`
-    // above): a malformed `selector_config` degrades this one source back to "generic path
-    // unavailable" rather than failing the whole registry read.
-    const parsedSelectorConfig = selectorConfigSchema.safeParse(row.selector_config);
-    return {
-      id: row.id,
-      name: row.name,
-      domain: row.domain,
-      baseUrl: row.base_url,
-      enabled: row.enabled,
-      sourceType: row.source_type,
-      processingType: row.processing_type,
-      priority: row.priority,
-      reliabilityScore: row.reliability_score,
-      robotsAllows: row.robots_allows,
-      lastCheckedAt: row.last_checked_at,
-      selectorConfig: parsedSelectorConfig.success ? parsedSelectorConfig.data : null,
-      imageDomains: row.image_domains ?? [],
-      detailedLogging: row.detailed_logging,
-      accessStrategy: row.access_strategy,
-      fallbackStrategies: row.fallback_strategies ?? [],
-      capabilities: {
-        canSearch: row.can_search,
-        canDetails: row.can_details,
-        canAvailability: row.can_availability,
-        canPricing: row.can_pricing,
-        canContact: row.can_contact,
-        supportsLocation: row.supports_location,
-        supportsDates: row.supports_dates,
-        supportsPrice: row.supports_price,
-        supportsGuests: row.supports_guests,
-      },
-      contactCapability: row.contact_capability,
-      coverage: (row.search_source_coverage ?? []).map((entry) => ({
-        worldwide: entry.worldwide,
-        country: entry.country,
-        region: entry.region,
-        destination: entry.destination,
-        latitude: entry.latitude,
-        longitude: entry.longitude,
-        radiusKm: entry.radius_km,
-      })),
-    };
-  });
+  return (data ?? []).map(mapSourceRow);
 });
 
 /**

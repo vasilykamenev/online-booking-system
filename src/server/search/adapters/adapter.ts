@@ -43,7 +43,7 @@ export interface AdapterSearchStats {
   pagesRejected: number;
   offersExtracted: number;
   aiCalls: number;
-  /** Candidates served straight from `search_extracted_listings` (design doc §4 P3) — no HTTP fetch,
+  /** Candidates served straight from `external_vessel_index` (design doc §4 P3) — no HTTP fetch,
    *  no AI call, not counted in `pagesVisited`/`aiCalls`. The measurable win P3 exists for. */
   pagesServedFromIndex: number;
   /** Candidates where a conditional GET (design doc §5.4) confirmed the page hadn't changed since

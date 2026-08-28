@@ -23,6 +23,7 @@ import {
 } from "@/components/ui/table";
 import type { Database } from "@/lib/supabase/database.types";
 import { ResyncUrlsButton } from "./resync-urls-button";
+import { ReindexButton } from "./reindex-button";
 import { ClearUrlsButton } from "./clear-urls-button";
 import { CrawlRuleForm } from "./crawl-rule-form";
 import { CrawlRulesTable } from "./crawl-rules-table";
@@ -84,6 +85,7 @@ export default async function SearchSourceUrlsPage({
             <Link href={`/admin/search-sources/${id}/edit`}>{t("backToEdit")}</Link>
           </Button>
           <ResyncUrlsButton sourceId={id} />
+          <ReindexButton sourceId={id} />
         </div>
       </div>
 

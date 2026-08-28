@@ -27,6 +27,7 @@ import {
   type userRoleValues,
 } from "@/lib/validation/admin";
 import { accessStrategyFromProcessingType } from "@/server/search/source-registry";
+import { indexSource } from "@/server/search/index/indexer";
 import {
   validateSearchSource,
   previewCandidateAtUrl,
@@ -719,6 +720,48 @@ export async function resyncSearchSourceUrls(
   };
 }
 
+export interface ReindexSearchSourceResult {
+  error?: "unauthenticated" | "forbidden" | "notFound" | "generic";
+  urlsConsidered?: number;
+  listingsIndexed?: number;
+  pagesFailed?: number;
+  aiCalls?: number;
+}
+
+/**
+ * Manual "Индексировать сейчас" trigger (URL Registry page, Э5) — the same background walk the
+ * `index-sources` cron runs on a schedule, exposed on demand: useful right after approving a new
+ * source or editing its `selectorConfig`, rather than waiting for the next scheduled run.
+ */
+export async function reindexSearchSource(locale: Locale, sourceId: string): Promise<ReindexSearchSourceResult> {
+  const supabase = await createClient();
+  const admin = await requireAdmin(supabase);
+  if ("error" in admin) return { error: admin.error };
+
+  const { data: source, error } = await supabase
+    .from("search_sources")
+    .select("id")
+    .eq("id", sourceId)
+    .maybeSingle();
+  if (error) return { error: "generic" };
+  if (!source) return { error: "notFound" };
+
+  const result = await indexSource(sourceId);
+
+  await logAudit(supabase, admin.id, "reindex_search_source", "search_sources", sourceId, {
+    urlsConsidered: result.urlsConsidered,
+    listingsIndexed: result.listingsIndexed,
+  });
+
+  revalidatePath(`/${locale}/admin/search-sources/${sourceId}/urls`);
+  return {
+    urlsConsidered: result.urlsConsidered,
+    listingsIndexed: result.listingsIndexed,
+    pagesFailed: result.pagesFailed,
+    aiCalls: result.aiCalls,
+  };
+}
+
 export interface AddManualUrlsActionResult {
   error?: "unauthenticated" | "forbidden" | "notFound" | "invalid" | "generic";
   added?: number;
@@ -1070,7 +1113,7 @@ interface ConflictListingRow {
 function buildListingFieldUpdate(
   field: ListingFieldName,
   value: ListingFieldValue,
-): Database["public"]["Tables"]["search_extracted_listings"]["Update"] {
+): Database["public"]["Tables"]["external_vessel_index"]["Update"] {
   switch (field) {
     case "name":
       return { name: value as string | null };
@@ -1106,7 +1149,7 @@ export interface ResolveFieldConflictResult {
  * (see `mergeExtractedListing`), so the listing row already holds the previous value; there is
  * nothing to change there.
  *
- * "kept_new" also writes the disputed field on `search_extracted_listings`, with `MANUAL`/1.0
+ * "kept_new" also writes the disputed field on `external_vessel_index`, with `MANUAL`/1.0
  * provenance (design doc §3.4) — through the service-role client specifically: the migration grants
  * `authenticated` only `select` on that table (an admin's own session can resolve the conflict
  * record itself, per that migration's RLS comment, but never write listing data directly). Guards
@@ -1138,7 +1181,7 @@ export async function resolveFieldConflict(
   if (resolution === "kept_new") {
     const adminSupabase = createAdminClient();
     const { data: listing, error: listingError } = await adminSupabase
-      .from("search_extracted_listings")
+      .from("external_vessel_index")
       .select(
         "url, name, description, price_minor, currency, guests, cabins, vessel_type_raw, country, city, field_provenance",
       )
@@ -1161,7 +1204,7 @@ export async function resolveFieldConflict(
     };
 
     const { error: updateError } = await adminSupabase
-      .from("search_extracted_listings")
+      .from("external_vessel_index")
       .update({
         ...buildListingFieldUpdate(field, conflict.new_value as ListingFieldValue),
         field_provenance: fieldProvenance as Json,

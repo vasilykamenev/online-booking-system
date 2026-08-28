@@ -436,7 +436,7 @@ const OPEN_CONFLICTS_LIMIT = 200;
 
 /** Open (unresolved) `search_field_conflicts` for a source (docs/data-merger-provenance-design.md §3.3,
  *  phase P2) — a field the extraction cascade re-derived and got a different answer for than what's
- *  already stored in `search_extracted_listings`, still unconfirmed by a second crawl. Two queries
+ *  already stored in `external_vessel_index`, still unconfirmed by a second crawl. Two queries
  *  rather than one embedded select: filtering conflicts by their parent listing's `source_id` through
  *  PostgREST's embedded-resource syntax needs an inner join filter that's more fragile to keep in sync
  *  with schema changes than just fetching this source's listing ids first. */
@@ -444,7 +444,7 @@ export async function getOpenFieldConflicts(sourceId: string): Promise<AdminFiel
   const supabase = await createClient();
 
   const { data: listings, error: listingsError } = await supabase
-    .from("search_extracted_listings")
+    .from("external_vessel_index")
     .select("id, url")
     .eq("source_id", sourceId);
   throwIfSupabaseError(listingsError);

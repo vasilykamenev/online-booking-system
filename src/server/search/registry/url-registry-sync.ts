@@ -470,6 +470,35 @@ export async function selectCandidatesFromRegistry(
   return [...seeded, ...(rest ?? [])];
 }
 
+/**
+ * Every `selected` URL for a source, unpaginated by the caller — Э5's indexer walks the whole
+ * registry, not a query-budgeted sample the way `selectCandidatesFromRegistry` does for live search.
+ * Paginates internally past PostgREST's default row cap so a registry larger than one page's worth
+ * still gets indexed in full, per Э5's own "Готово когда" ("наполняется полностью, а не выборкой").
+ * Runs with the service-role client — the indexer is a cron/admin-triggered job, not live request
+ * traffic, so there's no caller session to read with instead.
+ */
+export async function listAllSelectedUrls(sourceId: string): Promise<RegistryCandidate[]> {
+  const supabase = createAdminClient();
+  const pageSize = 1000;
+  const all: RegistryCandidate[] = [];
+
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("search_source_urls")
+      .select("id, url")
+      .eq("source_id", sourceId)
+      .eq("selected", true)
+      .order("id", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+    if (error || !data) break;
+    all.push(...data);
+    if (data.length < pageSize) break;
+  }
+
+  return all;
+}
+
 export interface FetchOutcome {
   httpStatus: number | null;
   contentHash: string | null;

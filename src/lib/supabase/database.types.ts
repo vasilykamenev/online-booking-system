@@ -234,6 +234,137 @@ export type Database = {
         }
         Relationships: []
       }
+      external_vessel_index: {
+        Row: {
+          amenities: string[]
+          available_from: string | null
+          available_to: string | null
+          cabins: number | null
+          city: string | null
+          content_hash: string | null
+          country: string | null
+          created_at: string
+          currency: string | null
+          description: string | null
+          external_id: string
+          extracted: Json
+          field_provenance: Json
+          guests: number | null
+          id: string
+          image: string | null
+          images: Json
+          indexed_at: string
+          last_checked_at: string
+          last_extracted_at: string
+          last_seen_at: string
+          latitude: number | null
+          length_meters: number | null
+          longitude: number | null
+          manufacturer: string | null
+          marina: string | null
+          model: string | null
+          name: string | null
+          price_minor: number | null
+          price_to_minor: number | null
+          price_unit: Database["public"]["Enums"]["price_unit"] | null
+          region: string | null
+          source_id: string
+          updated_at: string
+          url: string
+          vessel_type: Database["public"]["Enums"]["vessel_type"] | null
+          vessel_type_raw: string | null
+          year: number | null
+        }
+        Insert: {
+          amenities?: string[]
+          available_from?: string | null
+          available_to?: string | null
+          cabins?: number | null
+          city?: string | null
+          content_hash?: string | null
+          country?: string | null
+          created_at?: string
+          currency?: string | null
+          description?: string | null
+          external_id: string
+          extracted?: Json
+          field_provenance?: Json
+          guests?: number | null
+          id?: string
+          image?: string | null
+          images?: Json
+          indexed_at: string
+          last_checked_at: string
+          last_extracted_at?: string
+          last_seen_at: string
+          latitude?: number | null
+          length_meters?: number | null
+          longitude?: number | null
+          manufacturer?: string | null
+          marina?: string | null
+          model?: string | null
+          name?: string | null
+          price_minor?: number | null
+          price_to_minor?: number | null
+          price_unit?: Database["public"]["Enums"]["price_unit"] | null
+          region?: string | null
+          source_id: string
+          updated_at?: string
+          url: string
+          vessel_type?: Database["public"]["Enums"]["vessel_type"] | null
+          vessel_type_raw?: string | null
+          year?: number | null
+        }
+        Update: {
+          amenities?: string[]
+          available_from?: string | null
+          available_to?: string | null
+          cabins?: number | null
+          city?: string | null
+          content_hash?: string | null
+          country?: string | null
+          created_at?: string
+          currency?: string | null
+          description?: string | null
+          external_id?: string
+          extracted?: Json
+          field_provenance?: Json
+          guests?: number | null
+          id?: string
+          image?: string | null
+          images?: Json
+          indexed_at?: string
+          last_checked_at?: string
+          last_extracted_at?: string
+          last_seen_at?: string
+          latitude?: number | null
+          length_meters?: number | null
+          longitude?: number | null
+          manufacturer?: string | null
+          marina?: string | null
+          model?: string | null
+          name?: string | null
+          price_minor?: number | null
+          price_to_minor?: number | null
+          price_unit?: Database["public"]["Enums"]["price_unit"] | null
+          region?: string | null
+          source_id?: string
+          updated_at?: string
+          url?: string
+          vessel_type?: Database["public"]["Enums"]["vessel_type"] | null
+          vessel_type_raw?: string | null
+          year?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "search_extracted_listings_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "search_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       favorites: {
         Row: {
           created_at: string
@@ -712,73 +843,23 @@ export type Database = {
           },
         ]
       }
-      search_extracted_listings: {
+      search_extraction_cache: {
         Row: {
-          cabins: number | null
-          city: string | null
-          country: string | null
+          classification: Json
+          content_hash: string
           created_at: string
-          currency: string | null
-          description: string | null
-          field_provenance: Json
-          guests: number | null
-          id: string
-          image: string | null
-          last_extracted_at: string
-          name: string | null
-          price_minor: number | null
-          source_id: string
-          updated_at: string
-          url: string
-          vessel_type_raw: string | null
         }
         Insert: {
-          cabins?: number | null
-          city?: string | null
-          country?: string | null
+          classification: Json
+          content_hash: string
           created_at?: string
-          currency?: string | null
-          description?: string | null
-          field_provenance?: Json
-          guests?: number | null
-          id?: string
-          image?: string | null
-          last_extracted_at?: string
-          name?: string | null
-          price_minor?: number | null
-          source_id: string
-          updated_at?: string
-          url: string
-          vessel_type_raw?: string | null
         }
         Update: {
-          cabins?: number | null
-          city?: string | null
-          country?: string | null
+          classification?: Json
+          content_hash?: string
           created_at?: string
-          currency?: string | null
-          description?: string | null
-          field_provenance?: Json
-          guests?: number | null
-          id?: string
-          image?: string | null
-          last_extracted_at?: string
-          name?: string | null
-          price_minor?: number | null
-          source_id?: string
-          updated_at?: string
-          url?: string
-          vessel_type_raw?: string | null
         }
-        Relationships: [
-          {
-            foreignKeyName: "search_extracted_listings_source_id_fkey"
-            columns: ["source_id"]
-            isOneToOne: false
-            referencedRelation: "search_sources"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
       search_field_conflicts: {
         Row: {
@@ -822,7 +903,7 @@ export type Database = {
             foreignKeyName: "search_field_conflicts_listing_id_fkey"
             columns: ["listing_id"]
             isOneToOne: false
-            referencedRelation: "search_extracted_listings"
+            referencedRelation: "external_vessel_index"
             referencedColumns: ["id"]
           },
         ]
@@ -1533,6 +1614,7 @@ export type Database = {
         | "failed"
         | "refunded"
         | "cancelled"
+      price_unit: "HOUR" | "DAY" | "WEEK" | "MONTH" | "TRIP"
       search_access_strategy:
         | "API"
         | "GRAPHQL"
@@ -1724,6 +1806,7 @@ export const Constants = {
         "refunded",
         "cancelled",
       ],
+      price_unit: ["HOUR", "DAY", "WEEK", "MONTH", "TRIP"],
       search_access_strategy: [
         "API",
         "GRAPHQL",

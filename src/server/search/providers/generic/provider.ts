@@ -12,6 +12,7 @@ import { FALLBACK_SITEMAP_PATHS, MAX_SITEMAP_CANDIDATES } from "@/server/search/
 import { looksLikeSitemap, sampleSitemapLocs } from "@/server/search/crawl/sitemap-rules";
 import { hashContent } from "@/server/search/crawl/page-cache";
 import { classifyCandidatePage, type CandidateClassification } from "@/server/search/candidate-classifier";
+import { getCachedClassification, cacheClassification } from "@/server/search/registry/extraction-cache";
 import {
   selectCandidatesFromRegistry,
   recordFetchOutcome,
@@ -63,7 +64,7 @@ import {
 
 const PAGE_CACHE_MS = 24 * 60 * 60 * 1000;
 const SITEMAP_CACHE_MS = 24 * 60 * 60 * 1000; // Same "changes by the week" assumption as brilions.
-// How fresh a `search_extracted_listings` row must be to serve a candidate without any network
+// How fresh a `external_vessel_index` row must be to serve a candidate without any network
 // activity at all (design doc §4 P3). Deliberately equal to `PAGE_CACHE_MS` — the index and the
 // raw-HTML cache expiring in lockstep keeps there being only one freshness knob to reason about.
 // Once this elapses, `fetchCandidate` no longer skips the network entirely, but it isn't a full
@@ -84,7 +85,7 @@ const MAX_CANDIDATE_POOL = 20;
 const FETCH_CONCURRENCY = 3;
 
 /** Fixed confidence for deterministic tiers (design doc data-merger-provenance-design.md §3.4) — not a
- *  model score, just where each tier ranks relative to the others when a `search_extracted_listings`
+ *  model score, just where each tier ranks relative to the others when a `external_vessel_index`
  *  field later needs a starting point to lower on conflict. AI's confidence is `classification.confidence`
  *  instead, read as-is. */
 const SELECTOR_CONFIDENCE = 0.95;
@@ -129,13 +130,20 @@ function matchesUrlPrefix(url: string, prefixPath: string): boolean {
 
 /**
  * In-process cache of AI classification, keyed by page-content hash — same pattern and same reason
- * as brilions' `amenitiesCache` (survives one warm process, cuts repeat Anthropic spend for
- * byte-identical pages seen again within it). Module-level, not inside `createGenericProvider`'s
- * closure: that factory runs fresh for every active generic source on every request
- * (`provider-registry.ts`), so a cache scoped to its closure would never actually warm up.
+ * as brilions' `amenitiesCache` (cuts repeat Anthropic spend for byte-identical pages seen again
+ * within one warm process). Checked before the persistent cache below purely to skip a DB round-trip
+ * on a same-process repeat; module-level, not inside `createGenericProvider`'s closure, since that
+ * factory runs fresh for every active generic source on every request (`adapter-registry.ts`).
  */
 const classificationCache = new Map<string, CandidateClassification>();
 
+/**
+ * Э5: persistent counterpart (`registry/extraction-cache.ts`) — survives across requests and
+ * processes, unlike the in-memory map above, which is what actually closes the gap
+ * `src/server/search/README.md` used to carry as "не реализован". Checked/written in that order:
+ * in-memory first (free), then the DB-backed cache (a fast indexed read, still cheaper than an AI
+ * call), then the model itself only on a genuine miss on both.
+ */
 async function classifyCached(
   html: string,
 ): Promise<{ classification: CandidateClassification; usedAi: boolean }> {
@@ -143,8 +151,15 @@ async function classifyCached(
   const cached = classificationCache.get(key);
   if (cached) return { classification: cached, usedAi: false };
 
+  const persisted = await getCachedClassification(key).catch(() => null);
+  if (persisted) {
+    classificationCache.set(key, persisted);
+    return { classification: persisted, usedAi: false };
+  }
+
   const classification = await classifyCandidatePage(html);
   classificationCache.set(key, classification);
+  cacheClassification(key, classification).catch(() => {});
   return { classification, usedAi: true };
 }
 
@@ -204,14 +219,14 @@ interface FetchedCandidate {
    *  docs/SEO_Web_Discovery_JSON_LD_Project_Rules.md §27: "не должна молча выбирать одно значение").
    *  Never affects the result itself, which already omits the disputed price. */
   note: string | null;
-  /** Which tier produced `result`, `null` when there is none — feeds `search_extracted_listings`'
+  /** Which tier produced `result`, `null` when there is none — feeds `external_vessel_index`'
    *  per-field provenance (design doc §3.4). `null` result and `null` fieldSource always travel
    *  together. */
   fieldSource: FieldSource | null;
   /** 0.0-1.0, paired with `fieldSource` — fixed per deterministic tier, or the AI classifier's own
    *  score. Meaningless when `fieldSource` is `null`. */
   confidence: number | null;
-  /** True when this candidate was served from `search_extracted_listings` (design doc §4 P3) rather
+  /** True when this candidate was served from `external_vessel_index` (design doc §4 P3) rather
    *  than a live fetch — `fieldSource`/`confidence` are always `null` in that case, since nothing new
    *  was learned this request. Callers must skip both `recordFetchOutcome` (no fetch happened) and
    *  `recordExtraction` (would be a no-op) when this is true. */
@@ -379,7 +394,7 @@ function locationNeedsRecheck(result: VesselSearchResult, criteria: SearchCriter
  * no extra network round-trip beyond what the caller already did (a fresh page-cache read, or the
  * conditional-GET revalidation it was already performing), and never AI, just the same free
  * breadcrumb match `fetchAndNormalize`'s JSON-LD tier itself uses. Ephemeral like that confirmation
- * too: the caller must never persist this back to `search_extracted_listings` (see this file's own
+ * too: the caller must never persist this back to `external_vessel_index` (see this file's own
  * persistence comment in `fetchCandidates` for why).
  */
 function reconfirmCachedLocation(
@@ -398,7 +413,7 @@ function reconfirmCachedLocation(
 }
 
 /**
- * Checks `search_extracted_listings` before falling back to a live fetch (design doc §4 P3), then
+ * Checks `external_vessel_index` before falling back to a live fetch (design doc §4 P3), then
  * — if that missed — tries one cheaper thing before a full re-extraction (design doc §5.4): a
  * conditional GET against whatever validator (`etag`/`last-modified`) the last fetch of this page
  * stored. A `304` means the origin confirms nothing changed, so the stale row's already-extracted
@@ -566,7 +581,7 @@ async function fetchCandidates(
             // The JSON-LD tier's location is confirmed only against *this request's own* criteria
             // (`matchBreadcrumbLocation`'s doc comment: "яхта в Турции" confirms "Turkey" because
             // *that query* asked about Turkey and the page's breadcrumb happens to say so — it is
-            // not a claim that this page's country is Turkey in general). `search_extracted_listings`
+            // not a claim that this page's country is Turkey in general). `external_vessel_index`
             // is query-independent and reused by every future search regardless of what it asks for
             // (`getFreshListing` is age-gated only, not criteria-aware), and a stored field's `null`
             // never overwrites an existing value (`listing-merge.ts`: "no opinion", never "clear").
