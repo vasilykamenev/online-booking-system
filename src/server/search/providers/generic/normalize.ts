@@ -1,5 +1,5 @@
-import { emptyResult, type FieldProvenance, type ResultSource, type VesselSearchResult } from "@/lib/search/result";
-import { MINOR_UNITS_PER_MAJOR } from "@/lib/search/criteria";
+import { emptyResult, type FieldProvenance, type ResultSource, type VesselSearchResult } from "@/lib/search/offer";
+import { MINOR_UNITS_PER_MAJOR } from "@/lib/search/request";
 
 /**
  * Folds one candidate page's extracted fields into the canonical `VesselSearchResult` (spec §13),

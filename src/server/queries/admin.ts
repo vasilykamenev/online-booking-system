@@ -7,7 +7,11 @@ import type { Locale } from "@/i18n/routing";
 import { pickLocalized } from "@/lib/supabase/localized";
 import { throwIfSupabaseError } from "@/lib/supabase/errors";
 import { DEFAULT_PLATFORM_COMMISSION_RATE } from "@/lib/pricing/commission";
-import { selectorConfigSchema, type SelectorConfig } from "@/lib/validation/admin";
+import {
+  selectorConfigSchema,
+  type SelectorConfig,
+  type SourcePoliciesInput,
+} from "@/lib/validation/admin";
 import type { LocalizedText } from "./vessels";
 
 /** Accepts an existing client (e.g. the admin/service-role one already in scope
@@ -155,10 +159,48 @@ export interface AdminSearchSource {
   notes: string | null;
   createdAt: string;
   detailedLogging: boolean;
+  canDetails: boolean;
+  canAvailability: boolean;
+  canPricing: boolean;
+  canContact: boolean;
+  supportsDates: boolean;
+  supportsPrice: boolean;
+  supportsGuests: boolean;
+  contactCapability: Database["public"]["Enums"]["search_contact_capability"] | null;
+  /** First (and, today, only — see `parseCoverageInput`'s doc comment) coverage row, or `null` when
+   *  none is configured yet. */
+  coverage: {
+    worldwide: boolean;
+    country: string | null;
+    region: string | null;
+    destination: string | null;
+    latitude: number | null;
+    longitude: number | null;
+    radiusKm: number | null;
+  } | null;
+  policies: SourcePoliciesInput | null;
 }
 
 const SEARCH_SOURCE_COLUMNS =
-  "id, name, domain, base_url, enabled, status, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, selector_config, image_domains, auto_select_classifications, notes, created_at, detailed_logging";
+  "id, name, domain, base_url, enabled, status, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, selector_config, image_domains, auto_select_classifications, notes, created_at, detailed_logging, can_details, can_availability, can_pricing, can_contact, supports_dates, supports_price, supports_guests, contact_capability, search_source_coverage(worldwide, country, region, destination, latitude, longitude, radius_km), search_source_policies(access_policy, cache_policy, attribution_policy, rate_limit_policy, retention_policy)";
+
+/** Same defensively-null-on-failure convention as `parseAdminSelectorConfig` below. */
+function parseAdminSourcePolicies(raw: {
+  access_policy: unknown;
+  cache_policy: unknown;
+  attribution_policy: unknown;
+  rate_limit_policy: unknown;
+  retention_policy: unknown;
+} | null): SourcePoliciesInput | null {
+  if (!raw) return null;
+  return {
+    accessPolicy: (raw.access_policy as Record<string, unknown>) ?? {},
+    cachePolicy: (raw.cache_policy as Record<string, unknown>) ?? {},
+    attributionPolicy: (raw.attribution_policy as Record<string, unknown>) ?? {},
+    rateLimitPolicy: (raw.rate_limit_policy as Record<string, unknown>) ?? {},
+    retentionPolicy: (raw.retention_policy as Record<string, unknown>) ?? {},
+  };
+}
 
 /** Parses `selector_config` the same defensively-null-on-failure way `listEnabledSources`
  *  (`source-registry.ts`) does — an admin-authored value should always be valid (the form validates
@@ -199,6 +241,26 @@ export async function getAllSearchSourcesAdmin(): Promise<AdminSearchSource[]> {
     notes: row.notes,
     createdAt: row.created_at,
     detailedLogging: row.detailed_logging,
+    canDetails: row.can_details,
+    canAvailability: row.can_availability,
+    canPricing: row.can_pricing,
+    canContact: row.can_contact,
+    supportsDates: row.supports_dates,
+    supportsPrice: row.supports_price,
+    supportsGuests: row.supports_guests,
+    contactCapability: row.contact_capability,
+    coverage: row.search_source_coverage?.[0]
+      ? {
+          worldwide: row.search_source_coverage[0].worldwide,
+          country: row.search_source_coverage[0].country,
+          region: row.search_source_coverage[0].region,
+          destination: row.search_source_coverage[0].destination,
+          latitude: row.search_source_coverage[0].latitude,
+          longitude: row.search_source_coverage[0].longitude,
+          radiusKm: row.search_source_coverage[0].radius_km,
+        }
+      : null,
+    policies: parseAdminSourcePolicies(row.search_source_policies),
   }));
 }
 
@@ -236,6 +298,26 @@ export async function getSearchSourceById(id: string): Promise<AdminSearchSource
     notes: data.notes,
     createdAt: data.created_at,
     detailedLogging: data.detailed_logging,
+    canDetails: data.can_details,
+    canAvailability: data.can_availability,
+    canPricing: data.can_pricing,
+    canContact: data.can_contact,
+    supportsDates: data.supports_dates,
+    supportsPrice: data.supports_price,
+    supportsGuests: data.supports_guests,
+    contactCapability: data.contact_capability,
+    coverage: data.search_source_coverage?.[0]
+      ? {
+          worldwide: data.search_source_coverage[0].worldwide,
+          country: data.search_source_coverage[0].country,
+          region: data.search_source_coverage[0].region,
+          destination: data.search_source_coverage[0].destination,
+          latitude: data.search_source_coverage[0].latitude,
+          longitude: data.search_source_coverage[0].longitude,
+          radiusKm: data.search_source_coverage[0].radius_km,
+        }
+      : null,
+    policies: parseAdminSourcePolicies(data.search_source_policies),
   };
 }
 

@@ -1,7 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Json } from "@/lib/supabase/database.types";
-import type { VesselSearchResult } from "@/lib/search/result";
+import type { VesselSearchResult } from "@/lib/search/offer";
 import {
   LISTING_FIELDS,
   mergeExtractedListing,

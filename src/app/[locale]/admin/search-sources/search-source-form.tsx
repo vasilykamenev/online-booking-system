@@ -19,6 +19,7 @@ import {
   searchProcessingTypeValues,
   searchSourceTypeValues,
   urlClassificationValues,
+  searchContactCapabilityValues,
 } from "@/lib/validation/admin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -50,6 +51,23 @@ export interface SearchSourceFormDefaultValues {
   imageDomains: string;
   autoSelectClassifications: (typeof urlClassificationValues)[number][];
   detailedLogging: boolean;
+  canDetails: boolean;
+  canAvailability: boolean;
+  canPricing: boolean;
+  canContact: boolean;
+  supportsDates: boolean;
+  supportsPrice: boolean;
+  supportsGuests: boolean;
+  contactCapability: (typeof searchContactCapabilityValues)[number] | null;
+  coverageWorldwide: boolean;
+  coverageCountry: string;
+  coverageRegion: string;
+  coverageDestination: string;
+  coverageLatitude: string;
+  coverageLongitude: string;
+  coverageRadiusKm: string;
+  /** Raw JSON text, or "" — mirrors the form field's own shape, same convention as `selectorConfig`. */
+  policies: string;
 }
 
 const GENERIC_SELECTOR_TYPES = new Set<(typeof searchProcessingTypeValues)[number]>(["HTML", "HYBRID"]);
@@ -174,6 +192,7 @@ export function SearchSourceForm({
   const tProcessingHint = useTranslations("admin.searchSources.processingTypeHint");
   const tSourceType = useTranslations("admin.searchSources.sourceType");
   const tClassification = useTranslations("admin.searchSources.classification");
+  const tContactCapability = useTranslations("admin.searchSources.contactCapability");
   const tValidation = useTranslations("admin.searchSources.validation");
   const locale = useLocale() as Locale;
   const router = useRouter();
@@ -578,6 +597,107 @@ export function SearchSourceForm({
         </label>
         <p className="text-xs font-light text-muted-foreground">{t("detailedLoggingHint")}</p>
       </div>
+
+      <div className="flex flex-col gap-2 sm:col-span-2">
+        <Label>{t("capabilities")}</Label>
+        <p className="text-xs font-light text-muted-foreground">{t("capabilitiesHint")}</p>
+        <div className="flex flex-wrap gap-4">
+          {(
+            [
+              ["canDetails", defaultValues?.canDetails],
+              ["canAvailability", defaultValues?.canAvailability],
+              ["canPricing", defaultValues?.canPricing],
+              ["canContact", defaultValues?.canContact],
+              ["supportsDates", defaultValues?.supportsDates],
+              ["supportsPrice", defaultValues?.supportsPrice],
+              ["supportsGuests", defaultValues?.supportsGuests],
+            ] as const
+          ).map(([name, checked]) => (
+            <label key={name} className="group flex items-center gap-2 text-sm font-light">
+              <Checkbox name={name} defaultChecked={checked ?? false} />
+              {t(`capability.${name}`)}
+            </label>
+          ))}
+        </div>
+      </div>
+      <div className="flex flex-col gap-2 sm:col-span-2">
+        <Label htmlFor="contactCapability">{t("contactCapability")}</Label>
+        <Select name="contactCapability" defaultValue={defaultValues?.contactCapability ?? ""}>
+          <SelectTrigger id="contactCapability" className="w-full">
+            <SelectValue placeholder={t("contactCapabilityNone")} />
+          </SelectTrigger>
+          <SelectContent>
+            {searchContactCapabilityValues.map((value) => (
+              <SelectItem key={value} value={value}>
+                {tContactCapability(value)}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div className="flex flex-col gap-2 sm:col-span-2 rounded-2xl border border-border p-4">
+        <Label>{t("coverage")}</Label>
+        <p className="text-xs font-light text-muted-foreground">{t("coverageHint")}</p>
+        <label className="group flex items-center gap-2 text-sm font-light">
+          <Checkbox name="coverageWorldwide" defaultChecked={defaultValues?.coverageWorldwide ?? false} />
+          {t("coverageWorldwide")}
+        </label>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Input
+            name="coverageCountry"
+            placeholder={t("coverageCountryPlaceholder")}
+            defaultValue={defaultValues?.coverageCountry}
+          />
+          <Input
+            name="coverageRegion"
+            placeholder={t("coverageRegionPlaceholder")}
+            defaultValue={defaultValues?.coverageRegion}
+          />
+          <Input
+            name="coverageDestination"
+            placeholder={t("coverageDestinationPlaceholder")}
+            defaultValue={defaultValues?.coverageDestination}
+          />
+        </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Input
+            name="coverageLatitude"
+            type="number"
+            step="any"
+            placeholder={t("coverageLatitudePlaceholder")}
+            defaultValue={defaultValues?.coverageLatitude}
+          />
+          <Input
+            name="coverageLongitude"
+            type="number"
+            step="any"
+            placeholder={t("coverageLongitudePlaceholder")}
+            defaultValue={defaultValues?.coverageLongitude}
+          />
+          <Input
+            name="coverageRadiusKm"
+            type="number"
+            step="any"
+            placeholder={t("coverageRadiusKmPlaceholder")}
+            defaultValue={defaultValues?.coverageRadiusKm}
+          />
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2 sm:col-span-2">
+        <Label htmlFor="policies">{t("policies")}</Label>
+        <Textarea
+          id="policies"
+          name="policies"
+          rows={6}
+          className="font-mono text-xs"
+          placeholder={t("policiesPlaceholder")}
+          defaultValue={defaultValues?.policies}
+        />
+        <p className="text-xs font-light text-muted-foreground">{t("policiesHint")}</p>
+      </div>
+
       <div className="flex flex-col gap-2">
         <Label htmlFor="priority">{t("priority")}</Label>
         <Input

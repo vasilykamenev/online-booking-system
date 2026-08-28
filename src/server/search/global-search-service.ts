@@ -2,10 +2,10 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import type { Locale } from "@/i18n/routing";
 import { routing } from "@/i18n/routing";
-import { isEmptyCriteria, removeCriterion, type SearchCriteria } from "@/lib/search/criteria";
+import { isEmptyCriteria, removeCriterion, type SearchCriteria } from "@/lib/search/request";
 import { dedupeResults } from "@/lib/search/dedupe";
 import { rankResults } from "@/lib/search/ranking";
-import type { ResultSource, UnifiedSearchResponse, VesselSearchResult } from "@/lib/search/result";
+import type { ResultSource, UnifiedSearchResponse, VesselSearchResult } from "@/lib/search/offer";
 import { interpretQuery, type InterpretationOutcome } from "@/server/ai/query-interpreter";
 import { buildSearchVocabulary } from "@/server/queries/search-vocabulary";
 import { searchInternalVessels } from "@/server/search/internal-provider";
@@ -155,6 +155,10 @@ export interface ExternalSearchPhaseOptions {
   externalProviders: ExternalSearchProvider[];
   externalTimeoutMs?: number;
   signal?: AbortSignal;
+  /** Э3 (Арх §9): enabled sources excluded before this phase even started because their coverage
+   *  didn't include the request's location — passed through so `search_runs` can distinguish "not
+   *  covering this place" from "no provider wired up" (see `provider-registry.ts`). */
+  sourcesSkippedByCoverage?: number;
 }
 
 export interface ExternalSearchPhaseResult {
@@ -240,6 +244,7 @@ export async function runExternalSearchPhase(
     pagesRejected: externalStats.pagesRejected + internalPhase.rejectedForDates,
     externalStats,
     externalPhase: meta.externalPhase,
+    sourcesSkippedByCoverage: options.sourcesSkippedByCoverage ?? 0,
     errors,
   });
 

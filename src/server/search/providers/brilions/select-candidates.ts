@@ -1,4 +1,4 @@
-import type { SearchCriteria } from "@/lib/search/criteria";
+import type { SearchCriteria } from "@/lib/search/request";
 import { normalizeForMatch } from "@/lib/search/text";
 import type { BrilionsSitemapEntry } from "@/server/search/providers/brilions/sitemap";
 

@@ -6,7 +6,7 @@ import { ExternalLink, MapPin, Star, Users2, DoorClosed, Ship } from "lucide-rea
 import { useLocale, useTranslations } from "next-intl";
 import type { Locale } from "@/i18n/routing";
 import { Link } from "@/i18n/navigation";
-import type { VesselSearchResult } from "@/lib/search/result";
+import type { VesselSearchResult } from "@/lib/search/offer";
 import { encodeExternalImageUrl } from "@/lib/search/external-image-url";
 import { formatPrice } from "@/lib/pricing/format";
 import { Badge } from "@/components/ui/badge";

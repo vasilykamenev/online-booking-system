@@ -2,7 +2,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { normalizeForMatch } from "@/lib/search/text";
 import type { BreadcrumbEntry } from "@/lib/search/structured-data";
-import type { SearchCriteria } from "@/lib/search/criteria";
+import type { SearchCriteria } from "@/lib/search/request";
 
 /**
  * A per-source, self-learning map of breadcrumb labels the generic provider (`providers/generic/provider.ts`)

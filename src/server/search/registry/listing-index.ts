@@ -1,6 +1,6 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
-import { emptyResult, type FieldProvenance, type ResultSource, type VesselSearchResult } from "@/lib/search/result";
+import { emptyResult, type FieldProvenance, type ResultSource, type VesselSearchResult } from "@/lib/search/offer";
 import type { ListingFieldProvenance } from "@/server/search/registry/listing-merge";
 
 /**

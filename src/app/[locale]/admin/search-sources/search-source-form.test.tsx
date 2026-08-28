@@ -46,6 +46,22 @@ const BASE_DEFAULTS: SearchSourceFormDefaultValues = {
   imageDomains: "",
   autoSelectClassifications: ["HIGH"],
   detailedLogging: false,
+  canDetails: false,
+  canAvailability: false,
+  canPricing: false,
+  canContact: false,
+  supportsDates: false,
+  supportsPrice: false,
+  supportsGuests: false,
+  contactCapability: null,
+  coverageWorldwide: false,
+  coverageCountry: "",
+  coverageRegion: "",
+  coverageDestination: "",
+  coverageLatitude: "",
+  coverageLongitude: "",
+  coverageRadiusKm: "",
+  policies: "",
 };
 
 afterEach(() => {

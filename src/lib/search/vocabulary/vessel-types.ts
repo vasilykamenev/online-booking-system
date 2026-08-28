@@ -1,4 +1,4 @@
-import type { VesselType } from "@/lib/search/result";
+import type { VesselType } from "@/lib/search/offer";
 import { normalizeForMatch } from "@/lib/search/text";
 
 /**

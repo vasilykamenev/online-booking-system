@@ -4,8 +4,8 @@ import { throwIfSupabaseError } from "@/lib/supabase/errors";
 import { parseDateRangeLiteral } from "@/lib/supabase/date-range";
 import { isRangeAvailable, type DateInterval } from "@/lib/availability/ranges";
 import type { Locale } from "@/i18n/routing";
-import type { SearchCriteria } from "@/lib/search/criteria";
-import { emptyResult, type ResultSource, type VesselSearchResult } from "@/lib/search/result";
+import type { SearchCriteria } from "@/lib/search/request";
+import { emptyResult, type ResultSource, type VesselSearchResult } from "@/lib/search/offer";
 import { containsTerm } from "@/lib/search/text";
 
 /**

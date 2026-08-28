@@ -50,7 +50,7 @@ export type ListingFields = { [K in ListingFieldName]: ListingFieldTypes[K] | nu
 
 export interface FieldProvenanceEntry {
   source: FieldSource;
-  /** 0.0-1.0, always set here — unlike the ephemeral `FieldProvenance` in `lib/search/result.ts`, every
+  /** 0.0-1.0, always set here — unlike the ephemeral `FieldProvenance` in `lib/search/offer.ts`, every
    *  field (deterministic or not) needs a starting confidence for conflicts to have something to lower
    *  (design doc §3.4). */
   confidence: number;

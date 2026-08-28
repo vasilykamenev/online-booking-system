@@ -5,7 +5,7 @@ import {
   isEmptyCriteria,
   removeCriterion,
   searchCriteriaSchema,
-} from "./criteria";
+} from "./request";
 
 describe("searchCriteriaSchema — tolerating untrusted model output", () => {
   it("parses an empty object into all-null criteria", () => {

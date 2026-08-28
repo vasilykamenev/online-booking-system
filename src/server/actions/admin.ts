@@ -21,8 +21,12 @@ import {
   crawlRuleSchema,
   parseSelectorConfig,
   parseImageDomains,
+  parseCoverageInput,
+  parseSourcePolicies,
+  type SourcePoliciesInput,
   type userRoleValues,
 } from "@/lib/validation/admin";
+import { accessStrategyFromProcessingType } from "@/server/search/source-registry";
 import {
   validateSearchSource,
   previewCandidateAtUrl,
@@ -344,6 +348,43 @@ export interface SearchSourceActionState {
   error?: string;
 }
 
+/**
+ * Replaces a source's single coverage row and its policies row (Э3, Арх §9/§24). Coverage is
+ * delete-then-insert-if-present rather than upsert: the admin form edits one row at a time (see
+ * `parseCoverageInput`'s own doc comment on the one-row-per-source simplification), so "the admin
+ * cleared every coverage field" must delete the row, not leave a stale one an upsert would never
+ * touch. Policies is a genuine upsert — `search_source_policies.source_id` is its primary key, and
+ * "leave every policy blank" is a legitimate steady state (an all-default row), not a delete.
+ */
+async function replaceSourceCoverageAndPolicies(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  sourceId: string,
+  parsed: { coverage: ReturnType<typeof parseCoverageInput>; policies: SourcePoliciesInput | null },
+): Promise<void> {
+  await supabase.from("search_source_coverage").delete().eq("source_id", sourceId);
+  if (parsed.coverage) {
+    await supabase.from("search_source_coverage").insert({
+      source_id: sourceId,
+      worldwide: parsed.coverage.worldwide,
+      country: parsed.coverage.country,
+      region: parsed.coverage.region,
+      destination: parsed.coverage.destination,
+      latitude: parsed.coverage.latitude,
+      longitude: parsed.coverage.longitude,
+      radius_km: parsed.coverage.radiusKm,
+    });
+  }
+
+  await supabase.from("search_source_policies").upsert({
+    source_id: sourceId,
+    access_policy: (parsed.policies?.accessPolicy ?? {}) as Json,
+    cache_policy: (parsed.policies?.cachePolicy ?? {}) as Json,
+    attribution_policy: (parsed.policies?.attributionPolicy ?? {}) as Json,
+    rate_limit_policy: (parsed.policies?.rateLimitPolicy ?? {}) as Json,
+    retention_policy: (parsed.policies?.retentionPolicy ?? {}) as Json,
+  });
+}
+
 export async function createSearchSource(
   locale: Locale,
   _prevState: SearchSourceActionState,
@@ -363,6 +404,22 @@ export async function createSearchSource(
     imageDomains: formData.get("imageDomains") ?? "",
     autoSelectClassifications: formData.getAll("autoSelectClassifications"),
     detailedLogging: formData.get("detailedLogging"),
+    canDetails: formData.get("canDetails"),
+    canAvailability: formData.get("canAvailability"),
+    canPricing: formData.get("canPricing"),
+    canContact: formData.get("canContact"),
+    supportsDates: formData.get("supportsDates"),
+    supportsPrice: formData.get("supportsPrice"),
+    supportsGuests: formData.get("supportsGuests"),
+    contactCapability: formData.get("contactCapability") ?? "",
+    coverageWorldwide: formData.get("coverageWorldwide"),
+    coverageCountry: formData.get("coverageCountry") ?? "",
+    coverageRegion: formData.get("coverageRegion") ?? "",
+    coverageDestination: formData.get("coverageDestination") ?? "",
+    coverageLatitude: formData.get("coverageLatitude") ?? "",
+    coverageLongitude: formData.get("coverageLongitude") ?? "",
+    coverageRadiusKm: formData.get("coverageRadiusKm") ?? "",
+    policies: formData.get("policies") ?? "",
   });
   if (!parsed.success) return { error: "invalid" };
 
@@ -370,6 +427,9 @@ export async function createSearchSource(
   if (!selectorConfig.ok) return { error: "selectorConfigInvalid" };
   const imageDomains = parseImageDomains(parsed.data.imageDomains);
   if (!imageDomains.ok) return { error: "imageDomainsInvalid" };
+  const coverage = parseCoverageInput(parsed.data);
+  const policies = parseSourcePolicies(parsed.data.policies);
+  if (!policies.ok) return { error: "policiesInvalid" };
 
   const supabase = await createClient();
   const admin = await requireAdmin(supabase);
@@ -383,12 +443,21 @@ export async function createSearchSource(
       base_url: parsed.data.baseUrl,
       source_type: parsed.data.sourceType,
       processing_type: parsed.data.processingType,
+      access_strategy: accessStrategyFromProcessingType(parsed.data.processingType),
       priority: parsed.data.priority,
       notes: parsed.data.notes || null,
       selector_config: selectorConfig.value as Json,
       image_domains: imageDomains.value,
       auto_select_classifications: parsed.data.autoSelectClassifications,
       detailed_logging: parsed.data.detailedLogging,
+      can_details: parsed.data.canDetails,
+      can_availability: parsed.data.canAvailability,
+      can_pricing: parsed.data.canPricing,
+      can_contact: parsed.data.canContact,
+      supports_dates: parsed.data.supportsDates,
+      supports_price: parsed.data.supportsPrice,
+      supports_guests: parsed.data.supportsGuests,
+      contact_capability: parsed.data.contactCapability,
       // Every new source starts unreviewed — `approveSearchSource` is the only path to `enabled`.
       status: "draft",
       enabled: false,
@@ -396,6 +465,8 @@ export async function createSearchSource(
     .select("id")
     .single();
   if (error) return { error: error.code === "23505" ? "domainTaken" : "generic" };
+
+  await replaceSourceCoverageAndPolicies(supabase, source.id, { coverage, policies: policies.value });
 
   await logAudit(supabase, admin.id, "create_search_source", "search_sources", source.id, {
     domain: parsed.data.domain,
@@ -430,6 +501,22 @@ export async function updateSearchSource(
     imageDomains: formData.get("imageDomains") ?? "",
     autoSelectClassifications: formData.getAll("autoSelectClassifications"),
     detailedLogging: formData.get("detailedLogging"),
+    canDetails: formData.get("canDetails"),
+    canAvailability: formData.get("canAvailability"),
+    canPricing: formData.get("canPricing"),
+    canContact: formData.get("canContact"),
+    supportsDates: formData.get("supportsDates"),
+    supportsPrice: formData.get("supportsPrice"),
+    supportsGuests: formData.get("supportsGuests"),
+    contactCapability: formData.get("contactCapability") ?? "",
+    coverageWorldwide: formData.get("coverageWorldwide"),
+    coverageCountry: formData.get("coverageCountry") ?? "",
+    coverageRegion: formData.get("coverageRegion") ?? "",
+    coverageDestination: formData.get("coverageDestination") ?? "",
+    coverageLatitude: formData.get("coverageLatitude") ?? "",
+    coverageLongitude: formData.get("coverageLongitude") ?? "",
+    coverageRadiusKm: formData.get("coverageRadiusKm") ?? "",
+    policies: formData.get("policies") ?? "",
   });
   if (!parsed.success) return { error: "invalid" };
 
@@ -437,6 +524,9 @@ export async function updateSearchSource(
   if (!selectorConfig.ok) return { error: "selectorConfigInvalid" };
   const imageDomains = parseImageDomains(parsed.data.imageDomains);
   if (!imageDomains.ok) return { error: "imageDomainsInvalid" };
+  const coverage = parseCoverageInput(parsed.data);
+  const policies = parseSourcePolicies(parsed.data.policies);
+  if (!policies.ok) return { error: "policiesInvalid" };
 
   const supabase = await createClient();
   const admin = await requireAdmin(supabase);
@@ -459,15 +549,26 @@ export async function updateSearchSource(
       base_url: parsed.data.baseUrl,
       source_type: parsed.data.sourceType,
       processing_type: parsed.data.processingType,
+      access_strategy: accessStrategyFromProcessingType(parsed.data.processingType),
       priority: parsed.data.priority,
       notes: parsed.data.notes || null,
       selector_config: selectorConfig.value as Json,
       image_domains: imageDomains.value,
       auto_select_classifications: parsed.data.autoSelectClassifications,
       detailed_logging: parsed.data.detailedLogging,
+      can_details: parsed.data.canDetails,
+      can_availability: parsed.data.canAvailability,
+      can_pricing: parsed.data.canPricing,
+      can_contact: parsed.data.canContact,
+      supports_dates: parsed.data.supportsDates,
+      supports_price: parsed.data.supportsPrice,
+      supports_guests: parsed.data.supportsGuests,
+      contact_capability: parsed.data.contactCapability,
     })
     .eq("id", sourceId);
   if (error) return { error: error.code === "23505" ? "domainTaken" : "generic" };
+
+  await replaceSourceCoverageAndPolicies(supabase, sourceId, { coverage, policies: policies.value });
 
   await logAudit(supabase, admin.id, "update_search_source", "search_sources", sourceId, {
     domain: parsed.data.domain,

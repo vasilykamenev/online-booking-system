@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { matchesKnownCriteria } from "./match-criteria";
-import { emptyResult, type ResultSource, type VesselSearchResult } from "@/lib/search/result";
-import { searchCriteriaSchema } from "@/lib/search/criteria";
+import { emptyResult, type ResultSource, type VesselSearchResult } from "@/lib/search/offer";
+import { searchCriteriaSchema } from "@/lib/search/request";
 
 const source: ResultSource = {
   type: "WEBSITE",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { searchCriteriaSchema } from "@/lib/search/criteria";
+import { searchCriteriaSchema } from "@/lib/search/request";
 import { KNOWN_CITY_SLUGS, matchingCitySlugs, selectCandidates } from "./select-candidates";
 import type { BrilionsSitemapEntry } from "./sitemap";
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { emptyResult, type ResultSource, type VesselSearchResult } from "./result";
-import { searchCriteriaSchema, type SearchCriteria } from "./criteria";
+import { emptyResult, type ResultSource, type VesselSearchResult } from "./offer";
+import { searchCriteriaSchema, type SearchCriteria } from "./request";
 import {
   INTERNAL_ORIGIN_BONUS,
   rankResults,

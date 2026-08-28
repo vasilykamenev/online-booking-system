@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { emptyResult, type ResultSource, type VesselSearchResult } from "./result";
+import { emptyResult, type ResultSource, type VesselSearchResult } from "./offer";
 import { assessDuplicate, dedupeResults, mergeResults } from "./dedupe";
 
 const internalSource: ResultSource = {

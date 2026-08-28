@@ -49,6 +49,34 @@ export default async function EditSearchSourcePage({
             imageDomains: source.imageDomains.join(", "),
             autoSelectClassifications: source.autoSelectClassifications,
             detailedLogging: source.detailedLogging,
+            canDetails: source.canDetails,
+            canAvailability: source.canAvailability,
+            canPricing: source.canPricing,
+            canContact: source.canContact,
+            supportsDates: source.supportsDates,
+            supportsPrice: source.supportsPrice,
+            supportsGuests: source.supportsGuests,
+            contactCapability: source.contactCapability,
+            coverageWorldwide: source.coverage?.worldwide ?? false,
+            coverageCountry: source.coverage?.country ?? "",
+            coverageRegion: source.coverage?.region ?? "",
+            coverageDestination: source.coverage?.destination ?? "",
+            coverageLatitude: source.coverage?.latitude?.toString() ?? "",
+            coverageLongitude: source.coverage?.longitude?.toString() ?? "",
+            coverageRadiusKm: source.coverage?.radiusKm?.toString() ?? "",
+            policies: source.policies
+              ? JSON.stringify(
+                  {
+                    accessPolicy: source.policies.accessPolicy,
+                    cachePolicy: source.policies.cachePolicy,
+                    attributionPolicy: source.policies.attributionPolicy,
+                    rateLimitPolicy: source.policies.rateLimitPolicy,
+                    retentionPolicy: source.policies.retentionPolicy,
+                  },
+                  null,
+                  2,
+                )
+              : "",
           }}
         />
       </div>

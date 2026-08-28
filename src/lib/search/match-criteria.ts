@@ -1,5 +1,5 @@
-import type { SearchCriteria } from "@/lib/search/criteria";
-import type { VesselSearchResult } from "@/lib/search/result";
+import type { SearchCriteria } from "@/lib/search/request";
+import type { VesselSearchResult } from "@/lib/search/offer";
 
 /**
  * Hard-filters a normalized result against criteria this source's own extraction knows reliably —

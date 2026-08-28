@@ -4,7 +4,7 @@ import {
   type CrewType,
   type PriceUnit,
   type SearchCriteria,
-} from "@/lib/search/criteria";
+} from "@/lib/search/request";
 import { containsTerm, normalizeForMatch, parseLooseNumber, stem } from "@/lib/search/text";
 import type { SearchVocabulary, VocabularyEntry } from "@/lib/search/vocabulary";
 

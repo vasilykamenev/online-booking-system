@@ -884,6 +884,7 @@ export type Database = {
           pages_revalidated_unchanged: number
           pages_visited: number
           request_version: number
+          sources_skipped_by_coverage: number
           sources_visited: number
           user_id: string | null
         }
@@ -910,6 +911,7 @@ export type Database = {
           pages_revalidated_unchanged?: number
           pages_visited?: number
           request_version?: number
+          sources_skipped_by_coverage?: number
           sources_visited?: number
           user_id?: string | null
         }
@@ -936,6 +938,7 @@ export type Database = {
           pages_revalidated_unchanged?: number
           pages_visited?: number
           request_version?: number
+          sources_skipped_by_coverage?: number
           sources_visited?: number
           user_id?: string | null
         }
@@ -990,6 +993,53 @@ export type Database = {
           },
         ]
       }
+      search_source_coverage: {
+        Row: {
+          country: string | null
+          created_at: string
+          destination: string | null
+          id: string
+          latitude: number | null
+          longitude: number | null
+          radius_km: number | null
+          region: string | null
+          source_id: string
+          worldwide: boolean
+        }
+        Insert: {
+          country?: string | null
+          created_at?: string
+          destination?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          radius_km?: number | null
+          region?: string | null
+          source_id: string
+          worldwide?: boolean
+        }
+        Update: {
+          country?: string | null
+          created_at?: string
+          destination?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          radius_km?: number | null
+          region?: string | null
+          source_id?: string
+          worldwide?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "search_source_coverage_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "search_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       search_source_crawl_rules: {
         Row: {
           classification: Database["public"]["Enums"]["search_url_classification"]
@@ -1029,6 +1079,44 @@ export type Database = {
             foreignKeyName: "search_source_crawl_rules_source_id_fkey"
             columns: ["source_id"]
             isOneToOne: false
+            referencedRelation: "search_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      search_source_policies: {
+        Row: {
+          access_policy: Json
+          attribution_policy: Json
+          cache_policy: Json
+          rate_limit_policy: Json
+          retention_policy: Json
+          source_id: string
+          updated_at: string
+        }
+        Insert: {
+          access_policy?: Json
+          attribution_policy?: Json
+          cache_policy?: Json
+          rate_limit_policy?: Json
+          retention_policy?: Json
+          source_id: string
+          updated_at?: string
+        }
+        Update: {
+          access_policy?: Json
+          attribution_policy?: Json
+          cache_policy?: Json
+          rate_limit_policy?: Json
+          retention_policy?: Json
+          source_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "search_source_policies_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: true
             referencedRelation: "search_sources"
             referencedColumns: ["id"]
           },
@@ -1107,12 +1195,22 @@ export type Database = {
       }
       search_sources: {
         Row: {
+          access_strategy: Database["public"]["Enums"]["search_access_strategy"]
           auto_select_classifications: Database["public"]["Enums"]["search_url_classification"][]
           base_url: string
+          can_availability: boolean
+          can_contact: boolean
+          can_details: boolean
+          can_pricing: boolean
+          can_search: boolean
+          contact_capability:
+            | Database["public"]["Enums"]["search_contact_capability"]
+            | null
           created_at: string
           detailed_logging: boolean
           domain: string
           enabled: boolean
+          fallback_strategies: Database["public"]["Enums"]["search_access_strategy"][]
           id: string
           image_domains: string[]
           last_checked_at: string | null
@@ -1125,15 +1223,29 @@ export type Database = {
           selector_config: Json | null
           source_type: Database["public"]["Enums"]["search_source_type"]
           status: Database["public"]["Enums"]["search_source_status"]
+          supports_dates: boolean
+          supports_guests: boolean
+          supports_location: boolean
+          supports_price: boolean
           updated_at: string
         }
         Insert: {
+          access_strategy: Database["public"]["Enums"]["search_access_strategy"]
           auto_select_classifications?: Database["public"]["Enums"]["search_url_classification"][]
           base_url: string
+          can_availability?: boolean
+          can_contact?: boolean
+          can_details?: boolean
+          can_pricing?: boolean
+          can_search?: boolean
+          contact_capability?:
+            | Database["public"]["Enums"]["search_contact_capability"]
+            | null
           created_at?: string
           detailed_logging?: boolean
           domain: string
           enabled?: boolean
+          fallback_strategies?: Database["public"]["Enums"]["search_access_strategy"][]
           id?: string
           image_domains?: string[]
           last_checked_at?: string | null
@@ -1146,15 +1258,29 @@ export type Database = {
           selector_config?: Json | null
           source_type?: Database["public"]["Enums"]["search_source_type"]
           status?: Database["public"]["Enums"]["search_source_status"]
+          supports_dates?: boolean
+          supports_guests?: boolean
+          supports_location?: boolean
+          supports_price?: boolean
           updated_at?: string
         }
         Update: {
+          access_strategy?: Database["public"]["Enums"]["search_access_strategy"]
           auto_select_classifications?: Database["public"]["Enums"]["search_url_classification"][]
           base_url?: string
+          can_availability?: boolean
+          can_contact?: boolean
+          can_details?: boolean
+          can_pricing?: boolean
+          can_search?: boolean
+          contact_capability?:
+            | Database["public"]["Enums"]["search_contact_capability"]
+            | null
           created_at?: string
           detailed_logging?: boolean
           domain?: string
           enabled?: boolean
+          fallback_strategies?: Database["public"]["Enums"]["search_access_strategy"][]
           id?: string
           image_domains?: string[]
           last_checked_at?: string | null
@@ -1167,6 +1293,10 @@ export type Database = {
           selector_config?: Json | null
           source_type?: Database["public"]["Enums"]["search_source_type"]
           status?: Database["public"]["Enums"]["search_source_status"]
+          supports_dates?: boolean
+          supports_guests?: boolean
+          supports_location?: boolean
+          supports_price?: boolean
           updated_at?: string
         }
         Relationships: []
@@ -1403,6 +1533,20 @@ export type Database = {
         | "failed"
         | "refunded"
         | "cancelled"
+      search_access_strategy:
+        | "API"
+        | "GRAPHQL"
+        | "STRUCTURED_DATA"
+        | "SEARCH_URL"
+        | "WEB_PARSER"
+        | "AI_EXTRACTION"
+      search_contact_capability:
+        | "EMAIL"
+        | "PROVIDER_API"
+        | "CONTACT_FORM"
+        | "EXTERNAL_BOOKING_URL"
+        | "PLATFORM_MESSAGE"
+        | "REDIRECT_ONLY"
       search_crawl_rule_pattern_type: "PREFIX" | "REGEX"
       search_external_phase: "SKIPPED" | "PENDING" | "COMPLETE" | "FAILED"
       search_field_source: "SELECTOR" | "JSON_LD" | "AI" | "MANUAL"
@@ -1579,6 +1723,22 @@ export const Constants = {
         "failed",
         "refunded",
         "cancelled",
+      ],
+      search_access_strategy: [
+        "API",
+        "GRAPHQL",
+        "STRUCTURED_DATA",
+        "SEARCH_URL",
+        "WEB_PARSER",
+        "AI_EXTRACTION",
+      ],
+      search_contact_capability: [
+        "EMAIL",
+        "PROVIDER_API",
+        "CONTACT_FORM",
+        "EXTERNAL_BOOKING_URL",
+        "PLATFORM_MESSAGE",
+        "REDIRECT_ONLY",
       ],
       search_crawl_rule_pattern_type: ["PREFIX", "REGEX"],
       search_external_phase: ["SKIPPED", "PENDING", "COMPLETE", "FAILED"],

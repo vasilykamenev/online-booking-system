@@ -1,7 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Locale } from "@/i18n/routing";
-import type { SearchCriteria } from "@/lib/search/criteria";
+import type { SearchCriteria } from "@/lib/search/request";
 import type { InterpretationOutcome } from "@/server/ai/query-interpreter";
 import type { ExternalSearchStats } from "@/server/search/providers";
 import { getCurrentProfile } from "@/server/queries/profile";
@@ -33,6 +33,9 @@ export interface SearchRunRecord {
   pagesRejected: number;
   externalStats: ExternalSearchStats;
   externalPhase: "SKIPPED" | "PENDING" | "COMPLETE" | "FAILED";
+  /** Э3 (Арх §9) — enabled sources this run never consulted because their coverage didn't include
+   *  the request's location. */
+  sourcesSkippedByCoverage: number;
   errors: string[];
 }
 
@@ -65,6 +68,7 @@ export async function recordSearchRun(record: SearchRunRecord): Promise<void> {
         ai_calls: record.interpretation.mode === "AI" ? 1 + record.externalStats.aiCalls : record.externalStats.aiCalls,
         execution_ms: record.durationMs,
         external_phase: record.externalPhase,
+        sources_skipped_by_coverage: record.sourcesSkippedByCoverage,
         errors: record.errors,
       });
   } catch {

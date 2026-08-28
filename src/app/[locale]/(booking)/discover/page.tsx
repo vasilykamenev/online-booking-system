@@ -5,7 +5,7 @@ import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Locale } from "@/i18n/routing";
 import { Link } from "@/i18n/navigation";
 import { buildTitle } from "@/lib/site";
-import { criteriaToChips, isEmptyCriteria, MINOR_UNITS_PER_MAJOR } from "@/lib/search/criteria";
+import { criteriaToChips, isEmptyCriteria, MINOR_UNITS_PER_MAJOR } from "@/lib/search/request";
 import { formatPrice } from "@/lib/pricing/format";
 import {
   runInternalSearchPhase,
@@ -42,10 +42,11 @@ function toArray(value: string | string[] | undefined): string[] {
  */
 async function ExternalResultsSection({ internalPhase }: { internalPhase: InternalSearchPhaseResult }) {
   const t = await getTranslations("discover");
-  const providers = await getActiveExternalProviders();
+  const { providers, skippedByCoverage } = await getActiveExternalProviders(internalPhase.interpretedCriteria);
   const { externalOnlyResults, meta } = await runExternalSearchPhase(internalPhase, {
     externalProviders: providers,
     externalTimeoutMs: 15_000,
+    sourcesSkippedByCoverage: skippedByCoverage,
   });
 
   const nothingFoundAnywhere = internalPhase.internalResults.length === 0 && externalOnlyResults.length === 0;
@@ -112,6 +113,7 @@ export default async function DiscoverPage({
   const t = await getTranslations("discover");
   const tChips = await getTranslations("discover.chips");
   const tTypes = await getTranslations("vessels.types");
+  const tCrewTypes = await getTranslations("discover.crewTypes");
 
   const resolved = await searchParams;
   const rawQuery = toArray(resolved.q)[0] ?? "";
@@ -155,8 +157,15 @@ export default async function DiscoverPage({
   const chipValue = (chip: (typeof chips)[number]) => {
     const { labelKey, value } = chip;
     if (labelKey === "vesselType") return tTypes(String(value));
+    if (labelKey === "crewType") return tCrewTypes(String(value));
     if (labelKey === "country" || labelKey === "city" || labelKey === "marina") {
       return placeLabel(labelKey, String(value));
+    }
+    if (labelKey === "lengthMin" || labelKey === "lengthMax") {
+      return t("lengthMeters", { value: Number(value) });
+    }
+    if (labelKey === "searchRadiusKm") {
+      return t("radiusKm", { value: Number(value) });
     }
     if (labelKey === "priceMax") {
       const currency = internalPhase?.interpretedCriteria.price?.currency;

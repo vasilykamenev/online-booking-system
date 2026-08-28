@@ -1,7 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { SearchCriteria } from "@/lib/search/criteria";
-import type { VesselSearchResult } from "@/lib/search/result";
+import type { SearchCriteria } from "@/lib/search/request";
+import type { VesselSearchResult } from "@/lib/search/offer";
 import { fetchWithCache } from "@/server/search/crawl/cached-fetch";
 import { hashContent } from "@/server/search/crawl/page-cache";
 import { checkRobotsAllowed } from "@/server/search/crawl/robots";

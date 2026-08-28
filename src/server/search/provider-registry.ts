@@ -2,7 +2,9 @@ import "server-only";
 import { brilionsProvider } from "@/server/search/providers/brilions/provider";
 import { createGenericProvider } from "@/server/search/providers/generic/provider";
 import { listEnabledSources, type SearchSource } from "@/server/search/source-registry";
+import { sourceCovers } from "@/server/search/coverage";
 import type { ExternalSearchProvider } from "@/server/search/providers";
+import type { SearchCriteria } from "@/lib/search/request";
 
 /**
  * Every purpose-built `ExternalSearchProvider`, keyed by the domain its `search_sources` row uses.
@@ -36,19 +38,36 @@ function isGenericEligible(source: SearchSource): boolean {
   }
 }
 
+export interface ActiveExternalProviders {
+  providers: ExternalSearchProvider[];
+  /** Э3 (Арх §9): enabled sources this search never consulted because their coverage doesn't include
+   *  the request's location — surfaced separately from `providers.length` so a source excluded for
+   *  not covering the place asked about is distinguishable in `search_runs` from one simply not
+   *  wired to any provider yet (see `isGenericEligible`). */
+  skippedByCoverage: number;
+}
+
 /**
- * Providers to consult for a search: every `search_sources` row that is currently `enabled` and
- * `status = 'active'` (spec §8/§9's registry). A domain with a purpose-built provider in
- * `PROVIDERS_BY_DOMAIN` gets it, regardless of its declared `processingType`; any other row
- * `isGenericEligible` for gets `createGenericProvider` instead — this is what makes approving a
+ * Providers to consult for a search: every `search_sources` row that is currently `enabled`,
+ * `status = 'active'` (spec §8/§9's registry) and whose coverage includes `request`'s location
+ * (Арх §9 — checked before a source is ever consulted, not after). A domain with a purpose-built
+ * provider in `PROVIDERS_BY_DOMAIN` gets it, regardless of its declared `processingType`; any other
+ * row `isGenericEligible` for gets `createGenericProvider` instead — this is what makes approving a
  * brand-new source in `/admin/search-sources` searchable immediately, with no provider code or
  * deploy required, for `AI_EXTRACTION`/`STRUCTURED_DATA` always and for `HTML`/`HYBRID` once an
  * admin has filled in `selectorConfig`.
+ *
+ * `request` is optional so existing callers with no criteria in hand yet (or a future batch/cron
+ * context) keep working — omitting it never excludes anything, same as a source with no coverage
+ * rows configured (see `coverage.ts`'s `sourceCovers`).
  */
-export async function getActiveExternalProviders(): Promise<ExternalSearchProvider[]> {
+export async function getActiveExternalProviders(
+  request?: SearchCriteria,
+): Promise<ActiveExternalProviders> {
   const sources = await listEnabledSources();
+  const covered = request ? sources.filter((source) => sourceCovers(source.coverage, request)) : sources;
 
-  return sources
+  const providers = covered
     .map((source): ExternalSearchProvider | null => {
       const specific = PROVIDERS_BY_DOMAIN[source.domain];
       if (specific) return specific;
@@ -56,4 +75,6 @@ export async function getActiveExternalProviders(): Promise<ExternalSearchProvid
       return null;
     })
     .filter((provider): provider is ExternalSearchProvider => provider !== null);
+
+  return { providers, skippedByCoverage: sources.length - covered.length };
 }

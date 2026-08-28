@@ -6,7 +6,7 @@ import {
   durationUnits,
   priceUnitValues,
   type SearchCriteria,
-} from "@/lib/search/criteria";
+} from "@/lib/search/request";
 import { interpretQueryDeterministic } from "@/lib/search/interpret-fallback";
 import type { SearchVocabulary } from "@/lib/search/vocabulary";
 import { vesselTypeValues } from "@/lib/validation/search";

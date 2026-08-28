@@ -28,8 +28,9 @@
 
 | Файл | Роль | §  |
 |---|---|---|
-| `criteria.ts` | Модель критериев, чипы, удаление критерия | §4, §20 |
-| `result.ts` | Canonical `VesselSearchResult`, provenance, confidence | §13–§15 |
+| `request.ts` (бывш. `criteria.ts`) | Модель критериев, чипы, удаление критерия | §4, §20 |
+| `offer.ts` (бывш. `result.ts`) | Canonical `VesselSearchResult`, provenance, confidence | §13–§15 |
+| `geo.ts` | haversine, bounding box для `searchRadiusKm` | Арх §5 |
 | `interpret-fallback.ts` | Детерминированный разбор запроса | §4 |
 | `vocabulary.ts` | Словарь из справочников проекта | §4 |
 | `ranking.ts` | `SearchRankingService` | §18 |
@@ -43,7 +44,8 @@
 | `global-search-service.ts` | Оркестратор | §5 |
 | `internal-provider.ts` | Поиск по своей БД | §6 |
 | `providers.ts` | Интерфейс внешних источников | §7, §22, §23 |
-| `source-registry.ts` | Реестр источников (`search_sources`, `listEnabledSources`) | §8, §28 |
+| `coverage.ts` | `sourceCovers` — предфильтр источников по географии запроса (Э3) | Арх §9 |
+| `source-registry.ts` | Реестр источников — `search_sources` + capabilities + `search_source_coverage` (`listEnabledSources`) | §8, §9, §28 |
 | `source-validation.ts` | Live-проверка кандидата перед одобрением (доступность, robots, sitemap, микроразметка, предпросмотр карточек) | §9 |
 | `candidate-classifier.ts` | AI-классификация одной кандидатной страницы («это карточка судна?») | §9, §11 |
 | `provider-registry.ts` | Связка «провайдер ↔ активная строка реестра» — по домену, иначе по `processingType` (generic) | §8, §23 |

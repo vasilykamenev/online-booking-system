@@ -1,5 +1,5 @@
-import type { VesselSearchResult } from "@/lib/search/result";
-import { dataCompleteness } from "@/lib/search/result";
+import type { VesselSearchResult } from "@/lib/search/offer";
+import { dataCompleteness } from "@/lib/search/offer";
 import { normalizeForMatch, tokenSimilarity } from "@/lib/search/text";
 
 /**

@@ -1,5 +1,5 @@
 import type { Database } from "@/lib/supabase/database.types";
-import type { DurationUnit, PriceUnit } from "@/lib/search/criteria";
+import type { DurationUnit, PriceUnit } from "@/lib/search/request";
 
 /**
  * The canonical shape every result is normalized into (spec §13), whether it came from our own

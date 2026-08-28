@@ -1,5 +1,5 @@
-import type { SearchCriteria } from "@/lib/search/criteria";
-import { dataCompleteness, type VesselSearchResult } from "@/lib/search/result";
+import type { SearchCriteria } from "@/lib/search/request";
+import { dataCompleteness, type VesselSearchResult } from "@/lib/search/offer";
 import { normalizeForMatch } from "@/lib/search/text";
 
 /**

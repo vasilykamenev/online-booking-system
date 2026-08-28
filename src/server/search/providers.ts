@@ -1,5 +1,5 @@
-import type { SearchCriteria } from "@/lib/search/criteria";
-import type { VesselSearchResult } from "@/lib/search/result";
+import type { SearchCriteria } from "@/lib/search/request";
+import type { VesselSearchResult } from "@/lib/search/offer";
 import type { Locale } from "@/i18n/routing";
 
 /**

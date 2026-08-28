@@ -185,6 +185,7 @@
     "externalSkipped": "External sources are not connected yet — these are offers from our own catalogue.",
     "untitled": "Untitled",
     "lengthMeters": "{value} m",
+    "radiusKm": "{value} km",
     "priceUnknown": "Price not listed",
     "open": "Open",
     "openSource": "View on source site",
@@ -193,6 +194,11 @@
     "origin": {
       "internal": "Our catalogue",
       "external": "External source"
+    },
+    "crewTypes": {
+      "BAREBOAT": "bareboat",
+      "SKIPPERED": "skippered",
+      "CREWED": "fully crewed"
     },
     "priceUnit": {
       "HOUR": "/ hour",
@@ -1106,6 +1112,14 @@
         "AI_EXTRACTION": "Sends the page text to an AI model to pull out the data. Handles messy, free-form pages, but costs more and runs slower per page.",
         "HYBRID": "Fixed selectors for fields that are always in the same place, AI for the rest (e.g. a free-text amenities list)."
       },
+      "contactCapability": {
+        "EMAIL": "Email",
+        "PROVIDER_API": "Provider API",
+        "CONTACT_FORM": "Contact form",
+        "EXTERNAL_BOOKING_URL": "External booking link",
+        "PLATFORM_MESSAGE": "Platform message",
+        "REDIRECT_ONLY": "Redirect to source site only"
+      },
       "lifecycle": {
         "badge": {
           "draft": "Draft",
@@ -1148,6 +1162,31 @@
         "autoSelectClassificationsHint": "URL Registry classifications (docs/CLAUDE_SITEMAP_AI_CRAWLER_RULE.md §4) that get fetched automatically. Leave a classification unchecked to keep it out of search unless an admin picks specific URLs by hand on the URL registry page. \"High\" is the sane default for actual listing pages.",
         "detailedLogging": "Detailed logging",
         "detailedLoggingHint": "Logs (Vercel Runtime Logs) a step-by-step trace of every search run against this source: robots.txt check, where candidates came from (URL registry or sitemap fallback), per-page outcome (which tier matched, why accepted/rejected), location confirmation, final result count. Noticeably more log volume than usual — turn on to debug one specific source issue, not as a standing setting.",
+        "capabilities": "Source capabilities",
+        "capabilitiesHint": "What this source can do beyond a plain search — for now this is only data for later stages (offer details, availability checks, contacting the provider); it doesn't change search yet.",
+        "capability": {
+          "canDetails": "Offer details",
+          "canAvailability": "Availability check",
+          "canPricing": "Live pricing",
+          "canContact": "Contact the provider",
+          "supportsDates": "Date filtering",
+          "supportsPrice": "Price filtering",
+          "supportsGuests": "Guest-count filtering"
+        },
+        "contactCapability": "How to contact the provider",
+        "contactCapabilityNone": "Not set",
+        "coverage": "Source coverage",
+        "coverageHint": "Which destinations this source serves — a source that doesn't cover the requested region is skipped during search. Empty means no coverage set (the source is considered for every search).",
+        "coverageWorldwide": "Serves the whole world",
+        "coverageCountryPlaceholder": "Country, e.g. Greece",
+        "coverageRegionPlaceholder": "Region, e.g. Adriatic",
+        "coverageDestinationPlaceholder": "City/marina, e.g. Split",
+        "coverageLatitudePlaceholder": "Center latitude, e.g. 43.5",
+        "coverageLongitudePlaceholder": "Center longitude, e.g. 16.44",
+        "coverageRadiusKmPlaceholder": "Radius, km",
+        "policies": "Source policies (JSON)",
+        "policiesPlaceholder": "'{'\n  \"attributionPolicy\": '{' \"text\": \"Data provided by ...\" '}'\n'}'",
+        "policiesHint": "Optional: robots/ToS, cache TTLs, required attribution, rate limits, retention period — one section per policy. Only this form reads it today, nothing consumes it automatically yet.",
         "priority": "Priority",
         "priorityHint": "Higher runs earlier when the search's crawl budget is limited.",
         "notes": "Notes",
@@ -1162,6 +1201,7 @@
           "domainTaken": "A source with that domain already exists",
           "selectorConfigInvalid": "Selector configuration is not valid JSON",
           "imageDomainsInvalid": "Trusted image hosts must be valid domain names",
+          "policiesInvalid": "Source policies is not valid JSON",
           "generic": "Couldn't add the source"
         }
       },

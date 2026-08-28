@@ -1,7 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
-import type { SearchCriteria } from "@/lib/search/criteria";
-import type { VesselSearchResult } from "@/lib/search/result";
+import type { SearchCriteria } from "@/lib/search/request";
+import type { VesselSearchResult } from "@/lib/search/offer";
 import { matchesKnownCriteria } from "@/lib/search/match-criteria";
 import { extractBreadcrumbTrail, extractJsonLdFields, matchBreadcrumbLocation } from "@/lib/search/structured-data";
 import { extractPageSummary } from "@/lib/search/page-text";

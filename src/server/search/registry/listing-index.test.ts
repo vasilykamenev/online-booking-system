@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { listingRowToResult, type FreshListingRow } from "./listing-index";
-import type { ResultSource } from "@/lib/search/result";
+import type { ResultSource } from "@/lib/search/offer";
 
 const SOURCE: ResultSource = {
   type: "WEBSITE",

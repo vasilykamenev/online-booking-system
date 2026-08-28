@@ -3,6 +3,7 @@ import { cache } from "react";
 import { createClient } from "@/lib/supabase/server";
 import type { Database } from "@/lib/supabase/database.types";
 import { selectorConfigSchema, type SelectorConfig } from "@/lib/validation/admin";
+import type { SourceCoverageRow } from "@/server/search/coverage";
 
 /**
  * `SourceRegistryService` (spec §8).
@@ -17,6 +18,22 @@ import { selectorConfigSchema, type SelectorConfig } from "@/lib/validation/admi
 export type SearchProcessingType = Database["public"]["Enums"]["search_processing_type"];
 export type SearchSourceType = Database["public"]["Enums"]["search_source_type"];
 export type SearchSourceStatus = Database["public"]["Enums"]["search_source_status"];
+export type SearchAccessStrategy = Database["public"]["Enums"]["search_access_strategy"];
+export type SearchContactCapability = Database["public"]["Enums"]["search_contact_capability"];
+
+/** Арх §8's capability flags — what a source can be asked to do, independent of `reliabilityScore`
+ *  (how well it currently does it). */
+export interface SourceCapabilities {
+  canSearch: boolean;
+  canDetails: boolean;
+  canAvailability: boolean;
+  canPricing: boolean;
+  canContact: boolean;
+  supportsLocation: boolean;
+  supportsDates: boolean;
+  supportsPrice: boolean;
+  supportsGuests: boolean;
+}
 
 export interface SearchSource {
   id: string;
@@ -45,6 +62,15 @@ export interface SearchSource {
    *  Vercel runtime logs). Off by default: meant for actively debugging one misbehaving source, not
    *  standing observability every source carries all the time. */
   detailedLogging: boolean;
+  /** Арх §8's access-strategy ladder — kept alongside `processingType` rather than replacing it;
+   *  see the Э3 migration's own comment for why both exist until Э4 cuts provider selection over. */
+  accessStrategy: SearchAccessStrategy;
+  fallbackStrategies: SearchAccessStrategy[];
+  capabilities: SourceCapabilities;
+  contactCapability: SearchContactCapability | null;
+  /** Арх §9 — asked by `coverage.ts`'s `sourceCovers` before a source is ever consulted. Empty means
+   *  "not configured yet", which `sourceCovers` treats as "don't exclude", never "excludes everything". */
+  coverage: SourceCoverageRow[];
 }
 
 /**
@@ -58,7 +84,7 @@ export const listEnabledSources = cache(async (): Promise<SearchSource[]> => {
   const { data, error } = await supabase
     .from("search_sources")
     .select(
-      "id, name, domain, base_url, enabled, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, selector_config, image_domains, detailed_logging",
+      "id, name, domain, base_url, enabled, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, selector_config, image_domains, detailed_logging, access_strategy, fallback_strategies, can_search, can_details, can_availability, can_pricing, can_contact, supports_location, supports_dates, supports_price, supports_guests, contact_capability, search_source_coverage(worldwide, country, region, destination, latitude, longitude, radius_km)",
     )
     .eq("enabled", true)
     // Belt-and-suspenders: `enabled` should only ever be true alongside status = 'active' (that's
@@ -99,9 +125,52 @@ export const listEnabledSources = cache(async (): Promise<SearchSource[]> => {
       selectorConfig: parsedSelectorConfig.success ? parsedSelectorConfig.data : null,
       imageDomains: row.image_domains ?? [],
       detailedLogging: row.detailed_logging,
+      accessStrategy: row.access_strategy,
+      fallbackStrategies: row.fallback_strategies ?? [],
+      capabilities: {
+        canSearch: row.can_search,
+        canDetails: row.can_details,
+        canAvailability: row.can_availability,
+        canPricing: row.can_pricing,
+        canContact: row.can_contact,
+        supportsLocation: row.supports_location,
+        supportsDates: row.supports_dates,
+        supportsPrice: row.supports_price,
+        supportsGuests: row.supports_guests,
+      },
+      contactCapability: row.contact_capability,
+      coverage: (row.search_source_coverage ?? []).map((entry) => ({
+        worldwide: entry.worldwide,
+        country: entry.country,
+        region: entry.region,
+        destination: entry.destination,
+        latitude: entry.latitude,
+        longitude: entry.longitude,
+        radiusKm: entry.radius_km,
+      })),
     };
   });
 });
+
+/**
+ * `processingType` → Арх §8's `access_strategy` — the same 1:1 mapping the Э3 migration backfilled
+ * existing rows with, applied again on every create/update so the two columns never drift apart
+ * while `provider-registry.ts` still selects on `processingType` (see that migration's own comment
+ * on why both columns coexist until Э4).
+ */
+export function accessStrategyFromProcessingType(processingType: SearchProcessingType): SearchAccessStrategy {
+  switch (processingType) {
+    case "API":
+      return "API";
+    case "STRUCTURED_DATA":
+      return "STRUCTURED_DATA";
+    case "AI_EXTRACTION":
+      return "AI_EXTRACTION";
+    case "HTML":
+    case "HYBRID":
+      return "WEB_PARSER";
+  }
+}
 
 /** Domain → reliability, the shape `SearchRankingService` expects (spec §18). */
 export async function getSourceReliability(): Promise<Record<string, number>> {

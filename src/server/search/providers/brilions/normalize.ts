@@ -1,4 +1,4 @@
-import { emptyResult, type ResultSource, type VesselSearchResult, type VesselType } from "@/lib/search/result";
+import { emptyResult, type ResultSource, type VesselSearchResult, type VesselType } from "@/lib/search/offer";
 import type { DeterministicExtraction } from "@/server/search/providers/brilions/extract";
 import type { AmenitiesExtraction } from "@/server/search/providers/brilions/amenities-extraction";
 

@@ -2,8 +2,8 @@ import type { ComponentProps } from "react";
 import { describe, expect, it, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
 import { GlobalResultCard } from "./result-card";
-import { emptyResult } from "@/lib/search/result";
-import type { ResultSource } from "@/lib/search/result";
+import { emptyResult } from "@/lib/search/offer";
+import type { ResultSource } from "@/lib/search/offer";
 
 /**
  * Covers the gap fixed here: a vessel deduplicated from an internal DB row plus an external
