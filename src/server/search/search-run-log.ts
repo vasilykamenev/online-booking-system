@@ -3,7 +3,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import type { Locale } from "@/i18n/routing";
 import type { SearchCriteria } from "@/lib/search/request";
 import type { InterpretationOutcome } from "@/server/ai/query-interpreter";
-import type { ExternalSearchStats } from "@/server/search/providers";
+import type { AdapterSearchStats } from "@/server/search/adapters/adapter";
 import { getCurrentProfile } from "@/server/queries/profile";
 
 /**
@@ -31,7 +31,7 @@ export interface SearchRunRecord {
   externalResults: number;
   duplicatesDetected: number;
   pagesRejected: number;
-  externalStats: ExternalSearchStats;
+  externalStats: AdapterSearchStats;
   externalPhase: "SKIPPED" | "PENDING" | "COMPLETE" | "FAILED";
   /** Э3 (Арх §9) — enabled sources this run never consulted because their coverage didn't include
    *  the request's location. */

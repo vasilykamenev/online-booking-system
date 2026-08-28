@@ -6,12 +6,11 @@ import { fetchWithCache } from "@/server/search/crawl/cached-fetch";
 import { hashContent } from "@/server/search/crawl/page-cache";
 import { checkRobotsAllowed } from "@/server/search/crawl/robots";
 import {
-  emptyExternalStats,
-  type ExternalSearchContext,
-  type ExternalSearchOutcome,
-  type ExternalSearchProvider,
-  type ExternalSearchStats,
-} from "@/server/search/providers";
+  emptyAdapterStats,
+  type AdapterContext,
+  type AdapterSearchResponse,
+  type AdapterSearchStats,
+} from "@/server/search/adapters/adapter";
 import { parseYachtSitemap, type BrilionsSitemapEntry } from "@/server/search/providers/brilions/sitemap";
 import { extractDeterministic } from "@/server/search/providers/brilions/extract";
 import { extractAmenitiesWithAi } from "@/server/search/providers/brilions/ai-extract";
@@ -24,8 +23,9 @@ import { matchesKnownCriteria } from "@/lib/search/match-criteria";
 import { matchingCitySlugs, selectCandidates } from "@/server/search/providers/brilions/select-candidates";
 
 /**
- * `ExternalSearchProvider` for brilions.com — the first, and so far only, implementation of the
- * seam described in `providers.ts`. See `src/server/search/README.md` for the integration
+ * Search-only provider for brilions.com, wrapped into a full `VesselSourceAdapter` by
+ * `adapters/brilions-adapter.ts` — the first, and so far only, site-specific implementation of the
+ * seam described in `adapters/adapter.ts`. See `src/server/search/README.md` for the integration
  * research this was built from (robots.txt, page structure, the no-pricing limitation).
  *
  * ## Why this is location-gated, not a general crawl
@@ -124,7 +124,7 @@ async function extractAmenitiesCached(amenitiesText: string): Promise<{ amenitie
 
 async function fetchAndNormalize(
   entry: BrilionsSitemapEntry,
-  context: ExternalSearchContext,
+  context: AdapterContext,
 ): Promise<{ result: VesselSearchResult | null; usedAi: boolean }> {
   // The English page exists for most, not all, vessels (see sitemap.ts) — falling back to the
   // Russian canonical page keeps a vessel visible on the English UI rather than dropping it.
@@ -165,9 +165,9 @@ async function fetchAndNormalize(
 async function fetchCandidates(
   toFetch: BrilionsSitemapEntry[],
   criteria: SearchCriteria,
-  context: ExternalSearchContext,
+  context: AdapterContext,
   deadline: number,
-  stats: ExternalSearchStats,
+  stats: AdapterSearchStats,
   errors: string[],
 ): Promise<VesselSearchResult[]> {
   const results: VesselSearchResult[] = [];
@@ -208,9 +208,9 @@ async function fetchCandidates(
 
 async function runSearch(
   criteria: SearchCriteria,
-  context: ExternalSearchContext,
-): Promise<ExternalSearchOutcome> {
-  const stats: ExternalSearchStats = { ...emptyExternalStats };
+  context: AdapterContext,
+): Promise<AdapterSearchResponse> {
+  const stats: AdapterSearchStats = { ...emptyAdapterStats };
   const errors: string[] = [];
   const deadline = Date.now() + context.timeoutMs;
 
@@ -251,7 +251,8 @@ async function runSearch(
   return { results, stats, errors };
 }
 
-export const brilionsProvider: ExternalSearchProvider = {
+/** Type is inferred (search-only, `{id, search}`) — see `createGenericProvider`'s matching note. */
+export const brilionsProvider = {
   id: "brilions",
   search: runSearch,
 };

@@ -34,7 +34,7 @@
 | `server/search/source-validation.ts` | Превью-проверка при регистрации источника в `/admin/search-sources`. Гоняет `extractJsonLdTypes` по домашней странице и по 2–3 сэмплам из sitemap, затем предлагает `processingType`. |
 | `app/[locale]/admin/search-sources/search-source-form.tsx` | Рендерит отчёт валидации: найденные типы, статус по каждому сэмплу, предложенную стратегию — админ видит это перед сохранением источника. |
 | `server/search/providers/generic/provider.ts` | `fetchAndNormalize()` — боевой путь. Вызывает `extractJsonLdFields` как второй уровень приоритета: после ручных селекторов, перед AI-классификацией. |
-| `server/search/provider-registry.ts` | `isGenericEligible()` — источники со стратегией `STRUCTURED_DATA` (как и `AI_EXTRACTION`) автоматически получают generic-провайдера без единой строки кода под конкретный сайт. |
+| `server/search/adapters/generic-adapter.ts` | `supports()` — источники со стратегией `STRUCTURED_DATA` (как и `AI_EXTRACTION`) автоматически получают generic-адаптер без единой строки кода под конкретный сайт. |
 | `lib/validation/admin.ts` | Zod-схема, где `STRUCTURED_DATA` — одно из значений enum'а `SearchProcessingType` (наряду с `API / HTML / HYBRID / AI_EXTRACTION`). |
 | `lib/search/structured-data.test.ts` | Юнит-тесты обеих функций ядра: malformed-скрипты, множественные `@type`, фильтрация site-wide узлов. |
 | `docs/search-source-processing-strategies.md` | Документирует приоритет извлечения (спецификация §11): API → JSON-LD → HTML-селекторы → AI — как обоснование порядка веток в `fetchAndNormalize`. |

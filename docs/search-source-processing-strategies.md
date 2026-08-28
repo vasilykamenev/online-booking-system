@@ -9,10 +9,11 @@ Registry`) — что означает каждое из пяти значени
 
 - `supabase/migrations/20260821140001_global_search.sql`, `20260824090001_search_source_selector_config.sql` — DDL enum'а `search_processing_type`, таблицы `search_sources` и колонки `selector_config`.
 - `src/server/search/source-registry.ts` — чтение реестра источников (`listEnabledSources`).
-- `src/server/search/provider-registry.ts` — связка «домен реестра ↔ реализованный провайдер» + `isGenericEligible`.
-- `src/server/search/providers.ts` — интерфейс `ExternalSearchProvider`, который обязан реализовать любой провайдер, независимо от заявленной стратегии.
+- `src/server/search/adapters/adapter-registry.ts` — связка «домен реестра ↔ адаптер» (`ADAPTER_FACTORIES_BY_DOMAIN`), плюс предфильтр по coverage.
+- `src/server/search/adapters/adapter.ts` — интерфейс `VesselSourceAdapter`, который обязан реализовать любой адаптер, независимо от заявленной стратегии.
+- `src/server/search/adapters/generic-adapter.ts`, `src/server/search/adapters/brilions-adapter.ts` — заворачивают провайдеры ниже в `VesselSourceAdapter`; `supports()` (эта eligibility-проверка) живёт в `generic-adapter.ts`.
 - `src/server/search/providers/brilions/` — единственный домен-специфичный провайдер, `processingType = HYBRID`.
-- `src/server/search/providers/generic/provider.ts` — провайдер без домен-специфичного кода: селекторы → JSON-LD → (если разрешено) AI, для любого источника, которого `isGenericEligible` принимает.
+- `src/server/search/providers/generic/provider.ts` — провайдер без домен-специфичного кода: селекторы → JSON-LD → (если разрешено) AI, для любого источника, которого `generic-adapter.ts`'s `supports()` принимает.
 - `src/server/search/providers/generic/extract-by-selectors.ts` — чистый экстрактор по `selectorConfig` (§1.1).
 - `src/server/search/selector-suggestion.ts` — AI-подсказка `selectorConfig` по образцу страницы, вызывается из `source-validation.ts` при проверке источника.
 - `src/lib/validation/admin.ts` — `selectorConfigSchema`/`parseSelectorConfig`.
@@ -44,14 +45,20 @@ create type public.search_processing_type as enum (
 > провайдера `processingType` (и, для `HTML`/`HYBRID`, `selectorConfig`)
 > теперь тоже читается рантаймом и реально на него влияет.
 
-Убедиться в этом можно по `provider-registry.ts`:
+> **Обновление (Э4):** домен-специфичный/generic провайдер (`{id, search}`) теперь только
+> внутренняя деталь — `adapters/generic-adapter.ts`/`adapters/brilions-adapter.ts` заворачивают его
+> в полный `VesselSourceAdapter` (Арх §10: `supports`/`search`/`getDetails`/`checkAvailability`/
+> `getContactCapability`), и именно эта обёртка регистрируется в `ADAPTER_FACTORIES_BY_DOMAIN`.
+> Убедиться в этом можно по `adapters/adapter-registry.ts` (упрощено — реальная версия ещё
+> предфильтрует по `coverage.ts`'s `sourceCovers`, Э3):
 
 ```ts
-const PROVIDERS_BY_DOMAIN: Record<string, ExternalSearchProvider> = {
-  "brilions.com": brilionsProvider,
+const ADAPTER_FACTORIES_BY_DOMAIN: Record<string, (source: SearchSource) => VesselSourceAdapter> = {
+  "brilions.com": createBrilionsAdapter,
 };
 
-function isGenericEligible(source: SearchSource): boolean {
+// adapters/generic-adapter.ts's own supports() — the eligibility check this section describes.
+function supports(source: SearchSource): boolean {
   switch (source.processingType) {
     case "AI_EXTRACTION":
     case "STRUCTURED_DATA":
@@ -64,16 +71,12 @@ function isGenericEligible(source: SearchSource): boolean {
   }
 }
 
-export async function getActiveExternalProviders(): Promise<ExternalSearchProvider[]> {
+export async function listExternalAdapters(): Promise<{ adapters: VesselSourceAdapter[] }> {
   const sources = await listEnabledSources();
-  return sources
-    .map((source) => {
-      const specific = PROVIDERS_BY_DOMAIN[source.domain];
-      if (specific) return specific;
-      if (isGenericEligible(source)) return createGenericProvider(source);
-      return null;
-    })
-    .filter((provider) => provider !== null);
+  const adapters = sources
+    .map((source) => (ADAPTER_FACTORIES_BY_DOMAIN[source.domain] ?? createGenericAdapter)(source))
+    .filter((adapter) => adapter.supports(/* ... */));
+  return { adapters };
 }
 ```
 
@@ -82,23 +85,23 @@ export async function getActiveExternalProviders(): Promise<ExternalSearchProvid
 получает его, **независимо от того, что выбрано в поле `processingType`** —
 поле в этом случае по-прежнему чисто декларативное. Но для любого домена
 *без* домен-специфичного провайдера `processingType` больше не игнорируется:
-`AI_EXTRACTION` и `STRUCTURED_DATA` запускают `createGenericProvider(source)`
+`AI_EXTRACTION` и `STRUCTURED_DATA` запускают `createGenericAdapter(source)`
 (§1.1) сразу, без единой строчки нового кода; `HTML` и `HYBRID` запускают его
 тоже, но только когда админ заполнил `selectorConfig` в форме (вручную или
 через AI-подсказку, §1.2) — без него они остаются незадействованными, как и
 `API`, для которого генерализация сознательно не сделана (слишком разные
 схемы авторизации/пагинации без единого реального примера). Ни один из пяти
 вариантов не приводит к падению поиска — это проверяет
-`provider-registry.test.ts`.
+`adapter-registry.test.ts`.
 
 ```mermaid
 flowchart TD
     Admin["/admin/search-sources\nформа: имя, домен, processingType, selectorConfig"] --> Row["Строка в search_sources"]
     Row --> Registry["listEnabledSources()\nenabled = true, ORDER BY priority"]
-    Registry --> Lookup{"provider-registry.ts:\nPROVIDERS_BY_DOMAIN[domain]\nсуществует?"}
-    Lookup -- "да" --> Provider["Домен-специфичный ExternalSearchProvider.search()\n(processingType игнорируется)"]
-    Lookup -- "нет" --> Generic{"isGenericEligible(source)?\nAI_EXTRACTION/STRUCTURED_DATA: всегда\nHTML/HYBRID: нужен selectorConfig\nAPI: никогда"}
-    Generic -- "да" --> GenericProvider["createGenericProvider(source).search()\nселекторы → JSON-LD → (если разрешено) AI"]
+    Registry --> Lookup{"adapter-registry.ts:\nADAPTER_FACTORIES_BY_DOMAIN[domain]\nсуществует?"}
+    Lookup -- "да" --> Provider["Домен-специфичный VesselSourceAdapter.search()\n(processingType игнорируется)"]
+    Lookup -- "нет" --> Generic{"generic-adapter.ts: supports(source)?\nAI_EXTRACTION/STRUCTURED_DATA: всегда\nHTML/HYBRID: нужен selectorConfig\nAPI: никогда"}
+    Generic -- "да" --> GenericProvider["createGenericAdapter(source).search()\nселекторы → JSON-LD → (если разрешено) AI"]
     Generic -- "нет" --> Skip["Источник не опрашивается.\nВлияет только на reliability-бонус\nв ранжировании и на кэш robots.txt"]
 
     style Lookup fill:#1f6f8b,color:#fff
@@ -111,10 +114,11 @@ flowchart TD
 ### 1.1 Универсальный провайдер (`providers/generic/provider.ts`)
 
 Для любого включённого источника без домен-специфичной реализации, которого
-`isGenericEligible` принимает, `createGenericProvider(source)` собирает
-`ExternalSearchProvider` на лету: обходит сайтмап источника (те же
-`crawl/`-утилиты §4), на каждой странице пробует извлечение в три тира по
-порядку:
+`generic-adapter.ts`'s `supports()` принимает, `createGenericAdapter(source)`
+собирает `VesselSourceAdapter` на лету (внутри — тот же `createGenericProvider(source)`,
+дополненный `supports`/`getDetails`/`checkAvailability`/`getContactCapability`):
+обходит сайтмап источника (те же `crawl/`-утилиты §4), на каждой странице пробует
+извлечение в три тира по порядку:
 
 1. **Селекторы** (`extract-by-selectors.ts`), если у источника задан
    `selectorConfig` — самый дешёвый и точный вариант, админ явно указал, где
@@ -158,22 +162,22 @@ Claude Haiku с очищенным от `script/style/svg` HTML той же уж
 
 | Стратегия | Что означает для реализации провайдера | Плюсы / минусы | Статус | Диспетчеризуется ли рантаймом |
 |---|---|---|---|---|
-| `API` | Источник отдаёт JSON/XML через собственный API — провайдер делает типизированный HTTP-запрос, без парсинга разметки | Быстро, устойчиво к редизайну сайта; требует у источника открытого API и часто ключа доступа | Не реализовано ни для одного источника; сознательно не обобщается (см. §1) | Нет — нужен домен-специфичный провайдер в `PROVIDERS_BY_DOMAIN` |
-| `HTML` | Провайдер парсит HTML по CSS/DOM-селекторам (в проекте — `cheerio`) | Работает на любом сайте без API; ломается при смене вёрстки источника — требует сопровождения селекторов | Реализовано и для brilions (домен-специфичные селекторы, `extract.ts`), и для любого нового источника через `selectorConfig` + `extract-by-selectors.ts` (§1.1) | **Да, если задан `selectorConfig`** — иначе нет (только через `PROVIDERS_BY_DOMAIN`) |
-| `STRUCTURED_DATA` | Провайдер читает встроенную микроразметку страницы (JSON-LD, `schema.org`, Open Graph) вместо сырого DOM | Надёжнее HTML-парсинга (структура задаётся самим источником), но работает только если источник её публикует | Реализовано для любого нового источника — `providers/generic/provider.ts` (§1.1) | **Да, всегда** — `isGenericEligible` в `provider-registry.ts` |
-| `AI_EXTRACTION` | Текст страницы целиком передаётся модели (Claude) с просьбой извлечь данные | Переживает изменение вёрстки, справляется с произвольным свободным текстом; дороже и медленнее HTML/API на страницу, менее детерминирован | Реализовано и для brilions (`ai-extract.ts`, только для текста об экипаже/удобствах), и для любого нового источника через generic-провайдер (§1.1) | **Да, всегда** — тот же `isGenericEligible`; на generic-провайдере ведёт себя идентично `STRUCTURED_DATA`, если `selectorConfig` не задан (см. §1.1) |
+| `API` | Источник отдаёт JSON/XML через собственный API — провайдер делает типизированный HTTP-запрос, без парсинга разметки | Быстро, устойчиво к редизайну сайта; требует у источника открытого API и часто ключа доступа | Не реализовано ни для одного источника; сознательно не обобщается (см. §1) | Нет — нужен домен-специфичный провайдер в `ADAPTER_FACTORIES_BY_DOMAIN` |
+| `HTML` | Провайдер парсит HTML по CSS/DOM-селекторам (в проекте — `cheerio`) | Работает на любом сайте без API; ломается при смене вёрстки источника — требует сопровождения селекторов | Реализовано и для brilions (домен-специфичные селекторы, `extract.ts`), и для любого нового источника через `selectorConfig` + `extract-by-selectors.ts` (§1.1) | **Да, если задан `selectorConfig`** — иначе нет (только через `ADAPTER_FACTORIES_BY_DOMAIN`) |
+| `STRUCTURED_DATA` | Провайдер читает встроенную микроразметку страницы (JSON-LD, `schema.org`, Open Graph) вместо сырого DOM | Надёжнее HTML-парсинга (структура задаётся самим источником), но работает только если источник её публикует | Реализовано для любого нового источника — `providers/generic/provider.ts` (§1.1) | **Да, всегда** — `generic-adapter.ts`'s `supports()` |
+| `AI_EXTRACTION` | Текст страницы целиком передаётся модели (Claude) с просьбой извлечь данные | Переживает изменение вёрстки, справляется с произвольным свободным текстом; дороже и медленнее HTML/API на страницу, менее детерминирован | Реализовано и для brilions (`ai-extract.ts`, только для текста об экипаже/удобствах), и для любого нового источника через generic-провайдер (§1.1) | **Да, всегда** — тот же `generic-adapter.ts`'s `supports()`; на generic-провайдере ведёт себя идентично `STRUCTURED_DATA`, если `selectorConfig` не задан (см. §1.1) |
 | `HYBRID` | Комбинация: детерминированный разбор (`selectorConfig`) для полей на строго определённом месте разметки + `AI_EXTRACTION` для свободного текста, который не разложить по селекторам | Берёт скорость/надёжность детерминированного пути там, где это возможно, и гибкость ИИ там, где данные неструктурированы | Домен-специфичный пример — `brilionsProvider`; для любого нового источника — через `selectorConfig` (селекторы) + AI-фолбэк generic-провайдера (§1.1) | **Да, если задан `selectorConfig`** — так же, как `HTML`, но с разрешённым AI-фолбэком (`allowAi=true`) |
 
 Важное следствие: если сегодня выбрать в форме `API` для нового источника,
 это будет **корректно с точки зрения БД и валидации**
 (`searchProcessingTypeValues` в `src/lib/validation/admin.ts` принимает все
 пять), но результат будет тем же, что и без строки вовсе, пока кто-то не
-напишет `ExternalSearchProvider` под этот домен и не пропишет его в
-`PROVIDERS_BY_DOMAIN`. `HTML`/`HYBRID` без `selectorConfig` ведут себя так
+напишет `VesselSourceAdapter` под этот домен и не пропишет его в
+`ADAPTER_FACTORIES_BY_DOMAIN`. `HTML`/`HYBRID` без `selectorConfig` ведут себя так
 же — но стоит заполнить конфиг (вручную или через AI-подсказку §1.2), и они
 сразу начинают сканироваться через generic-провайдер. `STRUCTURED_DATA` и
 `AI_EXTRACTION` работают через generic-провайдер вообще без дополнительной
-настройки. `provider-registry.test.ts` фиксирует это поведение для всех
+настройки. `adapter-registry.test.ts` фиксирует это поведение для всех
 комбинаций.
 
 ---
@@ -336,12 +340,12 @@ sequenceDiagram
    имя, домен, `baseUrl`, `sourceType`, желаемый `processingType` (это поле —
    декларация того, что вы собираетесь реализовать на шаге 2, ничего не
    активирует само по себе).
-2. Реализовать `ExternalSearchProvider` (`providers.ts`) для этого домена —
+2. Реализовать `VesselSourceAdapter` (`adapters/adapter.ts`) для этого домена —
    единственное жёсткое требование интерфейса: `search()` никогда не бросает
    исключение, ошибки источника попадают в `errors`, а не роняют весь поиск.
    Использовать `crawl/`-инфраструктуру из §4 для сетевых запросов, если
    стратегия предполагает обход страниц.
-3. Зарегистрировать провайдер в `PROVIDERS_BY_DOMAIN` (`provider-registry.ts`)
+3. Зарегистрировать провайдер в `ADAPTER_FACTORIES_BY_DOMAIN` (`adapters/adapter-registry.ts`)
    по тому же домену, что в строке реестра.
 4. Если источник отдаёт фото — добавить домен в `images.remotePatterns`
    (`next.config.ts`); в README зафиксирован реальный баг, когда это забыли

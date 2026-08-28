@@ -10,7 +10,7 @@ import type { VesselSearchResult } from "@/lib/search/offer";
  * occupying a result slot and inflating the shown count with a genuine non-match.
  *
  * Provider-agnostic on purpose (originally lived under `providers/brilions/`, promoted here once a
- * second provider needed the exact same filter): any `ExternalSearchProvider` whose extraction
+ * second provider needed the exact same filter): any `VesselSourceAdapter` whose extraction
  * reliably determines type/capacity should use this rather than relying on ranking alone.
  *
  * Price is deliberately absent from this check — a provider that never states one (or one whose

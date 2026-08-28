@@ -49,8 +49,8 @@ export interface SearchSource {
   /** Null means "not checked yet", which the crawler must treat as "check first", not "allowed". */
   robotsAllows: boolean | null;
   lastCheckedAt: string | null;
-  /** Null means the generic provider still can't attempt `HTML`/`HYBRID` for this source — see
-   *  `provider-registry.ts`'s `isGenericEligible`. */
+  /** Null means the generic adapter still can't attempt `HTML`/`HYBRID` for this source — see
+   *  `adapters/generic-adapter.ts`'s `supports()`. */
   selectorConfig: SelectorConfig | null;
   /** Trusted image-CDN hostnames beyond `domain` itself — `api/external-image/[encoded]/route.ts`'s proxy
    *  allowlist checks both. A source's own pages and its photos are often on different hosts (e.g.
@@ -155,7 +155,7 @@ export const listEnabledSources = cache(async (): Promise<SearchSource[]> => {
 /**
  * `processingType` → Арх §8's `access_strategy` — the same 1:1 mapping the Э3 migration backfilled
  * existing rows with, applied again on every create/update so the two columns never drift apart
- * while `provider-registry.ts` still selects on `processingType` (see that migration's own comment
+ * while `adapters/generic-adapter.ts` still selects on `processingType` (see that migration's own comment
  * on why both columns coexist until Э4).
  */
 export function accessStrategyFromProcessingType(processingType: SearchProcessingType): SearchAccessStrategy {

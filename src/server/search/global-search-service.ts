@@ -8,7 +8,6 @@ import { rankResults } from "@/lib/search/ranking";
 import type { ResultSource, UnifiedSearchResponse, VesselSearchResult } from "@/lib/search/offer";
 import { interpretQuery, type InterpretationOutcome } from "@/server/ai/query-interpreter";
 import { buildSearchVocabulary } from "@/server/queries/search-vocabulary";
-import { searchInternalVessels } from "@/server/search/internal-provider";
 import { getSourceReliability } from "@/server/search/source-registry";
 import { recordSearchRun } from "@/server/search/search-run-log";
 import {
@@ -16,11 +15,12 @@ import {
   writeCachedInterpretation,
 } from "@/server/search/interpretation-cache";
 import {
-  emptyExternalStats,
-  mergeExternalStats,
-  type ExternalSearchOutcome,
-  type ExternalSearchProvider,
-} from "@/server/search/providers";
+  emptyAdapterStats,
+  mergeAdapterStats,
+  type AdapterSearchResponse,
+  type VesselSourceAdapter,
+} from "@/server/search/adapters/adapter";
+import { internalAdapter } from "@/server/search/adapters/internal-adapter";
 
 /**
  * `GlobalVesselSearchService` (spec §5) — the orchestrator, split into two independently-awaited
@@ -85,10 +85,16 @@ export async function runInternalSearchPhase(
 
   const criteria = (options.removedCriteria ?? []).reduce(removeCriterion, interpretation.criteria);
 
-  const internalOutcome = await searchInternalVessels(criteria, options.locale).catch((error: unknown) => {
-    errors.push(`internal: ${String(error)}`);
-    return { results: [] as VesselSearchResult[], rejectedForDates: 0 };
+  // Э4: the internal catalogue is a `VesselSourceAdapter` like any other now, not a free function
+  // called directly — `internalAdapter.search()` never throws (see `adapters/adapter.ts`'s own
+  // "never throws" rule), so its `errors` entries fold straight into this phase's, no `.catch()`
+  // needed here any more.
+  const internalOutcome = await internalAdapter.search(criteria, {
+    locale: options.locale,
+    searchQueries: [],
+    timeoutMs: DEFAULT_EXTERNAL_TIMEOUT_MS,
   });
+  errors.push(...internalOutcome.errors);
 
   const rankedInternal = rankResults(internalOutcome.results, criteria, {
     sourceReliability: await getSourceReliability().catch(() => ({})),
@@ -101,7 +107,7 @@ export async function runInternalSearchPhase(
     interpretedCriteria: criteria,
     interpretation,
     internalResults: rankedInternal,
-    rejectedForDates: internalOutcome.rejectedForDates,
+    rejectedForDates: internalOutcome.rejectedForDates ?? 0,
     startedAt,
     baseErrors: errors,
   };
@@ -109,7 +115,7 @@ export async function runInternalSearchPhase(
 
 /** An outcome plus whether the provider actually broke its "never throw" contract. */
 interface ExternalProviderRun {
-  outcome: ExternalSearchOutcome;
+  outcome: AdapterSearchResponse;
   /** True only when the provider's promise rejected — a real bug, distinct from a provider
    *  correctly returning zero results with an explanatory entry in `outcome.errors` (e.g. "no
    *  location in the query"), which is expected behavior, not a failure. */
@@ -122,13 +128,13 @@ interface ExternalProviderRun {
  * request.
  */
 async function runExternalProviders(
-  providers: ExternalSearchProvider[],
+  adapters: VesselSourceAdapter[],
   criteria: SearchCriteria,
   options: { locale: Locale; timeoutMs: number; signal?: AbortSignal },
 ): Promise<ExternalProviderRun[]> {
   const settled = await Promise.allSettled(
-    providers.map((provider) =>
-      provider.search(criteria, {
+    adapters.map((adapter) =>
+      adapter.search(criteria, {
         locale: options.locale,
         searchQueries: [],
         timeoutMs: options.timeoutMs,
@@ -144,20 +150,20 @@ async function runExternalProviders(
           hardFailed: true,
           outcome: {
             results: [],
-            stats: { ...emptyExternalStats },
-            errors: [`${providers[index].id}: ${String(outcome.reason)}`],
+            stats: { ...emptyAdapterStats },
+            errors: [`${adapters[index].sourceId}: ${String(outcome.reason)}`],
           },
         },
   );
 }
 
 export interface ExternalSearchPhaseOptions {
-  externalProviders: ExternalSearchProvider[];
+  externalProviders: VesselSourceAdapter[];
   externalTimeoutMs?: number;
   signal?: AbortSignal;
   /** Э3 (Арх §9): enabled sources excluded before this phase even started because their coverage
    *  didn't include the request's location — passed through so `search_runs` can distinguish "not
-   *  covering this place" from "no provider wired up" (see `provider-registry.ts`). */
+   *  covering this place" from "no provider wired up" (see `adapters/adapter-registry.ts`). */
   sourcesSkippedByCoverage?: number;
 }
 
@@ -196,7 +202,7 @@ export async function runExternalSearchPhase(
       : [];
 
   const externalResults = externalOutcomes.flatMap((run) => run.outcome.results);
-  const externalStats = mergeExternalStats(externalOutcomes.map((run) => run.outcome.stats));
+  const externalStats = mergeAdapterStats(externalOutcomes.map((run) => run.outcome.stats));
   const anyProviderHardFailed = externalOutcomes.some((run) => run.hardFailed);
   errors.push(...externalOutcomes.flatMap((run) => run.outcome.errors));
 

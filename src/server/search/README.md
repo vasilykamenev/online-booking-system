@@ -41,14 +41,16 @@
 
 | Файл | Роль | § |
 |---|---|---|
-| `global-search-service.ts` | Оркестратор | §5 |
-| `internal-provider.ts` | Поиск по своей БД | §6 |
-| `providers.ts` | Интерфейс внешних источников | §7, §22, §23 |
+| `global-search-service.ts` | Оркестратор — internal/external фазы, каждая через `VesselSourceAdapter` (Э4) | §5 |
+| `internal-provider.ts` | Поиск по своей БД + `getInternalVesselById`/`isInternalVesselAvailable` (Э4) | §6 |
 | `coverage.ts` | `sourceCovers` — предфильтр источников по географии запроса (Э3) | Арх §9 |
 | `source-registry.ts` | Реестр источников — `search_sources` + capabilities + `search_source_coverage` (`listEnabledSources`) | §8, §9, §28 |
 | `source-validation.ts` | Live-проверка кандидата перед одобрением (доступность, robots, sitemap, микроразметка, предпросмотр карточек) | §9 |
 | `candidate-classifier.ts` | AI-классификация одной кандидатной страницы («это карточка судна?») | §9, §11 |
-| `provider-registry.ts` | Связка «провайдер ↔ активная строка реестра» — по домену, иначе по `processingType` (generic) | §8, §23 |
+| `adapters/adapter.ts` | `VesselSourceAdapter` (Э4, Арх §10) — заменил `adapters/adapter.ts`'s `VesselSourceAdapter` | §7, §22, §23 |
+| `adapters/internal-adapter.ts` | Внутренний каталог как адаптер — реальный `checkAvailability`/`getDetails` | Арх §10 |
+| `adapters/generic-adapter.ts`, `adapters/brilions-adapter.ts` | Обёртки существующих провайдеров (`providers/generic/`, `providers/brilions/`) в `VesselSourceAdapter` | Арх §10 |
+| `adapters/adapter-registry.ts` | Связка «адаптер ↔ активная строка реестра» — по домену, иначе по `processingType` (generic), + предфильтр по coverage и `supports()`. Заменил `adapters/adapter-registry.ts` | §8, §23, Арх §9 |
 | `interpretation-cache.ts` | Кэш интерпретаций | §25 |
 | `search-run-log.ts` | Метрики поиска | §26 |
 | `../ai/query-interpreter.ts` | AI-разбор запроса | §4 |
@@ -132,11 +134,11 @@ bulk-RPC `get_vessels_booked_ranges`. Применена локально, ти�
 (источник остаётся в таблице для истории, не удаляется).
 
 Включение/выключение уже одобренной строки сразу отражается на том, какие провайдеры реально
-опрашиваются — см. `provider-registry.ts` ниже. Одобрение нового источника со стратегией
+опрашиваются — см. `adapters/adapter-registry.ts` ниже. Одобрение нового источника со стратегией
 `STRUCTURED_DATA`/`AI_EXTRACTION` запускает его сканирование сразу, generic-провайдером (см. раздел
 ниже) — без строки кода. Стратегия `HTML` — исключение: без сайт-специфичных селекторов там нечего
-читать детерминированно, так что такой строке всё ещё нужен реализованный `ExternalSearchProvider`
-(§7), зарегистрированный в `PROVIDERS_BY_DOMAIN`.
+читать детерминированно, так что такой строке всё ещё нужен реализованный `VesselSourceAdapter`
+(§7), зарегистрированный в `ADAPTER_FACTORIES_BY_DOMAIN`.
 
 ### Проверка перед одобрением — `source-validation.ts`
 
@@ -183,13 +185,14 @@ AI-фолбэк у generic), §24 (SSRF, robots.txt, защита от инъе�
 generic-провайдера's `classificationCache`, который кэширует именно результат извлечения, но только
 в памяти процесса, не персистентно).
 
-Интерфейс `ExternalSearchProvider` (`providers.ts`) — единственная точка, куда подключаются внешние
-источники: оркестратор про них больше ничего не знает, он получает уже готовый список через
-`GlobalSearchOptions.externalProviders`. Какие именно провайдеры туда попадают, решает
-`provider-registry.ts`: сперва по домену (`PROVIDERS_BY_DOMAIN`), для остальных активных источников
-— по `processingType` (generic-провайдер, фабрика `createGenericProvider`) — а не список, зашитый в
-UI-странице: `discover/page.tsx` вызывает `getActiveExternalProviders()` и не знает ни про brilions,
-ни про generic напрямую.
+Интерфейс `VesselSourceAdapter` (`adapters/adapter.ts`, Э4) — единственная точка, куда подключаются
+источники (внутренний каталог включительно, через `adapters/internal-adapter.ts`): оркестратор про
+них больше ничего не знает, он получает уже готовый список через `ExternalSearchPhaseOptions.externalProviders`.
+Какие именно адаптеры туда попадают, решает `adapters/adapter-registry.ts`: сперва по домену
+(`ADAPTER_FACTORIES_BY_DOMAIN`), для остальных активных источников — по `processingType`
+(generic-адаптер, фабрика `createGenericAdapter`, внутри которой — `providers/generic/provider.ts`'s
+`createGenericProvider`) — а не список, зашитый в UI-странице: `discover/page.tsx` вызывает
+`listExternalAdapters()` и не знает ни про brilions, ни про generic напрямую.
 
 **Следующий шаг** (не начат): заменить live-краулинг внутри пользовательского запроса на фоновый
 индекс + курсорную пагинацию (CLAUDE.md §9). План разложен по шагам, с миграцией, схемой cron-job'а
@@ -315,7 +318,8 @@ best-effort, ошибка сети не блокирует сохранение 
   известна для этого источника. Изначально жил в этой папке, вынесен в `lib/search/` при появлении
   второго провайдера (`providers/generic/`), которому нужна та же функция — она уже была
   provider-agnostic, ничего специфичного для brilions в ней не было.
-- `provider.ts` — сам `ExternalSearchProvider`. **Ограничен по локации намеренно**: без страны/
+- `provider.ts` — сам провайдер (`{id, search}`, завёрнут в `VesselSourceAdapter` через
+  `adapters/brilions-adapter.ts`). **Ограничен по локации намеренно**: без страны/
   города в критериях и без типа судна/вместимости в критериях — 0 результатов с пояснением в
   `errors`, не произвольная выборка; с одним из последних двух, но без локации — round-robin
   выборка по всем известным городам (`select-candidates.ts`). Число реально загруженных страниц за
@@ -347,9 +351,11 @@ best-effort, ошибка сети не блокирует сохранение 
 
 ## Второй провайдер — generic (`providers/generic/`)
 
-`createGenericProvider(source: SearchSource): ExternalSearchProvider` — не единственный статичный
-экземпляр вроде `brilionsProvider`, а фабрика: `provider-registry.ts` вызывает её для каждой
-активной строки `search_sources`, чей домен не заявлен в `PROVIDERS_BY_DOMAIN`, но
+`createGenericProvider(source: SearchSource)` (`providers/generic/provider.ts`) — не единственный
+статичный экземпляр вроде `brilionsProvider`, а фабрика; `adapters/generic-adapter.ts`'s
+`createGenericAdapter` достраивает её результат до полного `VesselSourceAdapter`, и именно эту
+обёртку `adapters/adapter-registry.ts` вызывает для каждой активной строки `search_sources`, чей
+домен не заявлен в `ADAPTER_FACTORIES_BY_DOMAIN`, но
 `processingType` — `STRUCTURED_DATA` или `AI_EXTRACTION`. Это и есть закрытие первого из двух
 блокеров «реального времени», описанных в анализе, стоявшем за этой веткой работы: **одобрение
 источника с такой стратегией запускает его сканирование немедленно, без строки кода и без

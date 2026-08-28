@@ -86,7 +86,7 @@ export const searchContactCapabilityValues = [
 /**
  * A row here is registry metadata (reliability bonus for ranking, cached robots.txt verdict) —
  * it does not by itself make the app crawl the site. Actually searching a source still requires
- * an `ExternalSearchProvider` implementation wired into `discover/page.tsx`'s `externalProviders`
+ * an adapter wired into `discover/page.tsx`'s `externalProviders`
  * array (see `src/server/search/README.md`). The admin form makes this explicit rather than
  * implying "add a row, get a new source searched".
  */
@@ -258,7 +258,7 @@ export type CrawlRuleInput = z.infer<typeof crawlRuleSchema>;
  * CSS-selector-based field extraction for a `search_sources` row's `HTML`/`HYBRID` `processingType`
  * (docs/search-source-processing-strategies.md §1.1) — what makes `providers/generic/provider.ts`'s
  * `extractBySelectors()` able to attempt those two strategies for a source with no purpose-built
- * `ExternalSearchProvider`, the same way it already attempts `AI_EXTRACTION`/`STRUCTURED_DATA` for
+ * the same way the generic adapter already attempts `AI_EXTRACTION`/`STRUCTURED_DATA` for
  * any source. Field names mirror `GenericExtractedFields`
  * (`src/server/search/providers/generic/normalize.ts`) exactly — this config only ever says where to
  * find those same fields, never introduces new ones.

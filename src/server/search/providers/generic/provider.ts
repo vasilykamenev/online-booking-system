@@ -25,16 +25,16 @@ import { normalizeGenericResult } from "@/server/search/providers/generic/normal
 import { extractBySelectors } from "@/server/search/providers/generic/extract-by-selectors";
 import type { SearchSource } from "@/server/search/source-registry";
 import {
-  emptyExternalStats,
-  type ExternalSearchContext,
-  type ExternalSearchOutcome,
-  type ExternalSearchProvider,
-  type ExternalSearchStats,
-} from "@/server/search/providers";
+  emptyAdapterStats,
+  type AdapterContext,
+  type AdapterSearchResponse,
+  type AdapterSearchStats,
+} from "@/server/search/adapters/adapter";
 
 /**
- * `ExternalSearchProvider` factory for any registered source with no purpose-built implementation
- * registered in `PROVIDERS_BY_DOMAIN` (`provider-registry.ts`) that `isGenericEligible` there
+ * Search-only provider factory wrapped into a full `VesselSourceAdapter` by
+ * `adapters/generic-adapter.ts`, for any registered source with no purpose-built implementation
+ * registered in `PROVIDERS_BY_DOMAIN` (`adapters/adapter-registry.ts`) that `isGenericEligible` there
  * accepts — `AI_EXTRACTION`/`STRUCTURED_DATA` always, `HTML`/`HYBRID` once an admin has filled in
  * `selectorConfig` (docs/search-source-processing-strategies.md §1.1). This is the piece that makes
  * `/admin/search-sources` registration actually *real-time*: approving a source is enough to start
@@ -500,9 +500,9 @@ async function fetchCandidates(
   criteria: SearchCriteria,
   source: SearchSource,
   allowAi: boolean,
-  context: ExternalSearchContext,
+  context: AdapterContext,
   deadline: number,
-  stats: ExternalSearchStats,
+  stats: AdapterSearchStats,
   errors: string[],
 ): Promise<VesselSearchResult[]> {
   const results: VesselSearchResult[] = [];
@@ -625,9 +625,9 @@ async function fetchCandidates(
 function buildRunSearch(source: SearchSource) {
   return async function runSearch(
     criteria: SearchCriteria,
-    context: ExternalSearchContext,
-  ): Promise<ExternalSearchOutcome> {
-    const stats: ExternalSearchStats = { ...emptyExternalStats };
+    context: AdapterContext,
+  ): Promise<AdapterSearchResponse> {
+    const stats: AdapterSearchStats = { ...emptyAdapterStats };
     const errors: string[] = [];
     const deadline = Date.now() + context.timeoutMs;
 
@@ -738,6 +738,10 @@ function buildRunSearch(source: SearchSource) {
   };
 }
 
-export function createGenericProvider(source: SearchSource): ExternalSearchProvider {
+/** Return type is inferred (search-only, `{id, search}`) — `adapters/generic-adapter.ts` completes
+ *  this into a full `VesselSourceAdapter` (`supports`/`getDetails`/`checkAvailability`/
+ *  `getContactCapability`), so this stays a plain factory rather than importing that interface just
+ *  to satisfy an annotation. */
+export function createGenericProvider(source: SearchSource) {
   return { id: `generic:${source.domain}`, search: buildRunSearch(source) };
 }

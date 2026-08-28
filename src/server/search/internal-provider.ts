@@ -261,3 +261,40 @@ export async function searchInternalVessels(
     rejectedForDates: rows.length - available.length,
   };
 }
+
+/**
+ * `VesselSourceAdapter.getDetails` for the internal catalogue (Э4) — the same row/mapping
+ * `searchInternalVessels` already uses for a search result, fetched for one vessel by id. `null`
+ * for an unpublished or nonexistent id, same "not found" the search path already treats as absent
+ * rather than an error.
+ */
+export async function getInternalVesselById(id: string, locale: Locale): Promise<VesselSearchResult | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("vessels")
+    .select(SELECT_COLUMNS)
+    .eq("id", id)
+    .eq("status", "published")
+    .maybeSingle();
+
+  throwIfSupabaseError(error);
+  if (!data) return null;
+
+  return toResult(data as unknown as VesselRow, locale, new Date().toISOString());
+}
+
+/**
+ * `VesselSourceAdapter.checkAvailability` for the internal catalogue (Э4) — reads the same
+ * `availability`/`bookings`-backed ranges `searchInternalVessels` filters a whole page of
+ * candidates by, for one vessel. This is a real check, not a stand-in: our own tables are exactly
+ * what "verified" availability means for an internal offer (see `toResult`'s own comment).
+ */
+export async function isInternalVesselAvailable(
+  vesselId: string,
+  from: string,
+  to: string,
+): Promise<boolean> {
+  const supabase = await createClient();
+  const unavailable = await loadUnavailableRanges(supabase, [vesselId]);
+  return isRangeAvailable({ start: from, end: to }, unavailable.get(vesselId) ?? []);
+}

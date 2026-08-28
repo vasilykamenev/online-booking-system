@@ -13,7 +13,7 @@ import {
   type InternalSearchPhaseResult,
 } from "@/server/search/global-search-service";
 import { buildSearchVocabulary } from "@/server/queries/search-vocabulary";
-import { getActiveExternalProviders } from "@/server/search/provider-registry";
+import { listExternalAdapters } from "@/server/search/adapters/adapter-registry";
 import { DiscoverForm } from "./discover-form";
 import { GlobalResultCard } from "./result-card";
 
@@ -42,9 +42,9 @@ function toArray(value: string | string[] | undefined): string[] {
  */
 async function ExternalResultsSection({ internalPhase }: { internalPhase: InternalSearchPhaseResult }) {
   const t = await getTranslations("discover");
-  const { providers, skippedByCoverage } = await getActiveExternalProviders(internalPhase.interpretedCriteria);
+  const { adapters, skippedByCoverage } = await listExternalAdapters(internalPhase.interpretedCriteria);
   const { externalOnlyResults, meta } = await runExternalSearchPhase(internalPhase, {
-    externalProviders: providers,
+    externalProviders: adapters,
     externalTimeoutMs: 15_000,
     sourcesSkippedByCoverage: skippedByCoverage,
   });

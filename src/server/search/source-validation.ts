@@ -21,7 +21,7 @@ import type { SelectorConfig } from "@/lib/validation/admin";
  * the database — this is a preview the admin reviews in `/admin/search-sources` before saving.
  *
  * Deliberately does **not** touch `search_sources.robots_allows`/`last_checked_at`: those columns
- * are a single per-domain cache keyed to whatever path a specific `ExternalSearchProvider` cares
+ * are a single per-domain cache keyed to whatever path a specific adapter cares
  * about (see `providers/brilions/provider.ts`'s `resolveRobotsAllowed`, checked against `/yacht/`,
  * not `/`). Writing a root-path check into that same cache here would let a real provider trust a
  * verdict for a path it never asked about. (`providers/generic/provider.ts` is the exception where
