@@ -31,6 +31,13 @@ export const AI_MODELS = {
    * (spec §11) and by confidence scores on whatever the model does produce (spec §15).
    */
   extraction: "claude-haiku-4-5-20251001",
+  /**
+   * Contact/booking intent message drafting (Э9, Арх §18 п.7) — one call per intent a user
+   * actually creates, never per page or per search, so it gets the stronger model the same way
+   * interpretation does: low volume, and the one thing the user reads and edits before it's ever
+   * sent anywhere.
+   */
+  messageDraft: "claude-sonnet-5",
 } as const;
 
 /**

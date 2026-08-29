@@ -11,6 +11,7 @@ import { encodeExternalImageUrl } from "@/lib/search/external-image-url";
 import { formatPrice } from "@/lib/pricing/format";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { ContactIntentSheet } from "./contact-intent-sheet";
 
 /**
  * One unified result. Internal and external offers share this card by design (spec §6/§13) — the
@@ -188,6 +189,16 @@ export function GlobalResultCard({ result, index = 0 }: { result: VesselSearchRe
                 ))}
               </p>
             )}
+          </div>
+        )}
+
+        {/* Э9: only ever for an external offer — internal vessels already have a real booking flow
+            (see `contact_intents`' own migration comment). `sourceId`/`externalId` are absent only
+            for a degenerate external result (shouldn't happen in practice — every adapter sets both
+            — but honestly hidden rather than rendering a button that would fail on submit). */}
+        {!isInternal && result.sourceId && result.externalId && (
+          <div className="mt-3">
+            <ContactIntentSheet result={result} />
           </div>
         )}
       </div>

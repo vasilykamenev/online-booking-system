@@ -22,10 +22,12 @@ import { runVerificationPhase } from "@/server/search/orchestrator/verification-
 
 /**
  * The Э6 search orchestrator (docs/AI_Federated_Search_Migration_Plan_v1.md §6, Арх §13, §14, §26),
- * replacing `global-search-service.ts`. Still split into the same two independently-awaited phases
- * that module's own doc comment explained (internal search is a fast, indexed Postgres query;
- * `discover/page.tsx` awaits it directly, then streams the rest into a `<Suspense>` boundary) — what
- * changed is what the second phase actually does:
+ * replacing `global-search-service.ts`. Still split into the same two functions that module's own
+ * doc comment explained (internal search is a fast, indexed Postgres query, awaited first) — what
+ * changed is what the second phase actually does. `discover/page.tsx` currently awaits both directly
+ * in one blocking pass rather than streaming the second into a `<Suspense>` boundary — see that
+ * page's own `ExternalResultsSection` doc comment for why (a framework-level hydration issue with
+ * this project's exact Next.js/React/Turbopack versions, not an Э6 design choice).
  *
  *   - **Before Э6:** ran every external adapter's `search()` live, on every request — a real crawl of
  *     third-party sites in the request path.
@@ -180,10 +182,11 @@ export interface ExternalSearchPhaseResult {
   meta: GlobalSearchResponse["meta"];
 }
 
-/** Candidate + verification (Э6's slow half) — awaited inside a `<Suspense>` boundary in
- *  `discover/page.tsx`, streamed in after section A already rendered `internalResults`. Never called
- *  when `internalPhase.internalFirstShortCircuit` is true — that path already recorded its own
- *  `search_runs` row inside `runInternalSearchPhase` and has nothing left for this function to do. */
+/** Candidate + verification (Э6's slow half) — awaited directly by `discover/page.tsx` (see that
+ *  page's `ExternalResultsSection` doc comment for why this isn't streamed via `<Suspense>` right
+ *  now). Never called when `internalPhase.internalFirstShortCircuit` is true — that path already
+ *  recorded its own `search_runs` row inside `runInternalSearchPhase` and has nothing left for this
+ *  function to do. */
 export async function runExternalSearchPhase(
   internalPhase: InternalSearchPhaseResult,
   options: ExternalSearchPhaseOptions = {},

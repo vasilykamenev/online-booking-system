@@ -186,6 +186,91 @@ export type Database = {
           },
         ]
       }
+      contact_intents: {
+        Row: {
+          confirmed_at: string | null
+          contact_capability: Database["public"]["Enums"]["search_contact_capability"]
+          created_at: string
+          date_from: string | null
+          date_to: string | null
+          delivery_channel: string | null
+          delivery_reference: string | null
+          external_vessel_id: string
+          guests: number | null
+          id: string
+          index_id: string | null
+          message_draft: string | null
+          message_sent: string | null
+          sent_at: string | null
+          source_id: string
+          status: Database["public"]["Enums"]["intent_status"]
+          type: Database["public"]["Enums"]["intent_type"]
+          user_id: string
+        }
+        Insert: {
+          confirmed_at?: string | null
+          contact_capability: Database["public"]["Enums"]["search_contact_capability"]
+          created_at?: string
+          date_from?: string | null
+          date_to?: string | null
+          delivery_channel?: string | null
+          delivery_reference?: string | null
+          external_vessel_id: string
+          guests?: number | null
+          id?: string
+          index_id?: string | null
+          message_draft?: string | null
+          message_sent?: string | null
+          sent_at?: string | null
+          source_id: string
+          status?: Database["public"]["Enums"]["intent_status"]
+          type: Database["public"]["Enums"]["intent_type"]
+          user_id: string
+        }
+        Update: {
+          confirmed_at?: string | null
+          contact_capability?: Database["public"]["Enums"]["search_contact_capability"]
+          created_at?: string
+          date_from?: string | null
+          date_to?: string | null
+          delivery_channel?: string | null
+          delivery_reference?: string | null
+          external_vessel_id?: string
+          guests?: number | null
+          id?: string
+          index_id?: string | null
+          message_draft?: string | null
+          message_sent?: string | null
+          sent_at?: string | null
+          source_id?: string
+          status?: Database["public"]["Enums"]["intent_status"]
+          type?: Database["public"]["Enums"]["intent_type"]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "contact_intents_index_id_fkey"
+            columns: ["index_id"]
+            isOneToOne: false
+            referencedRelation: "external_vessel_index"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_intents_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "search_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "contact_intents_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       conversation_participants: {
         Row: {
           conversation_id: string
@@ -1669,6 +1754,8 @@ export type Database = {
         | "collaboration"
         | "info_request"
       initiative_status: "open" | "closed"
+      intent_status: "DRAFT" | "CONFIRMED" | "SENT" | "ANSWERED" | "FAILED" | "CANCELLED"
+      intent_type: "CONTACT_REQUEST" | "BOOKING_REQUEST" | "INFO_REQUEST"
       payment_provider: "stripe" | "bank_transfer"
       payment_status:
         | "pending"
@@ -1861,6 +1948,8 @@ export const Constants = {
         "info_request",
       ],
       initiative_status: ["open", "closed"],
+      intent_status: ["DRAFT", "CONFIRMED", "SENT", "ANSWERED", "FAILED", "CANCELLED"],
+      intent_type: ["CONTACT_REQUEST", "BOOKING_REQUEST", "INFO_REQUEST"],
       payment_provider: ["stripe", "bank_transfer"],
       payment_status: [
         "pending",

@@ -190,6 +190,28 @@
       "perCatalog": "Price and availability per catalogue data as of {date}",
       "unknown": "Availability not confirmed"
     },
+    "contactIntent": {
+      "cta": "Request from provider",
+      "title": "Request about \"{name}\"",
+      "dateFrom": "Dates from",
+      "dateTo": "to",
+      "guests": "Number of guests",
+      "note": "Note",
+      "notePlaceholder": "E.g.: need a skipper, interested in a long-stay discount",
+      "submit": "Send request",
+      "redirectRecorded": "Your interest has been recorded. The rest happens on the source's page.",
+      "openSourceCta": "Open on {name}",
+      "undeliverableNotice": "This source doesn't have automatic sending set up on the platform yet — copy the message and send it yourself on the source's page.",
+      "draftLabel": "Message draft (editable)",
+      "copyCta": "Copy message",
+      "copied": "Message copied",
+      "confirmedNotice": "Recorded — now send the text via the source's page.",
+      "errors": {
+        "unauthenticated": "Sign in to send a request.",
+        "invalid": "Check the entered data.",
+        "generic": "Couldn't send the request. Please try again."
+      }
+    },
     "untitled": "Untitled",
     "lengthMeters": "{value} m",
     "radiusKm": "{value} km",

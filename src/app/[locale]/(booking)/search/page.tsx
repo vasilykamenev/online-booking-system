@@ -8,6 +8,15 @@ import { SearchFiltersForm } from "./search-filters";
 import { SearchResults } from "./search-results";
 import { buildTitle } from "@/lib/site";
 
+/**
+ * Deliberately no `loading.tsx` in this route segment, despite CLAUDE.md §7's normal rule — same
+ * finding as `(booking)/discover/page.tsx`'s own note: Next's automatic route-level `<Suspense>`
+ * wrap never completes client-side hydration once SSR takes more than a couple of seconds (a real
+ * catalog search does), leaving the whole page — including `SearchFiltersForm`'s inputs and
+ * `AdvancedFiltersSheet` — permanently unclickable despite rendering correct HTML. Removing the file
+ * restored full interactivity. Revisit once the underlying Next.js/React/Turbopack issue is fixed.
+ */
+
 export async function generateMetadata({
   params,
 }: {

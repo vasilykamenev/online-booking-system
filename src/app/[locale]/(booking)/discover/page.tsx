@@ -1,4 +1,3 @@
-import { Suspense } from "react";
 import type { Metadata } from "next";
 import { X } from "lucide-react";
 import { getTranslations, setRequestLocale } from "next-intl/server";
@@ -15,6 +14,19 @@ import {
 import { buildSearchVocabulary } from "@/server/queries/search-vocabulary";
 import { DiscoverForm } from "./discover-form";
 import { GlobalResultCard } from "./result-card";
+
+/**
+ * Deliberately no `loading.tsx` in this route segment, despite CLAUDE.md §7's normal rule — Next's
+ * automatic route-level `<Suspense>` wrap (which a `loading.tsx` file creates) was found to never
+ * complete client-side hydration for this exact request once server rendering takes more than a
+ * couple of seconds, which a real discover search always does. Confirmed via direct fiber-tree
+ * inspection (the boundary's host node had no `child` fiber, live in both `next dev` and a
+ * production build) and by removing the file, which restored full interactivity. Fast route
+ * segments (`/`, `/account`) keep their own `loading.tsx` fine — this looks tied to slow SSR, not
+ * `loading.tsx` itself, but the safe fix today is not having one here. Revisit once the underlying
+ * Next.js/React/Turbopack issue is understood or a newer version fixes it — see the same note on
+ * `ExternalResultsSection` below, and the analogous note in `(booking)/search/page.tsx`.
+ */
 
 export async function generateMetadata({
   params,
@@ -33,13 +45,19 @@ function toArray(value: string | string[] | undefined): string[] {
 }
 
 /**
- * Streams in once `runExternalSearchPhase` resolves — see `orchestrator/search-orchestrator.ts`'s
- * module doc comment for why the search is split into two phases, and for what its second phase
- * does since Э6 (candidate query against `external_vessel_index` + bounded live verification,
- * neither of which this component needs to orchestrate itself any more). Reads its own translations
- * rather than receiving them as a prop: this runs inside a `<Suspense>` boundary as its own async
- * render pass, and `getTranslations` is request-scoped/cached, so nothing is lost by calling it
- * again here.
+ * Awaited directly as part of the page's own render pass — **not** wrapped in `<Suspense>`.
+ * It used to be (Э6): internal results rendered immediately, this section streamed in once
+ * `runExternalSearchPhase` resolved. That streaming split is temporarily disabled: this exact
+ * `<Suspense>` boundary (and separately, the route segment's own `loading.tsx` boundary) was found
+ * to never complete client-side hydration in this project's Next.js 16.3.0 / React 19.2.8 /
+ * Turbopack combination — the boundary's SSR content displayed correctly but stayed permanently
+ * non-interactive (confirmed via direct fiber-tree inspection: the boundary's host node had no
+ * `child` fiber, live in both dev and a production build; pages with no Suspense boundary at all,
+ * e.g. `/vessels/[slug]`, hydrated normally). Reverting to a single blocking await trades away the
+ * BRD §8 fast-internal-results perception for a working, clickable page — revisit once the
+ * underlying framework issue is understood/fixed upstream. Still reads its own translations rather
+ * than receiving them as a prop, since `getTranslations` is request-scoped/cached and this was kept
+ * as its own function for a minimal diff back to streaming later.
  */
 async function ExternalResultsSection({ internalPhase }: { internalPhase: InternalSearchPhaseResult }) {
   const t = await getTranslations("discover");
@@ -87,17 +105,6 @@ async function ExternalResultsSection({ internalPhase }: { internalPhase: Intern
         <p className="mt-6 text-xs font-light text-muted-foreground">{t("externalSkipped")}</p>
       )}
     </>
-  );
-}
-
-/** Rendered synchronously (Suspense fallbacks can't themselves be async), so `t` comes from the
- *  parent rather than a fresh `getTranslations` call here. */
-function ExternalResultsFallback({ t }: { t: Awaited<ReturnType<typeof getTranslations>> }) {
-  return (
-    <p className="mt-10 flex items-center gap-2 text-xs font-light text-muted-foreground">
-      <span className="size-1.5 animate-pulse rounded-full bg-muted-foreground/60" aria-hidden />
-      <span className="animate-pulse">{t("externalLoading")}</span>
-    </p>
   );
 }
 
@@ -280,12 +287,9 @@ export default async function DiscoverPage({
               </Link>
             </p>
           ) : (
-            // Streamed in over the same response once Э6's candidate/verification phase resolves —
-            // never blocks the internal results above (see `orchestrator/search-orchestrator.ts`'s
-            // module doc comment).
-            <Suspense fallback={<ExternalResultsFallback t={t} />}>
-              <ExternalResultsSection internalPhase={internalPhase} />
-            </Suspense>
+            // Awaited directly, not streamed — see `ExternalResultsSection`'s own doc comment on
+            // why the `<Suspense>` split is temporarily disabled.
+            <ExternalResultsSection internalPhase={internalPhase} />
           )}
         </section>
       )}
