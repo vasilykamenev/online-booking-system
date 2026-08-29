@@ -753,6 +753,10 @@ export async function reindexSearchSource(locale: Locale, sourceId: string): Pro
     listingsIndexed: result.listingsIndexed,
   });
 
+  // Э10: `indexSource` (called above) also just recomputed this source's `needs_reanalysis` verdict
+  // (`checkSourceStructureHealth`) — the list page's own badge needs revalidating too, not just the
+  // URL Registry page this trigger lives on.
+  revalidatePath(`/${locale}/admin/search-sources`);
   revalidatePath(`/${locale}/admin/search-sources/${sourceId}/urls`);
   return {
     urlsConsidered: result.urlsConsidered,

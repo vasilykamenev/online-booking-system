@@ -1111,6 +1111,7 @@
         "priority": "Priority",
         "robots": "robots.txt",
         "health": "Health",
+        "structure": "Structure",
         "status": "Status",
         "actions": "Actions"
       },
@@ -1123,6 +1124,12 @@
         "closed": "Healthy",
         "open": "{count, plural, one {Down — # failure in a row} other {Down — # failures in a row}}",
         "half_open": "{count, plural, one {Trial check — # failure in a row} other {Trial check — # failures in a row}}"
+      },
+      "structure": {
+        "ok": "Healthy",
+        "notChecked": "Not checked yet",
+        "needsReanalysis": "Site structure changed",
+        "detailTitle": "Name and price were only extracted from {success} of {total} pages"
       },
       "notFound": {
         "title": "Source not found",
@@ -1179,6 +1186,12 @@
       "form": {
         "editTitle": "Edit source",
         "editSubtitle": "Update the source's registration details.",
+        "structureHealth": {
+          "title": "This site's structure may have changed",
+          "detail": "Over the last 30 days, name and price were only extracted from {success} of {total} checked pages.",
+          "detailUnknown": "The check hasn't gathered enough data yet.",
+          "hint": "Click \"Check\" below to see what the site returns now, and update the selectors or processing strategy if needed."
+        },
         "name": "Name",
         "namePlaceholder": "e.g. Meridian Beyond",
         "domain": "Domain",
@@ -1270,6 +1283,18 @@
         "structuredData": {
           "found": "Structured data found (JSON-LD): {types}",
           "notFound": "No structured data (JSON-LD) found"
+        },
+        "apiEndpoint": {
+          "found": "REST API detected: {url}",
+          "notFound": "No REST API detected (only /wp-json/ was checked)"
+        },
+        "graphqlEndpoint": {
+          "found": "GraphQL endpoint detected: {url}",
+          "notFound": "No GraphQL endpoint detected (this check can't see error-coded responses)"
+        },
+        "searchForm": {
+          "found": "Search form found: action={action}, fields: {fields}",
+          "notFound": "No search form found on the homepage"
         },
         "suggestion": "Suggested processing strategy: {type}",
         "suggestedSelectors": "AI proposed a selector configuration from a sample page",

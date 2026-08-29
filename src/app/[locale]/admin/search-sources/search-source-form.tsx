@@ -178,14 +178,24 @@ function CandidateSampleCard({
   );
 }
 
+export interface SearchSourceStructureHealth {
+  needsReanalysis: boolean;
+  sampleSize: number | null;
+  successCount: number | null;
+}
+
 export function SearchSourceForm({
   mode = "create",
   sourceId,
   defaultValues,
+  structureHealth,
 }: {
   mode?: "create" | "edit";
   sourceId?: string;
   defaultValues?: SearchSourceFormDefaultValues;
+  /** Э10 — only ever set in edit mode; a source being created has no indexing history yet to have
+   *  flagged it. */
+  structureHealth?: SearchSourceStructureHealth;
 }) {
   const t = useTranslations("admin.searchSources.form");
   const tProcessing = useTranslations("admin.searchSources.processingType");
@@ -305,6 +315,20 @@ export function SearchSourceForm({
 
   return (
     <form ref={formRef} action={formAction} className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+      {structureHealth?.needsReanalysis && (
+        <div className="flex flex-col gap-1 rounded-2xl border border-destructive/40 bg-destructive/5 p-4 text-sm sm:col-span-2">
+          <p className="font-medium text-destructive">{t("structureHealth.title")}</p>
+          <p className="font-light text-muted-foreground">
+            {structureHealth.sampleSize !== null && structureHealth.successCount !== null
+              ? t("structureHealth.detail", {
+                  success: structureHealth.successCount,
+                  total: structureHealth.sampleSize,
+                })
+              : t("structureHealth.detailUnknown")}
+          </p>
+          <p className="font-light text-muted-foreground">{t("structureHealth.hint")}</p>
+        </div>
+      )}
       <div className="flex flex-col gap-2">
         <Label htmlFor="name">{t("name")}</Label>
         <Input
@@ -388,6 +412,24 @@ export function SearchSourceForm({
                       types: validation.report.structuredData.types.join(", "),
                     })
                   : tValidation("structuredData.notFound")}
+              </p>
+              <p className="font-light text-muted-foreground">
+                {validation.report.apiEndpoint.found
+                  ? tValidation("apiEndpoint.found", { url: validation.report.apiEndpoint.url ?? "" })
+                  : tValidation("apiEndpoint.notFound")}
+              </p>
+              <p className="font-light text-muted-foreground">
+                {validation.report.graphqlEndpoint.found
+                  ? tValidation("graphqlEndpoint.found", { url: validation.report.graphqlEndpoint.url ?? "" })
+                  : tValidation("graphqlEndpoint.notFound")}
+              </p>
+              <p className="font-light text-muted-foreground">
+                {validation.report.searchForm.found
+                  ? tValidation("searchForm.found", {
+                      action: validation.report.searchForm.action ?? "",
+                      fields: validation.report.searchForm.fieldNames.join(", "),
+                    })
+                  : tValidation("searchForm.notFound")}
               </p>
               {validation.report.suggestedProcessingType && (
                 <div className="mt-1 flex flex-wrap items-center gap-2">

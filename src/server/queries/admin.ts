@@ -176,6 +176,13 @@ export interface AdminSearchSource {
   lastCheckedAt: string | null;
   selectorConfig: SelectorConfig | null;
   imageDomains: string[];
+  /** Э10 (Арх §19): set by `checkSourceStructureHealth`, recomputed every indexer run — see that
+   *  module's own doc comment. `reanalysisSampleSize`/`reanalysisSuccessCount` are both `null` until
+   *  the first check with a non-empty sample has run for this source. */
+  needsReanalysis: boolean;
+  reanalysisSampleSize: number | null;
+  reanalysisSuccessCount: number | null;
+  structureCheckedAt: string | null;
   autoSelectClassifications: Database["public"]["Enums"]["search_url_classification"][];
   notes: string | null;
   createdAt: string;
@@ -203,7 +210,7 @@ export interface AdminSearchSource {
 }
 
 const SEARCH_SOURCE_COLUMNS =
-  "id, name, domain, base_url, enabled, status, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, selector_config, image_domains, auto_select_classifications, notes, created_at, detailed_logging, can_details, can_availability, can_pricing, can_contact, supports_dates, supports_price, supports_guests, contact_capability, search_source_coverage(worldwide, country, region, destination, latitude, longitude, radius_km), search_source_policies(access_policy, cache_policy, attribution_policy, rate_limit_policy, retention_policy)";
+  "id, name, domain, base_url, enabled, status, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, selector_config, image_domains, needs_reanalysis, reanalysis_sample_size, reanalysis_success_count, structure_checked_at, auto_select_classifications, notes, created_at, detailed_logging, can_details, can_availability, can_pricing, can_contact, supports_dates, supports_price, supports_guests, contact_capability, search_source_coverage(worldwide, country, region, destination, latitude, longitude, radius_km), search_source_policies(access_policy, cache_policy, attribution_policy, rate_limit_policy, retention_policy)";
 
 /** Same defensively-null-on-failure convention as `parseAdminSelectorConfig` below. */
 function parseAdminSourcePolicies(raw: {
@@ -258,6 +265,10 @@ export async function getAllSearchSourcesAdmin(): Promise<AdminSearchSource[]> {
     lastCheckedAt: row.last_checked_at,
     selectorConfig: parseAdminSelectorConfig(row.selector_config),
     imageDomains: row.image_domains,
+    needsReanalysis: row.needs_reanalysis,
+    reanalysisSampleSize: row.reanalysis_sample_size,
+    reanalysisSuccessCount: row.reanalysis_success_count,
+    structureCheckedAt: row.structure_checked_at,
     autoSelectClassifications: row.auto_select_classifications,
     notes: row.notes,
     createdAt: row.created_at,
@@ -352,6 +363,10 @@ export async function getSearchSourceById(id: string): Promise<AdminSearchSource
     lastCheckedAt: data.last_checked_at,
     selectorConfig: parseAdminSelectorConfig(data.selector_config),
     imageDomains: data.image_domains,
+    needsReanalysis: data.needs_reanalysis,
+    reanalysisSampleSize: data.reanalysis_sample_size,
+    reanalysisSuccessCount: data.reanalysis_success_count,
+    structureCheckedAt: data.structure_checked_at,
     autoSelectClassifications: data.auto_select_classifications,
     notes: data.notes,
     createdAt: data.created_at,

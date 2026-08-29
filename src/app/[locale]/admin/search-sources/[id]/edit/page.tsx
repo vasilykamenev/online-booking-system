@@ -37,6 +37,11 @@ export default async function EditSearchSourcePage({
         <SearchSourceForm
           mode="edit"
           sourceId={source.id}
+          structureHealth={{
+            needsReanalysis: source.needsReanalysis,
+            sampleSize: source.reanalysisSampleSize,
+            successCount: source.reanalysisSuccessCount,
+          }}
           defaultValues={{
             name: source.name,
             domain: source.domain,

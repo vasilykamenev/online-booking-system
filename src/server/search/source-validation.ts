@@ -54,6 +54,24 @@ export interface SourceValidationReport {
     found: boolean;
     types: string[];
   };
+  /** Э10 (Арх §19's onboarding checklist): a bounded, read-only probe for a WordPress-style REST
+   *  API at `/wp-json/` — the one convention common enough across charter/booking sites to be worth
+   *  guessing at without an admin already pointing at a specific endpoint. `found: false` means "not
+   *  detected", never "confirmed absent" — a genuinely custom API at another path needs an admin who
+   *  already knows the site to notice it. */
+  apiEndpoint: { found: boolean; url: string | null };
+  /** Э10: a bounded probe for `/graphql`. Only ever positive on a 2xx response (a GraphiQL/Apollo
+   *  Sandbox IDE page, or a server that allows introspection over GET) — see `probeGraphQlEndpoint`'s
+   *  own comment for why a 4xx "must provide query" response, the more common shape, can't be read
+   *  here at all. `found: false` is therefore inconclusive as often as it is a real "no". */
+  graphqlEndpoint: { found: boolean; url: string | null };
+  /** Э10: the homepage's own HTML, scanned for a `<form>` whose field names read as a vessel search
+   *  (location/dates/guests keywords — see `detectSearchForm`). Informational for the admin, same as
+   *  `breadcrumbLabels` elsewhere in this report — nothing in `search_processing_type` today has a
+   *  distinct "search URL" strategy to suggest from it (Арх §8's SEARCH_URL rung exists only on the
+   *  newer `access_strategy` column, not yet reachable from this form — see source-registry.ts's own
+   *  note on why `processingType` still drives selection until Э4 cuts adapters over). */
+  searchForm: { found: boolean; action: string | null; method: string | null; fieldNames: string[] };
   /** Null when the site wasn't even reachable — there's nothing to base a suggestion on. */
   suggestedProcessingType: SearchProcessingType | null;
   /** The first sample's `suggestedSelectors`, when any sample produced one — see
@@ -254,20 +272,125 @@ export async function previewCandidateAtUrl(
   return previewCandidateSample(candidateUrl, sourceDomain);
 }
 
+/** Field-name keywords a real vessel search form's inputs tend to use — English and Russian sites
+ *  both seen live in this registry (globesailor.ru, sailica.com, brilions.com). Two or more distinct
+ *  matches inside the same `<form>` is the bar for calling it a search form rather than, say, a
+ *  newsletter signup that happens to have a `location` cookie field. */
+const SEARCH_FORM_KEYWORDS = [
+  "location",
+  "destination",
+  "port",
+  "marina",
+  "city",
+  "country",
+  "date",
+  "checkin",
+  "checkout",
+  "guests",
+  "adults",
+  "passengers",
+  "persons",
+  "cabins",
+  "yacht",
+  "boat",
+  "vessel",
+  "charter",
+  "search",
+  "query",
+];
+
+/** `<input>`/`<select>`/`<textarea>` `name` attributes inside one already-isolated `<form>...</form>`
+ *  body — deliberately not a full HTML parse (no DOM library in this codebase's crawl pipeline; every
+ *  other extractor here — `structured-data.ts`, `candidate-classifier.ts` — is regex/AI-based too),
+ *  just enough to read a form's shape. */
+function extractFormFieldNames(formBody: string): string[] {
+  const names = new Set<string>();
+  const fieldRegex = /<(?:input|select|textarea)\b[^>]*\bname=["']([^"']+)["']/gi;
+  let match: RegExpExecArray | null;
+  while ((match = fieldRegex.exec(formBody))) {
+    names.add(match[1]);
+  }
+  return [...names];
+}
+
+/**
+ * Э10 (Арх §19's "анализ URL поисковой формы" / "анализ структуры HTML"): scans a fetched homepage
+ * for the first `<form>` whose field names read as a vessel search, exported (not just used
+ * internally) so its regex heuristics are unit-testable without a live fetch — same split as every
+ * other pure/I-O pair in this module (`buildImageCheck` vs. `previewCandidateSample`, etc.).
+ */
+export function detectSearchForm(html: string): SourceValidationReport["searchForm"] {
+  const formRegex = /<form\b([^>]*)>([\s\S]*?)<\/form>/gi;
+  let match: RegExpExecArray | null;
+  while ((match = formRegex.exec(html))) {
+    const [, attrs, body] = match;
+    const fieldNames = extractFormFieldNames(body);
+    const matchingFields = fieldNames.filter((name) =>
+      SEARCH_FORM_KEYWORDS.some((keyword) => name.toLowerCase().includes(keyword)),
+    );
+    if (matchingFields.length >= 2) {
+      const actionMatch = /\baction=["']([^"']*)["']/i.exec(attrs);
+      const methodMatch = /\bmethod=["']([^"']*)["']/i.exec(attrs);
+      return {
+        found: true,
+        action: actionMatch ? actionMatch[1] : null,
+        method: methodMatch ? methodMatch[1].toUpperCase() : "GET",
+        fieldNames,
+      };
+    }
+  }
+  return { found: false, action: null, method: null, fieldNames: [] };
+}
+
+/** Э10: a WordPress-style REST API convention (`/wp-json/`) — common enough across charter/booking
+ *  sites built on WP to be worth one bounded, read-only probe. A genuinely custom API at another
+ *  path is out of reach for an automated guess; the admin's own `notes` field is where that goes. */
+async function probeApiEndpoint(origin: string): Promise<SourceValidationReport["apiEndpoint"]> {
+  const url = `${origin}/wp-json/`;
+  const result = await safeFetch(url, PROBE_TIMEOUTS);
+  if (!result.ok) return { found: false, url: null };
+  const looksLikeWpJson = /"routes"\s*:|"namespaces"\s*:/.test(result.body);
+  return looksLikeWpJson ? { found: true, url } : { found: false, url: null };
+}
+
+/**
+ * Э10: a bounded probe for a GraphQL endpoint at `/graphql`. `safeFetch` only ever returns a body
+ * for a 2xx response (spec §24's SSRF-safe fetch never reads a non-OK body at all), so this can only
+ * ever catch a server that answers a bare GET with 200 — a GraphiQL/Apollo Sandbox/GraphQL Playground
+ * IDE page, or a server permissive enough to answer introspection over GET. The far more common shape
+ * (a 4xx "must provide query string" JSON error) is invisible to this probe; `found: false` here is
+ * therefore "not detected this way", not "confirmed absent".
+ */
+async function probeGraphQlEndpoint(origin: string): Promise<SourceValidationReport["graphqlEndpoint"]> {
+  const url = `${origin}/graphql`;
+  const result = await safeFetch(url, PROBE_TIMEOUTS);
+  if (!result.ok) return { found: false, url: null };
+  const looksLikeGraphQlIde = /graphiql|apollo\s*sandbox|graphql\s*playground/i.test(result.body);
+  return looksLikeGraphQlIde ? { found: true, url } : { found: false, url: null };
+}
+
 /**
  * Extraction-pipeline priority per spec §11 (API -> JSON-LD -> HTML -> AI), applied to what was
- * actually observed: homepage JSON-LD is the strongest signal; failing that, per-page JSON-LD on
- * the sampled candidates; failing that, whether the AI classifier recognized most samples as real
- * vessel listings (in which case AI_EXTRACTION needs no site-specific code to start working, unlike
- * HTML, which would still need selectors written for this site). HTML is the fallback when there's
- * simply nothing yet to judge by (no sitemap, so no samples).
+ * actually observed: an Э10 API/GraphQL probe outranks everything else (Арх §8's ladder puts a real
+ * API above structured data); failing that, homepage JSON-LD is the strongest remaining signal;
+ * failing that, per-page JSON-LD on the sampled candidates; failing that, whether the AI classifier
+ * recognized most samples as real vessel listings (in which case AI_EXTRACTION needs no site-specific
+ * code to start working, unlike HTML, which would still need selectors written for this site). HTML
+ * is the fallback when there's simply nothing yet to judge by (no sitemap, so no samples).
+ *
+ * `search_processing_type` has no distinct GraphQL/SearchURL value yet (only `search_access_strategy`
+ * does — see `searchForm`'s own doc comment on this report), so a GraphQL find buckets into `"API"`
+ * too, the closest existing meaning ("this source has a machine-readable interface").
  */
 function suggestProcessingType(
   reachable: boolean,
+  apiFound: boolean,
+  graphqlFound: boolean,
   homepageStructuredDataFound: boolean,
   preview: CandidatePreview,
 ): SearchProcessingType | null {
   if (!reachable) return null;
+  if (apiFound || graphqlFound) return "API";
   if (homepageStructuredDataFound) return "STRUCTURED_DATA";
   if (preview.samples.length === 0) return "HTML";
 
@@ -287,9 +410,11 @@ export async function validateSearchSource(baseUrl: string): Promise<SourceValid
   const origin = parsedUrl.origin;
   const pathname = parsedUrl.pathname || "/";
 
-  const [pageResult, robotsInfo] = await Promise.all([
+  const [pageResult, robotsInfo, apiEndpoint, graphqlEndpoint] = await Promise.all([
     safeFetch(baseUrl, PROBE_TIMEOUTS),
     fetchRobotsInfo(baseUrl, PROBE_TIMEOUTS),
+    probeApiEndpoint(origin),
+    probeGraphQlEndpoint(origin),
   ]);
 
   const sitemap = await discoverSitemap(origin, robotsInfo.sitemapUrls, PROBE_TIMEOUTS);
@@ -298,6 +423,7 @@ export async function validateSearchSource(baseUrl: string): Promise<SourceValid
   // Capped to `searchSourceSchema.name`'s own 120-char max (`lib/validation/admin.ts`) so the
   // suggestion is always submittable as-is, not just close.
   const suggestedName = pageResult.ok ? (extractPageSummary(pageResult.body).title?.slice(0, 120) ?? null) : null;
+  const searchForm = pageResult.ok ? detectSearchForm(pageResult.body) : { found: false, action: null, method: null, fieldNames: [] };
 
   const sampleUrls = sitemap
     ? sampleSitemapLocs(sitemap.xml, MAX_CANDIDATE_SAMPLES, pageResult.ok ? pageResult.finalUrl : undefined)
@@ -320,7 +446,16 @@ export async function validateSearchSource(baseUrl: string): Promise<SourceValid
       ? { found: true, url: sitemap.url, entryCount: sitemap.entryCount }
       : { found: false, url: null, entryCount: null },
     structuredData: { found: structuredDataFound, types: structuredTypes },
-    suggestedProcessingType: suggestProcessingType(pageResult.ok, structuredDataFound, candidatePreview),
+    apiEndpoint,
+    graphqlEndpoint,
+    searchForm,
+    suggestedProcessingType: suggestProcessingType(
+      pageResult.ok,
+      apiEndpoint.found,
+      graphqlEndpoint.found,
+      structuredDataFound,
+      candidatePreview,
+    ),
     suggestedSelectorConfig:
       candidatePreview.samples.find((sample) => sample.suggestedSelectors)?.suggestedSelectors ?? null,
     candidatePreview,

@@ -1444,13 +1444,17 @@ export type Database = {
           last_checked_at: string | null
           name: string
           notes: string | null
+          needs_reanalysis: boolean
           priority: number
           processing_type: Database["public"]["Enums"]["search_processing_type"]
+          reanalysis_sample_size: number | null
+          reanalysis_success_count: number | null
           reliability_score: number | null
           robots_allows: boolean | null
           selector_config: Json | null
           source_type: Database["public"]["Enums"]["search_source_type"]
           status: Database["public"]["Enums"]["search_source_status"]
+          structure_checked_at: string | null
           supports_dates: boolean
           supports_guests: boolean
           supports_location: boolean
@@ -1479,13 +1483,17 @@ export type Database = {
           last_checked_at?: string | null
           name: string
           notes?: string | null
+          needs_reanalysis?: boolean
           priority?: number
           processing_type?: Database["public"]["Enums"]["search_processing_type"]
+          reanalysis_sample_size?: number | null
+          reanalysis_success_count?: number | null
           reliability_score?: number | null
           robots_allows?: boolean | null
           selector_config?: Json | null
           source_type?: Database["public"]["Enums"]["search_source_type"]
           status?: Database["public"]["Enums"]["search_source_status"]
+          structure_checked_at?: string | null
           supports_dates?: boolean
           supports_guests?: boolean
           supports_location?: boolean
@@ -1514,13 +1522,17 @@ export type Database = {
           last_checked_at?: string | null
           name?: string
           notes?: string | null
+          needs_reanalysis?: boolean
           priority?: number
           processing_type?: Database["public"]["Enums"]["search_processing_type"]
+          reanalysis_sample_size?: number | null
+          reanalysis_success_count?: number | null
           reliability_score?: number | null
           robots_allows?: boolean | null
           selector_config?: Json | null
           source_type?: Database["public"]["Enums"]["search_source_type"]
           status?: Database["public"]["Enums"]["search_source_status"]
+          structure_checked_at?: string | null
           supports_dates?: boolean
           supports_guests?: boolean
           supports_location?: boolean

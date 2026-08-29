@@ -86,6 +86,7 @@ export default async function AdminSearchSourcesPage({
                 <TableHead>{t("columns.priority")}</TableHead>
                 <TableHead>{t("columns.robots")}</TableHead>
                 <TableHead>{t("columns.health")}</TableHead>
+                <TableHead>{t("columns.structure")}</TableHead>
                 <TableHead>{t("columns.status")}</TableHead>
                 <TableHead className="text-right">{t("columns.actions")}</TableHead>
               </TableRow>
@@ -134,6 +135,30 @@ export default async function AdminSearchSourcesPage({
                         </Badge>
                       );
                     })()}
+                  </TableCell>
+                  <TableCell>
+                    {/* Э10: distinct from the health column above — a source can answer every fetch
+                        with 200 (CLOSED breaker) while its pages have stopped yielding usable fields
+                        at all, which is exactly what this badge is for. */}
+                    {source.needsReanalysis ? (
+                      <Badge
+                        variant="destructive"
+                        title={
+                          source.reanalysisSampleSize !== null && source.reanalysisSuccessCount !== null
+                            ? t("structure.detailTitle", {
+                                success: source.reanalysisSuccessCount,
+                                total: source.reanalysisSampleSize,
+                              })
+                            : undefined
+                        }
+                      >
+                        {t("structure.needsReanalysis")}
+                      </Badge>
+                    ) : (
+                      <span className="text-xs font-light text-muted-foreground">
+                        {source.structureCheckedAt ? t("structure.ok") : t("structure.notChecked")}
+                      </span>
+                    )}
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">

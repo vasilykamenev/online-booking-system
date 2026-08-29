@@ -19,6 +19,7 @@ import type { FieldSource } from "@/server/search/registry/listing-merge";
 import { indexBrilionsSource } from "@/server/search/index/brilions-indexer";
 import { type IndexRunResult, emptyRunResult, throttle } from "@/server/search/index/shared";
 import { isSourceCallAllowed, recordSourceFailure, recordSourceSuccess } from "@/server/search/resilience/source-health";
+import { checkSourceStructureHealth } from "@/server/search/source-structure-health";
 
 /**
  * The background counterpart to the live path's per-request sampling (Э5, Арх §12) — walks every
@@ -267,5 +268,13 @@ export async function indexSource(sourceId: string): Promise<IndexRunResult> {
   if (!(await isSourceCallAllowed(sourceId))) return emptyRunResult(sourceId);
 
   const domainIndexer = DOMAIN_INDEXERS[source.domain];
-  return domainIndexer ? domainIndexer(sourceId) : indexGenericSource(source);
+  const result = await (domainIndexer ? domainIndexer(sourceId) : indexGenericSource(source));
+
+  // Э10 (Арх §19): piggybacks on the indexer's own cadence — checked here, not on every live search
+  // request. Best-effort and never awaited-into-failure: `checkSourceStructureHealth` already
+  // swallows its own errors, but the run's result must reach the caller (the cron job, the admin's
+  // "Индексировать сейчас" button) either way.
+  await checkSourceStructureHealth(sourceId);
+
+  return result;
 }
