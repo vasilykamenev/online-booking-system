@@ -26,6 +26,23 @@ export function GlobalResultCard({ result, index = 0 }: { result: VesselSearchRe
   const image = result.images[0];
   const isInternal = result.origin === "INTERNAL";
   const place = [result.location.city, result.location.country].filter(Boolean).join(", ");
+
+  // Э7 (Арх §15): an external offer's price/availability are read off `external_vessel_index`, not
+  // verified against the source at render time — this line is the one place that ever says so out
+  // loud, so nothing on the card lets a stale or unverified figure pass as confirmed. Internal offers
+  // need none of this: their price comes straight from our own DB at request time (see
+  // `internal-provider.ts`'s `toResult`), which *is* the verification.
+  const availabilityNote = isInternal
+    ? null
+    : result.availabilityStatus === "LIKELY_AVAILABLE" && result.verifiedAt
+      ? t("availability.verifiedNow")
+      : result.availabilityStatus === "LIKELY_AVAILABLE" && result.indexedAt
+        ? t("availability.perCatalog", {
+            date: new Intl.DateTimeFormat(locale, { day: "2-digit", month: "2-digit", year: "numeric" }).format(
+              new Date(result.indexedAt),
+            ),
+          })
+        : t("availability.unknown");
   // External photos are proxied through our own origin (`api/external-image/[encoded]`) rather than
   // passed to `next/image` directly — a raw external `src` would need its host added to
   // `next.config.ts`'s `images.remotePatterns` before every newly approved search source, which is
@@ -151,6 +168,7 @@ export function GlobalResultCard({ result, index = 0 }: { result: VesselSearchRe
             `alternateSources` too, once it absorbed a matching external offer. */}
         {(!isInternal || result.alternateSources.length > 0) && (
           <div className="mt-3 space-y-1 border-t border-border pt-3 text-[11px] font-light text-muted-foreground">
+            {availabilityNote && <p>{availabilityNote}</p>}
             {!isInternal && <p>{t("sourceLabel", { name: result.source.name })}</p>}
             {result.alternateSources.length > 0 && (
               <p>

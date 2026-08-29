@@ -185,6 +185,11 @@
     "externalSkipped": "External sources are not connected yet — these are offers from our own catalogue.",
     "internalFirstNotice": "Our own catalogue already has enough matches for this search, so external sources weren't checked.",
     "searchExternalCta": "Search external sources",
+    "availability": {
+      "verifiedNow": "Availability just verified",
+      "perCatalog": "Price and availability per catalogue data as of {date}",
+      "unknown": "Availability not confirmed"
+    },
     "untitled": "Untitled",
     "lengthMeters": "{value} m",
     "radiusKm": "{value} km",

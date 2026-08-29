@@ -73,6 +73,54 @@ describe("GlobalResultCard", () => {
     expect(screen.queryByText(/sourceLabel/)).toBeNull();
   });
 
+  it("never shows an availability caveat for an internal result — the DB read already is the verification", () => {
+    const result = {
+      ...emptyResult("r4", "INTERNAL", makeSource({ type: "INTERNAL", name: "Наша база", url: "/vessels/nordic-star" })),
+      name: "Nordic Star",
+      availabilityStatus: "VERIFIED" as const,
+    };
+
+    render(<GlobalResultCard result={result} />);
+
+    expect(screen.queryByText(/^availability\./)).toBeNull();
+  });
+
+  it("shows the freshness-dated caveat for a LIKELY_AVAILABLE external result with no live verification", () => {
+    const result = {
+      ...emptyResult("r5", "EXTERNAL", makeSource({})),
+      name: "Polar Frontier",
+      availabilityStatus: "LIKELY_AVAILABLE" as const,
+      indexedAt: "2026-08-20T00:00:00.000Z",
+      verifiedAt: null,
+    };
+
+    render(<GlobalResultCard result={result} />);
+
+    expect(screen.getByText(/availability\.perCatalog/)).not.toBeNull();
+  });
+
+  it("shows the just-verified caveat once a live check ran this request", () => {
+    const result = {
+      ...emptyResult("r6", "EXTERNAL", makeSource({})),
+      name: "Polar Frontier",
+      availabilityStatus: "LIKELY_AVAILABLE" as const,
+      indexedAt: "2026-08-20T00:00:00.000Z",
+      verifiedAt: "2026-08-29T07:00:00.000Z",
+    };
+
+    render(<GlobalResultCard result={result} />);
+
+    expect(screen.getByText(/availability\.verifiedNow/)).not.toBeNull();
+  });
+
+  it("shows the unknown caveat for an external result with no availability signal at all", () => {
+    const result = { ...emptyResult("r7", "EXTERNAL", makeSource({})), name: "Polar Frontier" };
+
+    render(<GlobalResultCard result={result} />);
+
+    expect(screen.getByText(/availability\.unknown/)).not.toBeNull();
+  });
+
   it("still shows the primary source label plus alternates for an external-origin result", () => {
     const result = {
       ...emptyResult("r3", "EXTERNAL", makeSource({ name: "Charter Co" })),

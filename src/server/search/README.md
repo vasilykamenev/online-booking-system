@@ -34,6 +34,7 @@
 | `interpret-fallback.ts` | Детерминированный разбор запроса | §4 |
 | `vocabulary.ts` | Словарь из справочников проекта | §4 |
 | `ranking.ts` | `SearchRankingService` | §18 |
+| `availability.ts` | `deriveAvailability` (Э7) — freshness + live-verification + reliability → `availabilityStatus`/`confidence`, никогда не персистится между запросами (разные окна дат) | Арх §15 |
 | `dedupe.ts` | `VesselDeduplicationService` | §17 |
 | `text.ts` | Нормализация текста, схожесть | — |
 
@@ -43,7 +44,7 @@
 |---|---|---|
 | `orchestrator/search-orchestrator.ts` | Оркестратор (Э6, заменил `global-search-service.ts`) — fast internal-only phase + Internal First (Арх §14); внешняя фаза больше не крaулит живьём | Арх §13, §14, §26 |
 | `orchestrator/candidate-phase.ts` | Э6 Phase 1 — `external_vessel_index` → строгие фильтры → merge с внутренними → дедуп → ранжирование → TOP N | Арх §13 |
-| `orchestrator/verification-phase.ts` | Э6 Phase 2 — `checkAvailability` только для TOP N, параллельно, с таймаутом и ограничением concurrency; только при точном окне дат | Арх §13, §15 |
+| `orchestrator/verification-phase.ts` | Э6 Phase 2 — `checkAvailability` только для TOP N, параллельно, с таймаутом и ограничением concurrency, только при точном окне дат; Э7 — прогоняет каждый внешний результат (проверенный вживую или нет) через `deriveAvailability` | Арх §13, §15 |
 | `index/vessel-index.ts` | Читающая сторона `external_vessel_index` для Phase 1 (`queryIndexCandidates`/`indexRowToResult`) — отдельно от `index/indexer.ts` (пишущая сторона, Э5) | Арх §12, §13 |
 | `internal-provider.ts` | Поиск по своей БД + `getInternalVesselById`/`isInternalVesselAvailable` (Э4) | §6 |
 | `coverage.ts` | `sourceCovers` — предфильтр источников по географии запроса (Э3) | Арх §9 |

@@ -196,12 +196,14 @@ export async function runExternalSearchPhase(
   const { byId: adaptersById } = await listExternalAdaptersById(criteria);
   const verification = await runVerificationPhase(candidatePhase.ranked, criteria, adaptersById, {
     locale: internalPhase.locale,
+    sourceReliability,
     timeoutMs: options.verificationTimeoutMs,
   });
 
-  // Final ranking (step 6): re-scored after Phase 2 may have changed availability status/confidence
-  // — a no-op against today's scoring factors (Э7 is what teaches `ranking.ts` to weigh them), but
-  // keeps this orchestrator correct once it does, without another pass over this file.
+  // Final ranking (step 6): re-scored after Phase 2 (Э7) may have changed availability status/
+  // confidence — a no-op against today's scoring factors (`ranking.ts` doesn't weigh either one yet;
+  // that would be a ranking-factor change, out of Э7's own scope), but keeps this orchestrator
+  // correct the moment it does, without another pass over this file.
   const ranked = rankResults(verification.results, criteria, { sourceReliability });
   const externalOnlyResults = ranked.filter((result) => result.origin === "EXTERNAL");
 
