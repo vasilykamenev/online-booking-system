@@ -285,6 +285,43 @@ export async function getAllSearchSourcesAdmin(): Promise<AdminSearchSource[]> {
   }));
 }
 
+export interface AdminSourceHealth {
+  state: Database["public"]["Enums"]["search_circuit_state"];
+  consecutiveFailures: number;
+  lastSuccessAt: string | null;
+  lastFailureAt: string | null;
+  lastError: string | null;
+}
+
+/**
+ * Э8's "страница здоровья источников в админке" — keyed by `source_id` so
+ * `admin/search-sources/page.tsx` can just do a plain map lookup per row, same shape
+ * `getSourceReliability` (`source-registry.ts`) already uses for its own domain→number map. A
+ * source absent from the map has never had an outcome recorded through the resilience layer yet —
+ * the page renders that the same as an explicit CLOSED/0-failures row, matching
+ * `resilience/source-health.ts`'s own "no row yet" convention.
+ */
+export async function getSearchSourceHealthMap(): Promise<Record<string, AdminSourceHealth>> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("search_source_health")
+    .select("source_id, state, consecutive_failures, last_success_at, last_failure_at, last_error");
+
+  throwIfSupabaseError(error);
+
+  const map: Record<string, AdminSourceHealth> = {};
+  for (const row of data ?? []) {
+    map[row.source_id] = {
+      state: row.state,
+      consecutiveFailures: row.consecutive_failures,
+      lastSuccessAt: row.last_success_at,
+      lastFailureAt: row.last_failure_at,
+      lastError: row.last_error,
+    };
+  }
+  return map;
+}
+
 export async function getSearchSourceById(id: string): Promise<AdminSearchSource | null> {
   const supabase = await createClient();
 

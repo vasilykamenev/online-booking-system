@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Locale } from "@/i18n/routing";
 import { Link } from "@/i18n/navigation";
-import { getAllSearchSourcesAdmin } from "@/server/queries/admin";
+import { getAllSearchSourcesAdmin, getSearchSourceHealthMap } from "@/server/queries/admin";
 import { buildTitle } from "@/lib/site";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +21,7 @@ import { SearchSourceStatusActions } from "./search-source-status-actions";
 import { SearchSourceDeleteButton } from "./search-source-delete-button";
 
 type SearchSourceStatus = Database["public"]["Enums"]["search_source_status"];
+type SearchCircuitState = Database["public"]["Enums"]["search_circuit_state"];
 
 const STATUS_BADGE_VARIANT: Record<
   SearchSourceStatus,
@@ -30,6 +31,14 @@ const STATUS_BADGE_VARIANT: Record<
   needs_review: "secondary",
   active: "default",
   rejected: "destructive",
+};
+
+/** Э8: CLOSED needs no visual alarm at all (the normal, healthy state) — shown as plain text, not a
+ *  badge, so a healthy source list doesn't drown in green noise the way every other column's badges
+ *  already avoid for their own "nothing wrong" state. */
+const HEALTH_BADGE_VARIANT: Record<Exclude<SearchCircuitState, "CLOSED">, "secondary" | "destructive"> = {
+  HALF_OPEN: "secondary",
+  OPEN: "destructive",
 };
 
 export async function generateMetadata({
@@ -53,7 +62,7 @@ export default async function AdminSearchSourcesPage({
   const tProcessing = await getTranslations("admin.searchSources.processingType");
   const tLifecycle = await getTranslations("admin.searchSources.lifecycle");
 
-  const sources = await getAllSearchSourcesAdmin();
+  const [sources, health] = await Promise.all([getAllSearchSourcesAdmin(), getSearchSourceHealthMap()]);
 
   return (
     <div>
@@ -76,6 +85,7 @@ export default async function AdminSearchSourcesPage({
                 <TableHead>{t("columns.processing")}</TableHead>
                 <TableHead>{t("columns.priority")}</TableHead>
                 <TableHead>{t("columns.robots")}</TableHead>
+                <TableHead>{t("columns.health")}</TableHead>
                 <TableHead>{t("columns.status")}</TableHead>
                 <TableHead className="text-right">{t("columns.actions")}</TableHead>
               </TableRow>
@@ -108,6 +118,22 @@ export default async function AdminSearchSourcesPage({
                     ) : (
                       <Badge variant="destructive">{t("robots.disallowed")}</Badge>
                     )}
+                  </TableCell>
+                  <TableCell>
+                    {(() => {
+                      const sourceHealth = health[source.id];
+                      if (!sourceHealth || sourceHealth.state === "CLOSED") {
+                        return <span className="text-xs font-light text-muted-foreground">{t("health.closed")}</span>;
+                      }
+                      return (
+                        <Badge
+                          variant={HEALTH_BADGE_VARIANT[sourceHealth.state]}
+                          title={sourceHealth.lastError ?? undefined}
+                        >
+                          {t(`health.${sourceHealth.state.toLowerCase()}`, { count: sourceHealth.consecutiveFailures })}
+                        </Badge>
+                      );
+                    })()}
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap gap-1">

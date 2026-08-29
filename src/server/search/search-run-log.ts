@@ -46,6 +46,9 @@ export interface SearchRunRecord {
   /** Э6 (Арх §14) — true when internal coverage alone met `min_internal_results` and the external
    *  phase never ran at all. */
   internalFirstShortCircuit: boolean;
+  /** Э8 (Арх §23) — live checks this run skipped outright because that source's circuit breaker was
+   *  OPEN, distinct from `verificationFailures` (attempted and broke). */
+  circuitBreakerSkips: number;
   errors: string[];
 }
 
@@ -83,6 +86,7 @@ export async function recordSearchRun(record: SearchRunRecord): Promise<void> {
         live_verifications: record.liveVerifications,
         verification_failures: record.verificationFailures,
         internal_first_short_circuit: record.internalFirstShortCircuit,
+        circuit_breaker_skips: record.circuitBreakerSkips,
         errors: record.errors,
       });
   } catch {

@@ -4,6 +4,8 @@ import type { SearchCriteria } from "@/lib/search/request";
 import type { VesselSearchResult } from "@/lib/search/offer";
 import type { VesselSourceAdapter } from "@/server/search/adapters/adapter";
 import { deriveAvailability } from "@/lib/search/availability";
+import { throttle } from "@/server/search/resilience/rate-limiter";
+import { isSourceCallAllowed, recordSourceFailure, recordSourceSuccess } from "@/server/search/resilience/source-health";
 
 /**
  * Э6's Phase 2 (docs/AI_Federated_Search_Migration_Plan_v1.md §6, Арх §13, step 4): live
@@ -22,6 +24,15 @@ import { deriveAvailability } from "@/lib/search/availability";
  * `LIKELY_AVAILABLE` from index freshness alone, once the source's reliability and the row's own
  * `indexed_at` justify it — see that module's own doc comment for why this is never persisted back
  * onto `external_vessel_index` for reuse by a *different* date window.
+ *
+ * Э8 (Арх §22, §23): every live call is gated by `resilience/source-health.ts`'s circuit breaker
+ * (a source whose breaker is OPEN gets skipped, not attempted-and-failed — Арх §23's "we stop
+ * calling it", not "the search errors") and paced by `resilience/rate-limiter.ts`'s shared throttle
+ * (the same one the background indexer uses). A skipped or failed call both simply leave
+ * `deriveAvailability` with no live signal to work from, falling back to its freshness-only branch —
+ * one broken or throttled source degrades this phase's confidence for its own candidates, never the
+ * whole search (the `Promise.all`-based `mapWithConcurrency` below never lets one worker's
+ * rejection stop the others, and every worker already catches its own failure internally besides).
  */
 
 const DEFAULT_TIMEOUT_MS = 8_000;
@@ -43,6 +54,10 @@ export interface VerificationPhaseResult {
   results: VesselSearchResult[];
   liveVerifications: number;
   verificationFailures: number;
+  /** Э8 (Арх §23) — a live check this run would otherwise have attempted, but didn't, because that
+   *  source's circuit breaker was OPEN. Distinct from `verificationFailures`: this call was never
+   *  made at all, not made-and-broke. */
+  circuitBreakerSkips: number;
 }
 
 /** Runs `items` through `worker` with at most `concurrency` in flight at once — Phase 2's own
@@ -89,6 +104,7 @@ export async function runVerificationPhase(
 
   let liveVerifications = 0;
   let verificationFailures = 0;
+  let circuitBreakerSkips = 0;
   const now = Date.now();
 
   const verified = await mapWithConcurrency(ranked, concurrency, async (result) => {
@@ -100,23 +116,33 @@ export async function runVerificationPhase(
 
     const adapter = result.sourceId ? adaptersById.get(result.sourceId) : undefined;
     if (from && to && adapter && result.externalId) {
-      liveVerifications += 1;
-      try {
-        const outcome = await withTimeout(
-          adapter.checkAvailability(result.externalId, from, to, {
-            locale: options.locale,
-            searchQueries: [],
+      // Э8: gate, then pace, then call — a source whose breaker just tripped shouldn't also eat a
+      // `throttle` wait for a call this phase is about to skip anyway.
+      if (!(await isSourceCallAllowed(result.sourceId!))) {
+        circuitBreakerSkips += 1;
+      } else {
+        await throttle(result.sourceId!);
+        liveVerifications += 1;
+        try {
+          const outcome = await withTimeout(
+            adapter.checkAvailability(result.externalId, from, to, {
+              locale: options.locale,
+              searchQueries: [],
+              timeoutMs,
+            }),
             timeoutMs,
-          }),
-          timeoutMs,
-        );
-        liveVerification = outcome;
-        verifiedAt = new Date(now).toISOString();
-      } catch {
-        // Honest degrade, same discipline as `VesselSourceAdapter.search()`'s own "never throw" rule
-        // (adapter.ts) — a broken or timed-out check must not sink the whole verification pass, it
-        // just falls through to the freshness-only inference below, same as never attempting one.
-        verificationFailures += 1;
+          );
+          liveVerification = outcome;
+          verifiedAt = new Date(now).toISOString();
+          recordSourceSuccess(result.sourceId!).catch(() => {});
+        } catch (error) {
+          // Honest degrade, same discipline as `VesselSourceAdapter.search()`'s own "never throw"
+          // rule (adapter.ts) — a broken or timed-out check must not sink the whole verification
+          // pass, it just falls through to the freshness-only inference below, same as never
+          // attempting one.
+          verificationFailures += 1;
+          recordSourceFailure(result.sourceId!, error instanceof Error ? error.message : String(error)).catch(() => {});
+        }
       }
     }
 
@@ -135,5 +161,6 @@ export async function runVerificationPhase(
     results: verified.filter((result) => result.availabilityStatus !== "UNAVAILABLE"),
     liveVerifications,
     verificationFailures,
+    circuitBreakerSkips,
   };
 }

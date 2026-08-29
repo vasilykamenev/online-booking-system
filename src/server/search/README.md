@@ -44,7 +44,7 @@
 |---|---|---|
 | `orchestrator/search-orchestrator.ts` | Оркестратор (Э6, заменил `global-search-service.ts`) — fast internal-only phase + Internal First (Арх §14); внешняя фаза больше не крaулит живьём | Арх §13, §14, §26 |
 | `orchestrator/candidate-phase.ts` | Э6 Phase 1 — `external_vessel_index` → строгие фильтры → merge с внутренними → дедуп → ранжирование → TOP N | Арх §13 |
-| `orchestrator/verification-phase.ts` | Э6 Phase 2 — `checkAvailability` только для TOP N, параллельно, с таймаутом и ограничением concurrency, только при точном окне дат; Э7 — прогоняет каждый внешний результат (проверенный вживую или нет) через `deriveAvailability` | Арх §13, §15 |
+| `orchestrator/verification-phase.ts` | Э6 Phase 2 — `checkAvailability` только для TOP N, параллельно, с таймаутом и ограничением concurrency, только при точном окне дат; Э7 — прогоняет каждый внешний результат через `deriveAvailability`; Э8 — каждый вызов сначала проверяет breaker (`isSourceCallAllowed`), затем `throttle` | Арх §13, §15, §22, §23 |
 | `index/vessel-index.ts` | Читающая сторона `external_vessel_index` для Phase 1 (`queryIndexCandidates`/`indexRowToResult`) — отдельно от `index/indexer.ts` (пишущая сторона, Э5) | Арх §12, §13 |
 | `internal-provider.ts` | Поиск по своей БД + `getInternalVesselById`/`isInternalVesselAvailable` (Э4) | §6 |
 | `coverage.ts` | `sourceCovers` — предфильтр источников по географии запроса (Э3) | Арх §9 |
@@ -56,6 +56,9 @@
 | `adapters/generic-adapter.ts`, `adapters/brilions-adapter.ts` | Обёртки существующих провайдеров (`providers/generic/`, `providers/brilions/`) в `VesselSourceAdapter` | Арх §10 |
 | `adapters/adapter-registry.ts` | Связка «адаптер ↔ активная строка реестра» — по домену, иначе по `processingType` (generic), + предфильтр по coverage и `supports()`. `listExternalAdaptersById` (Э6) — та же связка, ключом по `search_sources.id`, для Phase 1/Phase 2 | §8, §23, Арх §9 |
 | `interpretation-cache.ts` | Кэш интерпретаций | §25 |
+| `resilience/circuit-breaker.ts` | Э8 — closed → open → half-open, чистые функции (`isCallAllowed`/`afterSuccess`/`afterFailure`) | Арх §22, §23 |
+| `resilience/source-health.ts` | Э8 — I/O-обёртка: `search_source_health` + порог/cooldown из `search_source_policies.rate_limit_policy.circuitBreaker` | Арх §23 |
+| `resilience/rate-limiter.ts` | Э8 — `throttle(sourceId)`, общий для индексатора и `verification-phase.ts`; best-effort в рамках одного тёплого инстанса | Арх §22 |
 | `search-run-log.ts` | Метрики поиска, включая Э6's `candidatesFromIndex`/`liveVerifications`/`internalFirstShortCircuit` | §26 |
 | `../ai/query-interpreter.ts` | AI-разбор запроса | §4 |
 | `registry/url-classification.ts` | Детерминированная классификация URL по правилам (pure) | docs/CLAUDE_SITEMAP_AI_CRAWLER_RULE.md §4 |

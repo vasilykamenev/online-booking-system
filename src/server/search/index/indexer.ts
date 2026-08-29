@@ -17,7 +17,8 @@ import { resolveLocationFromBreadcrumb } from "@/server/search/index/location-re
 import { normalizeVesselType, type VesselTypeAlias } from "@/lib/search/vocabulary/vessel-types";
 import type { FieldSource } from "@/server/search/registry/listing-merge";
 import { indexBrilionsSource } from "@/server/search/index/brilions-indexer";
-import { type IndexRunResult, emptyRunResult, sleep, getRequestsPerSecond } from "@/server/search/index/shared";
+import { type IndexRunResult, emptyRunResult, throttle } from "@/server/search/index/shared";
+import { isSourceCallAllowed, recordSourceFailure, recordSourceSuccess } from "@/server/search/resilience/source-health";
 
 /**
  * The background counterpart to the live path's per-request sampling (Э5, Арх §12) — walks every
@@ -84,20 +85,18 @@ async function indexGenericSource(source: NonNullable<Awaited<ReturnType<typeof 
   const sourceId = source.id;
   const result = emptyRunResult(sourceId);
 
-  const [urls, aliases, requestsPerSecond] = await Promise.all([
-    listAllSelectedUrls(sourceId),
-    getVesselTypeAliases(sourceId),
-    getRequestsPerSecond(sourceId),
-  ]);
+  const [urls, aliases] = await Promise.all([listAllSelectedUrls(sourceId), getVesselTypeAliases(sourceId)]);
   result.urlsConsidered = urls.length;
-  const delayMs = 1000 / requestsPerSecond;
 
   // `HTML` must stay free/deterministic (docs/search-source-processing-strategies.md §2) — same
   // rule `fetchAndNormalize`'s own `allowAi` follows.
   const allowAi = source.processingType !== "HTML";
 
-  for (const [index, candidate] of urls.entries()) {
-    if (index > 0) await sleep(delayMs);
+  for (const candidate of urls) {
+    // Э8: shared with `orchestrator/verification-phase.ts` now — see `resilience/rate-limiter.ts`'s
+    // own doc comment. Unconditional (no more `if (index > 0)` guard): the first call for a source
+    // has nothing recorded yet and returns immediately on its own.
+    await throttle(sourceId);
 
     const page = await fetchWithCache(candidate.url, PAGE_CACHE_MS);
     if (!page.ok || !page.html) {
@@ -108,8 +107,13 @@ async function indexGenericSource(source: NonNullable<Awaited<ReturnType<typeof 
         crawlStatus: "FAILED",
         ranAi: false,
       });
+      // Э8: a genuine fetch failure — not "fetched fine but wasn't a listing" — is exactly the
+      // reachability signal the circuit breaker tracks. Fire-and-forget, same as this file's other
+      // best-effort side writes (`recordBreadcrumbTrail`).
+      recordSourceFailure(sourceId, `fetch failed: ${candidate.url}`).catch(() => {});
       continue;
     }
+    recordSourceSuccess(sourceId).catch(() => {});
 
     const contentHash = hashContent(page.html);
 
@@ -251,10 +255,16 @@ const DOMAIN_INDEXERS: Record<string, (sourceId: string) => Promise<IndexRunResu
  * this, never `indexGenericSource` directly, so a bespoke source's own path is never bypassed by
  * accident. `null` for an unknown id degrades to an empty result rather than throwing — same
  * "never break the caller's run over one source" discipline as everything else in this module.
+ *
+ * Э8: checked once here, before dispatching to either indexing path, rather than inside each one —
+ * an open breaker means "don't crawl this source at all right now" at the whole-run level, not a
+ * per-page decision. A skipped run simply leaves the existing index rows as they are (still served
+ * by the read path, just not refreshed this cycle) — never an error the cron route needs to handle.
  */
 export async function indexSource(sourceId: string): Promise<IndexRunResult> {
   const source = await getSourceById(sourceId);
   if (!source) return emptyRunResult(sourceId);
+  if (!(await isSourceCallAllowed(sourceId))) return emptyRunResult(sourceId);
 
   const domainIndexer = DOMAIN_INDEXERS[source.domain];
   return domainIndexer ? domainIndexer(sourceId) : indexGenericSource(source);

@@ -1,5 +1,4 @@
 import "server-only";
-import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
  * Pieces `index/indexer.ts` (generic-tier indexing) and `index/brilions-indexer.ts` (brilions'
@@ -28,26 +27,7 @@ export const emptyRunResult = (sourceId: string): IndexRunResult => ({
   aiCalls: 0,
 });
 
-export function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** Politeness floor when a source's `search_source_policies.rate_limit_policy` states no
- *  `requestsPerSecond` (or an invalid one) — one request per second is a conservative default for a
- *  site that has said nothing about what it can tolerate. */
-const DEFAULT_REQUESTS_PER_SECOND = 1;
-
-/** `rate_limit_policy` has no fixed shape yet (Э3's admin form accepts arbitrary JSON under this
- *  key) — `requestsPerSecond` is this module's own reading of it, the first concrete convention
- *  given to an otherwise-freeform field. An admin can already set it today via the policies
- *  textarea; nothing else currently reads any other key there. */
-export async function getRequestsPerSecond(sourceId: string): Promise<number> {
-  const { data } = await createAdminClient()
-    .from("search_source_policies")
-    .select("rate_limit_policy")
-    .eq("source_id", sourceId)
-    .maybeSingle();
-  const policy = data?.rate_limit_policy as { requestsPerSecond?: unknown } | null;
-  const value = typeof policy?.requestsPerSecond === "number" ? policy.requestsPerSecond : null;
-  return value && value > 0 ? value : DEFAULT_REQUESTS_PER_SECOND;
-}
+/** Э8: pacing moved to `resilience/rate-limiter.ts` (shared with `orchestrator/verification-phase.ts`
+ *  now, not just the indexer) — re-exported here so this module's existing importers don't all need
+ *  touching for the move. */
+export { sleep, getRequestsPerSecond, throttle } from "@/server/search/resilience/rate-limiter";

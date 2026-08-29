@@ -143,6 +143,7 @@ export async function runInternalSearchPhase(
       liveVerifications: 0,
       verificationFailures: 0,
       internalFirstShortCircuit: true,
+      circuitBreakerSkips: 0,
       errors,
     });
   }
@@ -244,6 +245,7 @@ export async function runExternalSearchPhase(
     liveVerifications: verification.liveVerifications,
     verificationFailures: verification.verificationFailures,
     internalFirstShortCircuit: false,
+    circuitBreakerSkips: verification.circuitBreakerSkips,
     errors,
   });
 

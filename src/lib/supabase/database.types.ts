@@ -951,6 +951,7 @@ export type Database = {
         Row: {
           ai_calls: number
           candidates_from_index: number
+          circuit_breaker_skips: number
           created_at: string
           degraded_reason: string | null
           duplicates_detected: number
@@ -982,6 +983,7 @@ export type Database = {
         Insert: {
           ai_calls?: number
           candidates_from_index?: number
+          circuit_breaker_skips?: number
           created_at?: string
           degraded_reason?: string | null
           duplicates_detected?: number
@@ -1013,6 +1015,7 @@ export type Database = {
         Update: {
           ai_calls?: number
           candidates_from_index?: number
+          circuit_breaker_skips?: number
           created_at?: string
           degraded_reason?: string | null
           duplicates_detected?: number
@@ -1178,6 +1181,47 @@ export type Database = {
             foreignKeyName: "search_source_crawl_rules_source_id_fkey"
             columns: ["source_id"]
             isOneToOne: false
+            referencedRelation: "search_sources"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      search_source_health: {
+        Row: {
+          consecutive_failures: number
+          last_error: string | null
+          last_failure_at: string | null
+          last_success_at: string | null
+          opened_at: string | null
+          source_id: string
+          state: Database["public"]["Enums"]["search_circuit_state"]
+          updated_at: string
+        }
+        Insert: {
+          consecutive_failures?: number
+          last_error?: string | null
+          last_failure_at?: string | null
+          last_success_at?: string | null
+          opened_at?: string | null
+          source_id: string
+          state?: Database["public"]["Enums"]["search_circuit_state"]
+          updated_at?: string
+        }
+        Update: {
+          consecutive_failures?: number
+          last_error?: string | null
+          last_failure_at?: string | null
+          last_success_at?: string | null
+          opened_at?: string | null
+          source_id?: string
+          state?: Database["public"]["Enums"]["search_circuit_state"]
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "search_source_health_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: true
             referencedRelation: "search_sources"
             referencedColumns: ["id"]
           },
@@ -1640,6 +1684,7 @@ export type Database = {
         | "SEARCH_URL"
         | "WEB_PARSER"
         | "AI_EXTRACTION"
+      search_circuit_state: "CLOSED" | "OPEN" | "HALF_OPEN"
       search_contact_capability:
         | "EMAIL"
         | "PROVIDER_API"
@@ -1833,6 +1878,7 @@ export const Constants = {
         "WEB_PARSER",
         "AI_EXTRACTION",
       ],
+      search_circuit_state: ["CLOSED", "OPEN", "HALF_OPEN"],
       search_contact_capability: [
         "EMAIL",
         "PROVIDER_API",

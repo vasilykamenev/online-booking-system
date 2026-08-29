@@ -1088,6 +1088,7 @@
         "processing": "Processing",
         "priority": "Priority",
         "robots": "robots.txt",
+        "health": "Health",
         "status": "Status",
         "actions": "Actions"
       },
@@ -1095,6 +1096,11 @@
         "unknown": "Not checked yet",
         "allowed": "Allowed",
         "disallowed": "Disallowed"
+      },
+      "health": {
+        "closed": "Healthy",
+        "open": "{count, plural, one {Down — # failure in a row} other {Down — # failures in a row}}",
+        "half_open": "{count, plural, one {Trial check — # failure in a row} other {Trial check — # failures in a row}}"
       },
       "notFound": {
         "title": "Source not found",

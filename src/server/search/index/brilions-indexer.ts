@@ -7,7 +7,8 @@ import {
   fetchAndNormalize,
 } from "@/server/search/providers/brilions/provider";
 import { recordExtraction, resultToListingFields } from "@/server/search/registry/extracted-listings";
-import { type IndexRunResult, emptyRunResult, sleep, getRequestsPerSecond } from "@/server/search/index/shared";
+import { type IndexRunResult, emptyRunResult, throttle } from "@/server/search/index/shared";
+import { recordSourceFailure, recordSourceSuccess } from "@/server/search/resilience/source-health";
 
 /**
  * Brilions' own indexing path (Э5) — every sitemap entry, not a criteria-matched sample. Reuses
@@ -32,11 +33,10 @@ export async function indexBrilionsSource(sourceId: string): Promise<IndexRunRes
   if (!entries) return result;
   result.urlsConsidered = entries.length;
 
-  const requestsPerSecond = await getRequestsPerSecond(sourceId);
-  const delayMs = 1000 / requestsPerSecond;
-
-  for (const [index, entry] of entries.entries()) {
-    if (index > 0) await sleep(delayMs);
+  for (const entry of entries) {
+    // Э8: shared with the generic indexer and live verification now — see
+    // `resilience/rate-limiter.ts`'s own doc comment.
+    await throttle(sourceId);
 
     const { result: normalized, usedAi, contentHash } = await fetchAndNormalize(entry, {
       locale: "ru",
@@ -47,8 +47,10 @@ export async function indexBrilionsSource(sourceId: string): Promise<IndexRunRes
 
     if (!normalized) {
       result.pagesFailed += 1;
+      recordSourceFailure(sourceId, `fetch failed: ${entry.urlRu}`).catch(() => {});
       continue;
     }
+    recordSourceSuccess(sourceId).catch(() => {});
     result.pagesFetched += 1;
 
     const pageUrl = normalized.source.url;
