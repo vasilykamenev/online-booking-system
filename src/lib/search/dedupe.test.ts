@@ -203,4 +203,24 @@ describe("dedupeResults", () => {
     ]);
     expect(deduped).toHaveLength(2);
   });
+
+  it("Э11: merges a pair sharing a persistent vessel identity without needing name/image evidence", () => {
+    // Deliberately dissimilar names/facts — only `assessDuplicate` on its own would keep these
+    // apart. A shared `vesselIdentityId` (set by the background indexer, possibly via AI
+    // arbitration) is trusted outright instead.
+    const deduped = dedupeResults([
+      makeResult({ id: "a", name: "Sun Odyssey 440", year: 2019, source: charterSource, vesselIdentityId: "identity-1" }),
+      makeResult({ id: "b", name: "Jeanneau SO 440", year: 2018, source: otherSource, vesselIdentityId: "identity-1" }),
+    ]);
+    expect(deduped).toHaveLength(1);
+    expect(deduped[0].alternateSources.map((source) => source.url)).toContain(otherSource.url);
+  });
+
+  it("does not merge two results just for both lacking a vessel identity", () => {
+    const deduped = dedupeResults([
+      makeResult({ id: "a", name: "Adriatic Dream", year: 2019, vesselIdentityId: null }),
+      makeResult({ id: "b", name: "Northern Light", year: 2015, source: otherSource, vesselIdentityId: null }),
+    ]);
+    expect(deduped).toHaveLength(2);
+  });
 });

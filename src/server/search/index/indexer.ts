@@ -20,6 +20,7 @@ import { indexBrilionsSource } from "@/server/search/index/brilions-indexer";
 import { type IndexRunResult, emptyRunResult, throttle } from "@/server/search/index/shared";
 import { isSourceCallAllowed, recordSourceFailure, recordSourceSuccess } from "@/server/search/resilience/source-health";
 import { checkSourceStructureHealth } from "@/server/search/source-structure-health";
+import { resolveVesselIdentity } from "@/server/search/identity/vessel-identity";
 
 /**
  * The background counterpart to the live path's per-request sampling (Э5, Арх §12) — walks every
@@ -211,7 +212,7 @@ async function indexGenericSource(source: NonNullable<Awaited<ReturnType<typeof 
       aiConfidence: fieldSource === "AI" ? confidence : null,
     });
 
-    await recordExtraction({
+    const extracted = await recordExtraction({
       sourceId,
       url: candidate.url,
       fields: resultToListingFields(normalized),
@@ -237,6 +238,9 @@ async function indexGenericSource(source: NonNullable<Awaited<ReturnType<typeof 
       })
       .eq("source_id", sourceId)
       .eq("url", candidate.url);
+
+    // Э11 (Арх §17): best-effort, never throws — see `resolveVesselIdentity`'s own doc comment.
+    if (extracted) await resolveVesselIdentity(extracted.id, normalized);
 
     result.listingsIndexed += 1;
   }

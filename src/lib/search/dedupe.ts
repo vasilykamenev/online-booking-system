@@ -29,7 +29,25 @@ export interface DuplicateAssessment {
   vetoedBy?: string;
 }
 
-function sharesImage(a: VesselSearchResult, b: VesselSearchResult): boolean {
+/**
+ * The subset of `VesselSearchResult` `assessDuplicate` actually compares — extracted so
+ * `server/search/identity/vessel-identity.ts` (Э11) can score a fresh offer against a persisted
+ * `vessel_identities` snapshot row (which has no rental/availability/etc. to speak of) without
+ * building a fake full `VesselSearchResult` just to satisfy this function's parameter type.
+ * `VesselSearchResult` already structurally satisfies this — every existing caller here keeps
+ * passing full results unchanged.
+ */
+export interface DuplicateComparable {
+  name: string | null;
+  year: number | null;
+  lengthMeters: number | null;
+  manufacturer: string | null;
+  model: string | null;
+  location: { city: string | null; marina: string | null };
+  images: { url: string }[];
+}
+
+function sharesImage(a: DuplicateComparable, b: DuplicateComparable): boolean {
   if (a.images.length === 0 || b.images.length === 0) return false;
   const urls = new Set(a.images.map((image) => image.url));
   return b.images.some((image) => urls.has(image.url));
@@ -48,7 +66,7 @@ function labelsEqual(a: string | null, b: string | null): boolean | null {
  * beyond measurement noise — charter sites round differently, so the tolerance is generous, but
  * a metre and a half apart is a different boat.
  */
-export function assessDuplicate(a: VesselSearchResult, b: VesselSearchResult): DuplicateAssessment {
+export function assessDuplicate(a: DuplicateComparable, b: DuplicateComparable): DuplicateAssessment {
   const signals: Record<string, number> = {};
 
   if (a.year !== null && b.year !== null && a.year !== b.year) {
@@ -182,6 +200,7 @@ export function mergeResults(
     ],
     ratingAvg: fillScalar(primary.ratingAvg, duplicate.ratingAvg),
     ratingCount: fillScalar(primary.ratingCount, duplicate.ratingCount),
+    vesselIdentityId: fillScalar(primary.vesselIdentityId, duplicate.vesselIdentityId),
     // Every listing the vessel was found on stays reachable — spec §14 forbids dropping a source.
     alternateSources: [
       ...primary.alternateSources,
@@ -208,14 +227,28 @@ export function mergeResults(
  * O(n²) by design: a global search returns tens of offers, not thousands, and every candidate pair
  * has to be assessed on several signals. Blocking by a cheap key (e.g. first name token) is the
  * obvious optimization if result volumes ever justify it.
+ *
+ * Э11 (Арх §17): a pair sharing a non-null `vesselIdentityId` is merged immediately, without ever
+ * calling `assessDuplicate` — the background indexer (`server/search/identity/vessel-identity.ts`)
+ * already resolved that pair's identity, possibly with an AI arbitration call this per-request pass
+ * has no reason to redo. `assessDuplicate` remains the fallback for any pair the indexer hasn't
+ * linked yet (a listing seen for the first time this request, or an internal result, which never
+ * carries a `vesselIdentityId` at all).
  */
 export function dedupeResults(results: VesselSearchResult[]): VesselSearchResult[] {
   const merged: VesselSearchResult[] = [];
 
   for (const candidate of results) {
-    const existingIndex = merged.findIndex(
-      (existing) => assessDuplicate(existing, candidate).confident,
-    );
+    const existingIndex = merged.findIndex((existing) => {
+      if (
+        candidate.vesselIdentityId !== null &&
+        existing.vesselIdentityId !== null &&
+        candidate.vesselIdentityId === existing.vesselIdentityId
+      ) {
+        return true;
+      }
+      return assessDuplicate(existing, candidate).confident;
+    });
     if (existingIndex === -1) {
       merged.push(candidate);
       continue;

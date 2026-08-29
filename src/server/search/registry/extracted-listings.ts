@@ -80,7 +80,7 @@ function rowToStoredListing(row: ListingRow): StoredListing {
   return { fields: fields as Partial<ListingFields>, fieldProvenance: row.field_provenance ?? {} };
 }
 
-export async function recordExtraction(input: RecordExtractionInput): Promise<void> {
+export async function recordExtraction(input: RecordExtractionInput): Promise<{ id: string } | null> {
   const supabase = createAdminClient();
 
   const { data: existingRow } = await supabase
@@ -147,7 +147,7 @@ export async function recordExtraction(input: RecordExtractionInput): Promise<vo
     .select("id")
     .single();
 
-  if (!upserted) return; // best-effort — a failed upsert leaves both conflict lists moot
+  if (!upserted) return null; // best-effort — a failed upsert leaves both conflict lists moot
 
   if (merged.newConflicts.length > 0) {
     await supabase.from("search_field_conflicts").insert(
@@ -168,6 +168,8 @@ export async function recordExtraction(input: RecordExtractionInput): Promise<vo
       .update({ resolved_at: new Date().toISOString(), resolution: "kept_new" })
       .eq("id", resolved.conflictId);
   }
+
+  return { id: upserted.id };
 }
 
 /**

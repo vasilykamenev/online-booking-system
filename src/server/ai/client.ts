@@ -38,6 +38,20 @@ export const AI_MODELS = {
    * sent anywhere.
    */
   messageDraft: "claude-sonnet-5",
+  /**
+   * Semantic re-ranking (Э11, Арх §16) — reordering a short, already-filtered slice by soft
+   * preference. Cheap and high-volume (up to once per search), so it gets the fast model; the task
+   * itself is "reorder", not "understand", which doesn't need `interpretation`'s stronger model.
+   */
+  semanticRanking: "claude-haiku-4-5-20251001",
+  /**
+   * Deduplication arbitration for a "grey zone" pair (Э11, Арх §17, §18 п.6) — one call per
+   * ambiguous pair the indexer's deterministic signals can't confidently resolve either way. Gets
+   * the stronger model: a wrong merge silently corrupts a vessel's price/availability history, so
+   * this is worth more reasoning than the fast model gives, and volume is bounded by how many pairs
+   * actually land in the grey zone, not by search traffic.
+   */
+  duplicateArbitration: "claude-sonnet-5",
 } as const;
 
 /**

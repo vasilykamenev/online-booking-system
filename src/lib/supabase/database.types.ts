@@ -336,6 +336,10 @@ export type Database = {
           field_provenance: Json
           guests: number | null
           id: string
+          identity_match_method:
+            | Database["public"]["Enums"]["vessel_identity_match_method"]
+            | null
+          identity_match_score: number | null
           image: string | null
           images: Json
           indexed_at: string
@@ -356,6 +360,7 @@ export type Database = {
           source_id: string
           updated_at: string
           url: string
+          vessel_identity_id: string | null
           vessel_type: Database["public"]["Enums"]["vessel_type"] | null
           vessel_type_raw: string | null
           year: number | null
@@ -376,6 +381,10 @@ export type Database = {
           field_provenance?: Json
           guests?: number | null
           id?: string
+          identity_match_method?:
+            | Database["public"]["Enums"]["vessel_identity_match_method"]
+            | null
+          identity_match_score?: number | null
           image?: string | null
           images?: Json
           indexed_at: string
@@ -396,6 +405,7 @@ export type Database = {
           source_id: string
           updated_at?: string
           url: string
+          vessel_identity_id?: string | null
           vessel_type?: Database["public"]["Enums"]["vessel_type"] | null
           vessel_type_raw?: string | null
           year?: number | null
@@ -416,6 +426,10 @@ export type Database = {
           field_provenance?: Json
           guests?: number | null
           id?: string
+          identity_match_method?:
+            | Database["public"]["Enums"]["vessel_identity_match_method"]
+            | null
+          identity_match_score?: number | null
           image?: string | null
           images?: Json
           indexed_at?: string
@@ -436,6 +450,7 @@ export type Database = {
           source_id?: string
           updated_at?: string
           url?: string
+          vessel_identity_id?: string | null
           vessel_type?: Database["public"]["Enums"]["vessel_type"] | null
           vessel_type_raw?: string | null
           year?: number | null
@@ -446,6 +461,13 @@ export type Database = {
             columns: ["source_id"]
             isOneToOne: false
             referencedRelation: "search_sources"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "external_vessel_index_vessel_identity_id_fkey"
+            columns: ["vessel_identity_id"]
+            isOneToOne: false
+            referencedRelation: "vessel_identities"
             referencedColumns: ["id"]
           },
         ]
@@ -1571,6 +1593,54 @@ export type Database = {
           },
         ]
       }
+      vessel_identities: {
+        Row: {
+          canonical_name: string | null
+          city: string | null
+          created_at: string
+          id: string
+          length_meters: number | null
+          manufacturer: string | null
+          marina: string | null
+          model: string | null
+          offer_count: number
+          representative_image: string | null
+          updated_at: string
+          vessel_type: Database["public"]["Enums"]["vessel_type"] | null
+          year: number | null
+        }
+        Insert: {
+          canonical_name?: string | null
+          city?: string | null
+          created_at?: string
+          id?: string
+          length_meters?: number | null
+          manufacturer?: string | null
+          marina?: string | null
+          model?: string | null
+          offer_count?: number
+          representative_image?: string | null
+          updated_at?: string
+          vessel_type?: Database["public"]["Enums"]["vessel_type"] | null
+          year?: number | null
+        }
+        Update: {
+          canonical_name?: string | null
+          city?: string | null
+          created_at?: string
+          id?: string
+          length_meters?: number | null
+          manufacturer?: string | null
+          marina?: string | null
+          model?: string | null
+          offer_count?: number
+          representative_image?: string | null
+          updated_at?: string
+          vessel_type?: Database["public"]["Enums"]["vessel_type"] | null
+          year?: number | null
+        }
+        Relationships: []
+      }
       vessel_images: {
         Row: {
           alt_text: Json
@@ -1805,6 +1875,7 @@ export type Database = {
       search_url_classification: "HIGH" | "MEDIUM" | "LOW" | "SKIP"
       search_url_crawl_status: "PENDING" | "FETCHED" | "FAILED" | "SKIPPED"
       user_role: "client" | "owner" | "admin"
+      vessel_identity_match_method: "SEED" | "DETERMINISTIC" | "AI"
       vessel_status: "draft" | "published" | "archived"
       vessel_type:
         | "MOTOR_YACHT"

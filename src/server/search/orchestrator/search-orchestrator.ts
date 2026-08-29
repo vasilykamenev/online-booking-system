@@ -19,6 +19,7 @@ import { internalAdapter } from "@/server/search/adapters/internal-adapter";
 import { listExternalAdaptersById } from "@/server/search/adapters/adapter-registry";
 import { runCandidatePhase } from "@/server/search/orchestrator/candidate-phase";
 import { runVerificationPhase } from "@/server/search/orchestrator/verification-phase";
+import { applySemanticRanking, hasSemanticSignal } from "@/server/ai/semantic-ranking";
 
 /**
  * The Э6 search orchestrator (docs/AI_Federated_Search_Migration_Plan_v1.md §6, Арх §13, §14, §26),
@@ -110,9 +111,15 @@ export async function runInternalSearchPhase(
   });
   errors.push(...internalOutcome.errors);
 
-  const rankedInternal = rankResults(internalOutcome.results, criteria, {
+  const deterministicInternal = rankResults(internalOutcome.results, criteria, {
     sourceReliability: await getSourceReliability().catch(() => ({})),
   });
+  // Э11 (Арх §16): reorders only within the deterministic ranking above — never re-filters, never
+  // touches a strict factor. A no-op when `criteria` carries no soft-preference signal or no
+  // `ANTHROPIC_API_KEY` is configured (`applySemanticRanking`'s own doc comment).
+  const rankedInternal = hasSemanticSignal(criteria)
+    ? await applySemanticRanking(deterministicInternal, query, criteria)
+    : deterministicInternal;
 
   const internalFirstSettings = await getInternalFirstSettings().catch(() => ({ enabled: false, minInternalResults: 3 }));
   const internalFirstShortCircuit =
@@ -208,7 +215,14 @@ export async function runExternalSearchPhase(
   // confidence — a no-op against today's scoring factors (`ranking.ts` doesn't weigh either one yet;
   // that would be a ranking-factor change, out of Э7's own scope), but keeps this orchestrator
   // correct the moment it does, without another pass over this file.
-  const ranked = rankResults(verification.results, criteria, { sourceReliability });
+  const deterministicRanked = rankResults(verification.results, criteria, { sourceReliability });
+  // Э11: same optional reorder as `runInternalSearchPhase`, applied to the combined set. Only
+  // `externalOnlyResults`'s relative order (section B) is actually observable from this — section
+  // A's internal list was already rendered from `internalPhase.internalResults`, independent of
+  // this array.
+  const ranked = hasSemanticSignal(criteria)
+    ? await applySemanticRanking(deterministicRanked, internalPhase.query, criteria)
+    : deterministicRanked;
   const externalOnlyResults = ranked.filter((result) => result.origin === "EXTERNAL");
 
   const durationMs = Date.now() - internalPhase.startedAt;

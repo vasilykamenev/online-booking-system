@@ -29,6 +29,7 @@ function row(overrides: Partial<Parameters<typeof indexRowToResult>[0]> = {}): P
     field_provenance: {},
     last_extracted_at: "2026-08-26T09:00:00.000Z",
     indexed_at: "2026-08-28T09:00:00.000Z",
+    vessel_identity_id: null,
     search_sources: { name: "Brilions", domain: "brilions.com" },
     ...overrides,
   };
@@ -65,6 +66,14 @@ describe("indexRowToResult", () => {
     // Never claimed as verified just for having been indexed — Э6's verification phase is the only
     // thing allowed to set this, and only for the request it actually ran for.
     expect(result.verifiedAt).toBeNull();
+  });
+
+  it("carries the Э11 persistent identity link when the indexer has resolved one", () => {
+    const linked = indexRowToResult(row({ vessel_identity_id: "22222222-2222-2222-2222-222222222222" }));
+    expect(linked.vesselIdentityId).toBe("22222222-2222-2222-2222-222222222222");
+
+    const unlinked = indexRowToResult(row({ vessel_identity_id: null }));
+    expect(unlinked.vesselIdentityId).toBeNull();
   });
 
   it("prefers the Э5 multi-image array over the legacy single `image` column when both are present", () => {

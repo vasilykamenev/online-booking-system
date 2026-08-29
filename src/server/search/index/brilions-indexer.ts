@@ -9,6 +9,7 @@ import {
 import { recordExtraction, resultToListingFields } from "@/server/search/registry/extracted-listings";
 import { type IndexRunResult, emptyRunResult, throttle } from "@/server/search/index/shared";
 import { recordSourceFailure, recordSourceSuccess } from "@/server/search/resilience/source-health";
+import { resolveVesselIdentity } from "@/server/search/identity/vessel-identity";
 
 /**
  * Brilions' own indexing path (Э5) — every sitemap entry, not a criteria-matched sample. Reuses
@@ -61,7 +62,7 @@ export async function indexBrilionsSource(sourceId: string): Promise<IndexRunRes
     // only its *amenities* extraction calls a model (`amenitiesCache`/`extractAmenitiesWithAi`,
     // tracked separately via `usedAi` above), and that path already carries its own provenance on
     // `normalized.fieldProvenance` rather than through `recordExtraction`'s single fieldSource.
-    await recordExtraction({
+    const extracted = await recordExtraction({
       sourceId,
       url: pageUrl,
       fields: resultToListingFields(normalized),
@@ -88,6 +89,9 @@ export async function indexBrilionsSource(sourceId: string): Promise<IndexRunRes
       })
       .eq("source_id", sourceId)
       .eq("url", pageUrl);
+
+    // Э11 (Арх §17): best-effort, never throws — see `resolveVesselIdentity`'s own doc comment.
+    if (extracted) await resolveVesselIdentity(extracted.id, normalized);
 
     result.listingsIndexed += 1;
   }

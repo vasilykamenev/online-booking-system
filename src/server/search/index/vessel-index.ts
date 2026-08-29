@@ -30,7 +30,7 @@ export const CANDIDATE_FRESHNESS_MS = 7 * 24 * 60 * 60 * 1000;
 export const CANDIDATE_QUERY_LIMIT = 300;
 
 const CANDIDATE_COLUMNS =
-  "source_id, url, external_id, name, description, price_minor, currency, guests, cabins, vessel_type, vessel_type_raw, manufacturer, model, year, length_meters, region, country, city, marina, latitude, longitude, image, images, field_provenance, last_extracted_at, indexed_at, last_seen_at, search_sources ( name, domain )";
+  "source_id, url, external_id, name, description, price_minor, currency, guests, cabins, vessel_type, vessel_type_raw, manufacturer, model, year, length_meters, region, country, city, marina, latitude, longitude, image, images, field_provenance, last_extracted_at, indexed_at, last_seen_at, vessel_identity_id, search_sources ( name, domain )";
 
 interface IndexCandidateRow extends FreshListingRow {
   source_id: string;
@@ -47,6 +47,7 @@ interface IndexCandidateRow extends FreshListingRow {
   longitude: number | null;
   images: unknown;
   indexed_at: string;
+  vessel_identity_id: string | null;
   search_sources: { name: string; domain: string } | null;
 }
 
@@ -78,6 +79,7 @@ export function indexRowToResult(row: IndexCandidateRow): VesselSearchResult {
   return {
     ...base,
     id: `${domain ?? "external"}:${row.external_id}`,
+    vesselIdentityId: row.vessel_identity_id,
     sourceId: row.source_id,
     externalId: row.external_id,
     vesselType: (row.vessel_type as VesselSearchResult["vesselType"]) ?? null,

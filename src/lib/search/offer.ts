@@ -127,9 +127,19 @@ export interface RankingInfo {
 }
 
 export interface VesselSearchResult {
-  /** Stable only within one search run — external offers have no durable identity yet. */
+  /** Stable only within one search run — use `vesselIdentityId` for identity that persists across
+   *  runs. */
   id: string;
   origin: ResultOrigin;
+  /**
+   * Э11 (Арх §17): the persistent identity this external offer was linked to by the background
+   * indexer (`server/search/identity/vessel-identity.ts`), if any — `null` until the indexer has
+   * visited this listing at least once, and always `null` for internal results (`vessels.id` is
+   * already a durable identity, so this layer doesn't cover them; see the Э11 migration's own doc
+   * comment). Two results sharing a non-null `vesselIdentityId` are the same vessel by definition —
+   * `dedupe.ts`'s `dedupeResults` merges them without re-scoring.
+   */
+  vesselIdentityId: string | null;
   /** Set for internal results so the UI can deep-link into the real booking flow. */
   internalVesselId: string | null;
   slug: string | null;
@@ -196,6 +206,7 @@ export function emptyResult(id: string, origin: ResultOrigin, source: ResultSour
   return {
     id,
     origin,
+    vesselIdentityId: null,
     internalVesselId: null,
     slug: null,
     sourceId: null,
