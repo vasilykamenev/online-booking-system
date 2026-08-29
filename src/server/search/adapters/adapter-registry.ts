@@ -25,6 +25,14 @@ export interface ExternalAdapterList {
   skippedByCoverage: number;
 }
 
+/** Shared by `listExternalAdapters` and `listExternalAdaptersById` below — the coverage/eligibility
+ *  filter is one rule, kept in one place so the two never drift into checking it differently. */
+async function eligibleSources(request?: SearchCriteria) {
+  const sources = await listEnabledSources();
+  const covered = request ? sources.filter((source) => sourceCovers(source.coverage, request)) : sources;
+  return { sources, covered };
+}
+
 /**
  * Every enabled, `status = 'active'` `search_sources` row whose coverage includes `request`'s
  * location (Э3, Арх §9) and whose adapter `supports()` it (Э4, Арх §10), each wrapped into a
@@ -33,8 +41,7 @@ export interface ExternalAdapterList {
  * configured.
  */
 export async function listExternalAdapters(request?: SearchCriteria): Promise<ExternalAdapterList> {
-  const sources = await listEnabledSources();
-  const covered = request ? sources.filter((source) => sourceCovers(source.coverage, request)) : sources;
+  const { sources, covered } = await eligibleSources(request);
 
   const adapters = covered
     .map((source) => (ADAPTER_FACTORIES_BY_DOMAIN[source.domain] ?? createGenericAdapter)(source))
@@ -44,9 +51,31 @@ export async function listExternalAdapters(request?: SearchCriteria): Promise<Ex
 }
 
 /**
+ * Same eligibility rule as `listExternalAdapters`, but keyed by `search_sources.id` (the real UUID)
+ * rather than `VesselSourceAdapter.sourceId` (a human-readable string like `"brilions"` or
+ * `"generic:example.com"`, unique among adapters but unrelated to the registry's own primary key).
+ * Э6's candidate phase needs the UUID to restrict `external_vessel_index.source_id`; its
+ * verification phase needs to go back from a candidate row's `source_id` to the adapter that can
+ * actually call `checkAvailability` on it — neither works off the string id.
+ */
+export async function listExternalAdaptersById(
+  request?: SearchCriteria,
+): Promise<{ byId: Map<string, VesselSourceAdapter>; skippedByCoverage: number }> {
+  const { sources, covered } = await eligibleSources(request);
+
+  const byId = new Map<string, VesselSourceAdapter>();
+  for (const source of covered) {
+    const adapter = (ADAPTER_FACTORIES_BY_DOMAIN[source.domain] ?? createGenericAdapter)(source);
+    if (adapter.supports(request ?? emptyCriteria)) byId.set(source.id, adapter);
+  }
+
+  return { byId, skippedByCoverage: sources.length - covered.length };
+}
+
+/**
  * The internal catalogue plus every eligible external adapter, as one uniform list — Э4's own
  * "Готово когда" ("оркестратор работает через единый список адаптеров, включая внутренний").
- * `global-search-service.ts`'s two-phase split still consults `internalAdapter` and
+ * `orchestrator/search-orchestrator.ts`'s two-phase split still consults `internalAdapter` and
  * `listExternalAdapters` separately rather than through this: BRD §8's ≤1s internal-search budget is
  * exactly why that split exists (see its own module doc comment), and unifying the two phases'
  * *timing* is Э6's job, not Э4's — this function exists for a caller that only needs the uniform

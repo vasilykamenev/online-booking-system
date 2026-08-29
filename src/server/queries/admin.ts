@@ -38,6 +38,27 @@ export async function getPublicCommissionRate(): Promise<number> {
   return getPlatformCommissionRate(createAdminClient());
 }
 
+export interface InternalFirstSettings {
+  /** Арх §14's `MIN_INTERNAL_RESULTS` gate — off by default (plan §8 п.3): the seed catalog is too
+   *  small for "internal coverage is sufficient" to be a meaningful signal yet, so short-circuiting
+   *  stays dormant until an admin turns it on. */
+  enabled: boolean;
+  minInternalResults: number;
+}
+
+/** Read through the service-role client, same as `getPublicCommissionRate` — every search
+ *  (anonymous included) needs this to decide whether to run the external phase at all. */
+export async function getInternalFirstSettings(): Promise<InternalFirstSettings> {
+  const { data, error } = await createAdminClient()
+    .from("platform_settings")
+    .select("internal_first_enabled, min_internal_results")
+    .eq("id", true)
+    .maybeSingle();
+
+  if (error || !data) return { enabled: false, minInternalResults: 3 };
+  return { enabled: data.internal_first_enabled, minInternalResults: data.min_internal_results };
+}
+
 export interface AdminProfile {
   id: string;
   email: string | null;

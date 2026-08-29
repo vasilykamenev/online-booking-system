@@ -41,7 +41,10 @@
 
 | Файл | Роль | § |
 |---|---|---|
-| `global-search-service.ts` | Оркестратор — internal/external фазы, каждая через `VesselSourceAdapter` (Э4) | §5 |
+| `orchestrator/search-orchestrator.ts` | Оркестратор (Э6, заменил `global-search-service.ts`) — fast internal-only phase + Internal First (Арх §14); внешняя фаза больше не крaулит живьём | Арх §13, §14, §26 |
+| `orchestrator/candidate-phase.ts` | Э6 Phase 1 — `external_vessel_index` → строгие фильтры → merge с внутренними → дедуп → ранжирование → TOP N | Арх §13 |
+| `orchestrator/verification-phase.ts` | Э6 Phase 2 — `checkAvailability` только для TOP N, параллельно, с таймаутом и ограничением concurrency; только при точном окне дат | Арх §13, §15 |
+| `index/vessel-index.ts` | Читающая сторона `external_vessel_index` для Phase 1 (`queryIndexCandidates`/`indexRowToResult`) — отдельно от `index/indexer.ts` (пишущая сторона, Э5) | Арх §12, §13 |
 | `internal-provider.ts` | Поиск по своей БД + `getInternalVesselById`/`isInternalVesselAvailable` (Э4) | §6 |
 | `coverage.ts` | `sourceCovers` — предфильтр источников по географии запроса (Э3) | Арх §9 |
 | `source-registry.ts` | Реестр источников — `search_sources` + capabilities + `search_source_coverage` (`listEnabledSources`) | §8, §9, §28 |
@@ -50,9 +53,9 @@
 | `adapters/adapter.ts` | `VesselSourceAdapter` (Э4, Арх §10) — заменил `adapters/adapter.ts`'s `VesselSourceAdapter` | §7, §22, §23 |
 | `adapters/internal-adapter.ts` | Внутренний каталог как адаптер — реальный `checkAvailability`/`getDetails` | Арх §10 |
 | `adapters/generic-adapter.ts`, `adapters/brilions-adapter.ts` | Обёртки существующих провайдеров (`providers/generic/`, `providers/brilions/`) в `VesselSourceAdapter` | Арх §10 |
-| `adapters/adapter-registry.ts` | Связка «адаптер ↔ активная строка реестра» — по домену, иначе по `processingType` (generic), + предфильтр по coverage и `supports()`. Заменил `adapters/adapter-registry.ts` | §8, §23, Арх §9 |
+| `adapters/adapter-registry.ts` | Связка «адаптер ↔ активная строка реестра» — по домену, иначе по `processingType` (generic), + предфильтр по coverage и `supports()`. `listExternalAdaptersById` (Э6) — та же связка, ключом по `search_sources.id`, для Phase 1/Phase 2 | §8, §23, Арх §9 |
 | `interpretation-cache.ts` | Кэш интерпретаций | §25 |
-| `search-run-log.ts` | Метрики поиска | §26 |
+| `search-run-log.ts` | Метрики поиска, включая Э6's `candidatesFromIndex`/`liveVerifications`/`internalFirstShortCircuit` | §26 |
 | `../ai/query-interpreter.ts` | AI-разбор запроса | §4 |
 | `registry/url-classification.ts` | Детерминированная классификация URL по правилам (pure) | docs/CLAUDE_SITEMAP_AI_CRAWLER_RULE.md §4 |
 | `registry/url-registry-sync.ts` | Синхронизация URL Registry (`search_source_urls`) | docs/CLAUDE_SITEMAP_AI_CRAWLER_RULE.md §3, §8 |

@@ -700,16 +700,22 @@ export type Database = {
         Row: {
           commission_rate: number
           id: boolean
+          internal_first_enabled: boolean
+          min_internal_results: number
           updated_at: string
         }
         Insert: {
           commission_rate?: number
           id?: boolean
+          internal_first_enabled?: boolean
+          min_internal_results?: number
           updated_at?: string
         }
         Update: {
           commission_rate?: number
           id?: boolean
+          internal_first_enabled?: boolean
+          min_internal_results?: number
           updated_at?: string
         }
         Relationships: []
@@ -944,6 +950,7 @@ export type Database = {
       search_runs: {
         Row: {
           ai_calls: number
+          candidates_from_index: number
           created_at: string
           degraded_reason: string | null
           duplicates_detected: number
@@ -953,9 +960,11 @@ export type Database = {
           external_results: number
           generated_queries: Json
           id: string
+          internal_first_short_circuit: boolean
           internal_results: number
           interpretation_mode: string
           interpreted_criteria: Json
+          live_verifications: number
           locale: string
           offers_extracted: number
           offers_normalized: number
@@ -968,9 +977,11 @@ export type Database = {
           sources_skipped_by_coverage: number
           sources_visited: number
           user_id: string | null
+          verification_failures: number
         }
         Insert: {
           ai_calls?: number
+          candidates_from_index?: number
           created_at?: string
           degraded_reason?: string | null
           duplicates_detected?: number
@@ -980,9 +991,11 @@ export type Database = {
           external_results?: number
           generated_queries?: Json
           id?: string
+          internal_first_short_circuit?: boolean
           internal_results?: number
           interpretation_mode?: string
           interpreted_criteria?: Json
+          live_verifications?: number
           locale: string
           offers_extracted?: number
           offers_normalized?: number
@@ -995,9 +1008,11 @@ export type Database = {
           sources_skipped_by_coverage?: number
           sources_visited?: number
           user_id?: string | null
+          verification_failures?: number
         }
         Update: {
           ai_calls?: number
+          candidates_from_index?: number
           created_at?: string
           degraded_reason?: string | null
           duplicates_detected?: number
@@ -1007,9 +1022,11 @@ export type Database = {
           external_results?: number
           generated_queries?: Json
           id?: string
+          internal_first_short_circuit?: boolean
           internal_results?: number
           interpretation_mode?: string
           interpreted_criteria?: Json
+          live_verifications?: number
           locale?: string
           offers_extracted?: number
           offers_normalized?: number
@@ -1022,6 +1039,7 @@ export type Database = {
           sources_skipped_by_coverage?: number
           sources_visited?: number
           user_id?: string | null
+          verification_failures?: number
         }
         Relationships: [
           {

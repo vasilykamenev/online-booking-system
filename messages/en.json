@@ -183,6 +183,8 @@
     "emptyCriteria": "Try being more specific — name a country, a guest count or a budget.",
     "noResults": "Nothing matched these criteria. Try removing one of the criteria above.",
     "externalSkipped": "External sources are not connected yet — these are offers from our own catalogue.",
+    "internalFirstNotice": "Our own catalogue already has enough matches for this search, so external sources weren't checked.",
+    "searchExternalCta": "Search external sources",
     "untitled": "Untitled",
     "lengthMeters": "{value} m",
     "radiusKm": "{value} km",

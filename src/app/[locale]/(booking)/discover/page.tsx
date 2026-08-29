@@ -11,9 +11,8 @@ import {
   runInternalSearchPhase,
   runExternalSearchPhase,
   type InternalSearchPhaseResult,
-} from "@/server/search/global-search-service";
+} from "@/server/search/orchestrator/search-orchestrator";
 import { buildSearchVocabulary } from "@/server/queries/search-vocabulary";
-import { listExternalAdapters } from "@/server/search/adapters/adapter-registry";
 import { DiscoverForm } from "./discover-form";
 import { GlobalResultCard } from "./result-card";
 
@@ -34,20 +33,17 @@ function toArray(value: string | string[] | undefined): string[] {
 }
 
 /**
- * Streams in once `runExternalSearchPhase` resolves (up to `externalTimeoutMs`) — see
- * `global-search-service.ts`'s module doc comment for why the search is split into two phases.
- * Reads its own translations rather than receiving them as a prop: this runs inside a `<Suspense>`
- * boundary as its own async render pass, and `getTranslations` is request-scoped/cached, so nothing
- * is lost by calling it again here.
+ * Streams in once `runExternalSearchPhase` resolves — see `orchestrator/search-orchestrator.ts`'s
+ * module doc comment for why the search is split into two phases, and for what its second phase
+ * does since Э6 (candidate query against `external_vessel_index` + bounded live verification,
+ * neither of which this component needs to orchestrate itself any more). Reads its own translations
+ * rather than receiving them as a prop: this runs inside a `<Suspense>` boundary as its own async
+ * render pass, and `getTranslations` is request-scoped/cached, so nothing is lost by calling it
+ * again here.
  */
 async function ExternalResultsSection({ internalPhase }: { internalPhase: InternalSearchPhaseResult }) {
   const t = await getTranslations("discover");
-  const { adapters, skippedByCoverage } = await listExternalAdapters(internalPhase.interpretedCriteria);
-  const { externalOnlyResults, meta } = await runExternalSearchPhase(internalPhase, {
-    externalProviders: adapters,
-    externalTimeoutMs: 15_000,
-    sourcesSkippedByCoverage: skippedByCoverage,
-  });
+  const { externalOnlyResults, meta } = await runExternalSearchPhase(internalPhase);
 
   const nothingFoundAnywhere = internalPhase.internalResults.length === 0 && externalOnlyResults.length === 0;
 
@@ -83,7 +79,11 @@ async function ExternalResultsSection({ internalPhase }: { internalPhase: Intern
         </p>
       )}
 
-      {meta.externalPhase === "SKIPPED" && (
+      {/* Э6: the external phase always runs to completion once called (a source-registry read
+          failure or zero covering sources degrades to `externalResults: 0`, not a separate
+          "skipped" state any more — see `source-registry.ts`'s own note on this) — so the same
+          "nothing external configured/found" message keys off the count instead. */}
+      {!nothingFoundAnywhere && meta.externalResults === 0 && (
         <p className="mt-6 text-xs font-light text-muted-foreground">{t("externalSkipped")}</p>
       )}
     </>
@@ -119,13 +119,25 @@ export default async function DiscoverPage({
   const rawQuery = toArray(resolved.q)[0] ?? "";
   const query = rawQuery.slice(0, 500).trim();
   const removed = toArray(resolved.remove);
+  const forceExternal = toArray(resolved.external)[0] === "1";
 
   // Fast half only (spec §5) — interpretation + internal search, no network crawl. Awaited directly
   // (not wrapped in `<Suspense>`) so chips and internal results render as part of the initial
-  // response; the external crawl is kicked off separately, below, inside a `<Suspense>` boundary.
+  // response; Э6's candidate/verification phase is kicked off separately, below, inside a
+  // `<Suspense>` boundary — unless Internal First (Арх §14) short-circuited it entirely, see
+  // `internalPhase.internalFirstShortCircuit` below.
   const internalPhase = query
-    ? await runInternalSearchPhase(query, { locale: locale as Locale, removedCriteria: removed })
+    ? await runInternalSearchPhase(query, { locale: locale as Locale, removedCriteria: removed, forceExternal })
     : null;
+
+  /** Preserves the query and every dismissed criterion while adding `external=1`. */
+  const searchExternalHref = (() => {
+    const next = new URLSearchParams();
+    next.set("q", query);
+    for (const value of removed) next.append("remove", value);
+    next.set("external", "1");
+    return `/discover?${next.toString()}`;
+  })();
 
   const chips = internalPhase ? criteriaToChips(internalPhase.interpretedCriteria) : [];
 
@@ -256,11 +268,25 @@ export default async function DiscoverPage({
             </>
           )}
 
-          {/* Streamed in over the same response once the external crawl resolves — never blocks the
-              internal results above (see global-search-service.ts's module doc comment). */}
-          <Suspense fallback={<ExternalResultsFallback t={t} />}>
-            <ExternalResultsSection internalPhase={internalPhase} />
-          </Suspense>
+          {/* Арх §14's Internal First: internal coverage alone already met `min_internal_results`,
+              so the external phase never ran at all — nothing to stream in, only an explicit
+              opt-in to run it anyway (see `orchestrator/search-orchestrator.ts`'s own doc comment
+              on why this is a dead end with no `<Suspense>` fallback, unlike the branch below). */}
+          {internalPhase.internalFirstShortCircuit ? (
+            <p className="mt-10 text-xs font-light text-muted-foreground">
+              {t("internalFirstNotice")}{" "}
+              <Link href={searchExternalHref} className="underline underline-offset-2 hover:text-foreground">
+                {t("searchExternalCta")}
+              </Link>
+            </p>
+          ) : (
+            // Streamed in over the same response once Э6's candidate/verification phase resolves —
+            // never blocks the internal results above (see `orchestrator/search-orchestrator.ts`'s
+            // module doc comment).
+            <Suspense fallback={<ExternalResultsFallback t={t} />}>
+              <ExternalResultsSection internalPhase={internalPhase} />
+            </Suspense>
+          )}
         </section>
       )}
     </div>

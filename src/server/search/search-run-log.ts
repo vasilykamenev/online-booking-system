@@ -36,6 +36,16 @@ export interface SearchRunRecord {
   /** Э3 (Арх §9) — enabled sources this run never consulted because their coverage didn't include
    *  the request's location. */
   sourcesSkippedByCoverage: number;
+  /** Э6 (Арх §13, §14) — rows `candidate-phase.ts` pulled from `external_vessel_index` before
+   *  dedup/ranking/TOP-N; 0 when Internal First short-circuited or no source covered the request. */
+  candidatesFromIndex: number;
+  /** Э6 — `checkAvailability` calls `verification-phase.ts` actually attempted for the TOP-N
+   *  external candidates, and how many of those broke the adapter's own "never throw" contract. */
+  liveVerifications: number;
+  verificationFailures: number;
+  /** Э6 (Арх §14) — true when internal coverage alone met `min_internal_results` and the external
+   *  phase never ran at all. */
+  internalFirstShortCircuit: boolean;
   errors: string[];
 }
 
@@ -69,6 +79,10 @@ export async function recordSearchRun(record: SearchRunRecord): Promise<void> {
         execution_ms: record.durationMs,
         external_phase: record.externalPhase,
         sources_skipped_by_coverage: record.sourcesSkippedByCoverage,
+        candidates_from_index: record.candidatesFromIndex,
+        live_verifications: record.liveVerifications,
+        verification_failures: record.verificationFailures,
+        internal_first_short_circuit: record.internalFirstShortCircuit,
         errors: record.errors,
       });
   } catch {
