@@ -539,6 +539,18 @@ export interface AdminFieldConflict {
 // Review list for an admin, same reasoning/cap as `URL_REGISTRY_PAGE_LIMIT` above.
 const OPEN_CONFLICTS_LIMIT = 200;
 
+/** Same PostgREST `max_rows` cap this file's sibling pagination fixes exist for
+ *  (`url-registry-sync.ts`'s `SOURCE_URLS_PAGE_SIZE`) — a source with more listings than this (e.g.
+ *  sailica.com's ~1900) would otherwise silently see conflicts for only its first page of listings. */
+const LISTINGS_PAGE_SIZE = 1000;
+
+/** `.in("listing_id", ids)` puts every id straight into the request URL — a source with a few
+ *  hundred listings already produces a query string long enough to hit "URI too long" (observed
+ *  live on brilions.com's 312 listings, well under `UPSERT_CHUNK_SIZE`'s 500 used elsewhere in this
+ *  codebase for the same kind of chunking, which is sized for a request *body*, not a URL). Kept
+ *  deliberately smaller than that for exactly this reason. */
+const CONFLICT_LISTING_CHUNK_SIZE = 150;
+
 /** Open (unresolved) `search_field_conflicts` for a source (docs/data-merger-provenance-design.md §3.3,
  *  phase P2) — a field the extraction cascade re-derived and got a different answer for than what's
  *  already stored in `external_vessel_index`, still unconfirmed by a second crawl. Two queries
@@ -548,27 +560,54 @@ const OPEN_CONFLICTS_LIMIT = 200;
 export async function getOpenFieldConflicts(sourceId: string): Promise<AdminFieldConflict[]> {
   const supabase = await createClient();
 
-  const { data: listings, error: listingsError } = await supabase
-    .from("external_vessel_index")
-    .select("id, url")
-    .eq("source_id", sourceId);
-  throwIfSupabaseError(listingsError);
-  if (!listings || listings.length === 0) return [];
+  const listings: { id: string; url: string }[] = [];
+  for (let offset = 0; ; offset += LISTINGS_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("external_vessel_index")
+      .select("id, url")
+      .eq("source_id", sourceId)
+      .order("id", { ascending: true })
+      .range(offset, offset + LISTINGS_PAGE_SIZE - 1);
+    throwIfSupabaseError(error);
+    if (!data || data.length === 0) break;
+    listings.push(...data);
+    if (data.length < LISTINGS_PAGE_SIZE) break;
+  }
+  if (listings.length === 0) return [];
 
   const urlByListingId = new Map(listings.map((row) => [row.id, row.url]));
-  const { data: conflicts, error: conflictsError } = await supabase
-    .from("search_field_conflicts")
-    .select("id, listing_id, field, previous_value, new_value, previous_source, new_source, detected_at")
-    .in(
-      "listing_id",
-      listings.map((row) => row.id),
-    )
-    .is("resolved_at", null)
-    .order("detected_at", { ascending: false })
-    .limit(OPEN_CONFLICTS_LIMIT);
-  throwIfSupabaseError(conflictsError);
+  const listingIds = listings.map((row) => row.id);
 
-  return (conflicts ?? []).map((row) => ({
+  type ConflictRow = {
+    id: string;
+    listing_id: string;
+    field: string;
+    previous_value: unknown;
+    new_value: unknown;
+    previous_source: Database["public"]["Enums"]["search_field_source"];
+    new_source: Database["public"]["Enums"]["search_field_source"];
+    detected_at: string;
+  };
+  const conflictRows: ConflictRow[] = [];
+  for (let i = 0; i < listingIds.length; i += CONFLICT_LISTING_CHUNK_SIZE) {
+    const { data, error } = await supabase
+      .from("search_field_conflicts")
+      .select("id, listing_id, field, previous_value, new_value, previous_source, new_source, detected_at")
+      .in("listing_id", listingIds.slice(i, i + CONFLICT_LISTING_CHUNK_SIZE))
+      .is("resolved_at", null)
+      .order("detected_at", { ascending: false })
+      .limit(OPEN_CONFLICTS_LIMIT);
+    throwIfSupabaseError(error);
+    if (data) conflictRows.push(...data);
+  }
+
+  // Each chunk above is independently ordered/capped — merging chunks means re-sorting and
+  // re-capping the combined set before returning, or a source with several chunks could return more
+  // than `OPEN_CONFLICTS_LIMIT` rows, or an older row from an early chunk could outrank a newer one
+  // from a later chunk.
+  conflictRows.sort((a, b) => new Date(b.detected_at).getTime() - new Date(a.detected_at).getTime());
+
+  return conflictRows.slice(0, OPEN_CONFLICTS_LIMIT).map((row) => ({
     id: row.id,
     url: urlByListingId.get(row.listing_id) ?? "",
     field: row.field,
