@@ -33,6 +33,15 @@ type SupabaseServerClient = SupabaseClient<Database>;
 
 const UPSERT_CHUNK_SIZE = 500;
 
+/** PostgREST's `max_rows` (`supabase/config.toml`) caps any single `.select()` at 1000 rows with no
+ *  error or truncation signal — `.data` just silently comes back short. `listAllSelectedUrls` below
+ *  already pages through with `.range()` for exactly this reason; every other read here that needs
+ *  a source's *complete* `search_source_urls` set (not a sample) must too, once a source's registry
+ *  grows past 1000 rows (sailica.com: ~3,000+) — found live when a newly added crawl rule only
+ *  reclassified the first ~1000 of ~3,000 stored URLs, silently leaving the rest on their stale
+ *  classification. */
+const SOURCE_URLS_PAGE_SIZE = 1000;
+
 function chunk<T>(items: T[], size: number): T[][] {
   const chunks: T[][] = [];
   for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
@@ -76,17 +85,28 @@ async function loadAutoSelect(supabase: SupabaseServerClient, sourceId: string):
 
 /** Existing manual overrides for a source, keyed by URL — read once per sync/reclassify so a
  *  re-classification never clobbers an admin's explicit per-URL pin (spec: selection "by list" must
- *  survive a rules/auto-select change, not just the initial sync). */
+ *  survive a rules/auto-select change, not just the initial sync). Also `reclassifyStoredUrls`'s only
+ *  source of "every URL currently on file" — its own `url` keys double as that list, so there's no
+ *  separate select to keep paginated in sync with this one. */
 async function loadExistingOverrides(
   supabase: SupabaseServerClient,
   sourceId: string,
 ): Promise<Map<string, boolean | null>> {
-  const { data } = await supabase
-    .from("search_source_urls")
-    .select("url, selection_override")
-    .eq("source_id", sourceId);
+  const overrides = new Map<string, boolean | null>();
 
-  return new Map((data ?? []).map((row) => [row.url, row.selection_override]));
+  for (let offset = 0; ; offset += SOURCE_URLS_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("search_source_urls")
+      .select("url, selection_override")
+      .eq("source_id", sourceId)
+      .order("id", { ascending: true })
+      .range(offset, offset + SOURCE_URLS_PAGE_SIZE - 1);
+    if (error || !data) break;
+    for (const row of data) overrides.set(row.url, row.selection_override);
+    if (data.length < SOURCE_URLS_PAGE_SIZE) break;
+  }
+
+  return overrides;
 }
 
 interface ClassifiedRow {
@@ -182,15 +202,27 @@ async function pruneForeignUrls(
   sourceId: string,
   origin: string,
 ): Promise<number> {
-  const { data } = await supabase
-    .from("search_source_urls")
-    .select("id, url")
-    .eq("source_id", sourceId);
+  const foreignIds: string[] = [];
 
-  const foreignIds = (data ?? []).filter((row) => !row.url.startsWith(origin)).map((row) => row.id);
+  for (let offset = 0; ; offset += SOURCE_URLS_PAGE_SIZE) {
+    const { data, error } = await supabase
+      .from("search_source_urls")
+      .select("id, url")
+      .eq("source_id", sourceId)
+      .order("id", { ascending: true })
+      .range(offset, offset + SOURCE_URLS_PAGE_SIZE - 1);
+    if (error || !data) break;
+    foreignIds.push(...data.filter((row) => !row.url.startsWith(origin)).map((row) => row.id));
+    if (data.length < SOURCE_URLS_PAGE_SIZE) break;
+  }
   if (foreignIds.length === 0) return 0;
 
-  await supabase.from("search_source_urls").delete().in("id", foreignIds);
+  // Deleting can't use the same page size as the read above — `.in()` with 1000+ UUIDs risks the
+  // exact "URI too long" failure this codebase has already hit elsewhere (`admin.ts`'s
+  // `getOpenFieldConflicts`) — so this chunks the delete itself, independent of the read loop above.
+  for (let i = 0; i < foreignIds.length; i += UPSERT_CHUNK_SIZE) {
+    await supabase.from("search_source_urls").delete().in("id", foreignIds.slice(i, i + UPSERT_CHUNK_SIZE));
+  }
   return foreignIds.length;
 }
 
@@ -250,20 +282,23 @@ export async function syncSourceUrlRegistry(
  * (or forcing) a full re-crawl. Preserves manual overrides the same way `syncSourceUrlRegistry` does.
  */
 export async function reclassifyStoredUrls(supabase: SupabaseServerClient, sourceId: string): Promise<number> {
-  const [existing, rules, autoSelect] = await Promise.all([
-    supabase.from("search_source_urls").select("url, selection_override").eq("source_id", sourceId),
+  // `loadExistingOverrides` already pages through the *complete* set (see its own doc comment) —
+  // its keys are every URL on file for this source, which is exactly what used to come from this
+  // function's own separate, unpaginated select (silently capped at PostgREST's 1000-row default).
+  const [overrides, rules, autoSelect] = await Promise.all([
+    loadExistingOverrides(supabase, sourceId),
     loadCrawlRules(supabase, sourceId),
     loadAutoSelect(supabase, sourceId),
   ]);
 
-  const rows = (existing.data ?? []).map((row): ClassifiedRow => {
-    const { classification, priority } = classifyUrl(pathOf(row.url), rules);
+  const rows = [...overrides.entries()].map(([url, override]): ClassifiedRow => {
+    const { classification, priority } = classifyUrl(pathOf(url), rules);
     return {
       source_id: sourceId,
-      url: row.url,
+      url,
       classification,
       priority,
-      selected: row.selection_override ?? autoSelect.includes(classification),
+      selected: override ?? autoSelect.includes(classification),
     };
   });
 

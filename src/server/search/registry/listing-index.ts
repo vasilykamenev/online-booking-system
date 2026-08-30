@@ -94,6 +94,16 @@ const PROVENANCE_FIELDS: { row: keyof ListingFieldProvenance; result: string }[]
  * queries (an Estonia query among them) until this guard went in. Dropping it here self-heals every
  * already-corrupted row without a data migration — the next live confirmation (if any) still writes
  * through `AI`/`SELECTOR` normally, which this guard leaves untouched.
+ *
+ * Deliberately checks `=== "JSON_LD"` specifically, not "any structured-data source" — the
+ * background indexer's own breadcrumb-to-vocabulary resolution (`index/location-resolver.ts`'s
+ * `resolveLocationFromBreadcrumb`, written as `BREADCRUMB`, not `JSON_LD`, since a second bug found
+ * live: every row from that indexer used to inherit the extraction *tier's* source label — typically
+ * `JSON_LD` for a `STRUCTURED_DATA` source — which meant this exact guard nulled the indexer's own,
+ * genuinely non-query-scoped location on every read, silently zeroing every location-scoped search
+ * against such a source (`matchesKnownCriteria`'s hard "no location at all" filter then excluded
+ * every row). `BREADCRUMB` rows are a stable fact about the page, not a leftover confirmation, and
+ * this guard must never start treating them the same way.
  */
 export function listingRowToResult(row: FreshListingRow, source: ResultSource): VesselSearchResult {
   const result = emptyResult(`${source.domain}:${source.url}`, "EXTERNAL", source);

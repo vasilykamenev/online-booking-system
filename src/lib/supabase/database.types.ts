@@ -1863,7 +1863,7 @@ export type Database = {
         | "REDIRECT_ONLY"
       search_crawl_rule_pattern_type: "PREFIX" | "REGEX"
       search_external_phase: "SKIPPED" | "PENDING" | "COMPLETE" | "FAILED"
-      search_field_source: "SELECTOR" | "JSON_LD" | "AI" | "MANUAL"
+      search_field_source: "SELECTOR" | "JSON_LD" | "AI" | "MANUAL" | "BREADCRUMB"
       search_processing_type:
         | "API"
         | "HTML"
@@ -2061,7 +2061,7 @@ export const Constants = {
       ],
       search_crawl_rule_pattern_type: ["PREFIX", "REGEX"],
       search_external_phase: ["SKIPPED", "PENDING", "COMPLETE", "FAILED"],
-      search_field_source: ["SELECTOR", "JSON_LD", "AI", "MANUAL"],
+      search_field_source: ["SELECTOR", "JSON_LD", "AI", "MANUAL", "BREADCRUMB"],
       search_processing_type: [
         "API",
         "HTML",

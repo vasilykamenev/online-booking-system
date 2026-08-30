@@ -42,6 +42,9 @@ import { resolveVesselIdentity } from "@/server/search/identity/vessel-identity"
 const PAGE_CACHE_MS = 24 * 60 * 60 * 1000;
 const SELECTOR_CONFIDENCE = 0.95;
 const JSON_LD_CONFIDENCE = 0.9;
+/** `resolveLocationFromBreadcrumb`'s own confidence — an exact match against our own `locations`
+ *  vocabulary, not a page-markup parse, so it earns a touch more trust than a bare `JSON_LD` field. */
+const BREADCRUMB_CONFIDENCE = 0.95;
 
 /** Global aliases (`source_id is null`) plus this source's own overrides — same precedence the Э1
  *  migration's seed comment describes for `vessel_type_aliases`. */
@@ -222,6 +225,32 @@ async function indexGenericSource(source: NonNullable<Awaited<ReturnType<typeof 
       retrievedAt,
       image: normalized.images[0]?.url ?? null,
     });
+
+    // Fix (found live): a resolved breadcrumb location must never be tagged with the tier's own
+    // `fieldSource` (typically `JSON_LD`) — `registry/listing-index.ts`'s stale-JSON-LD read guard
+    // exists specifically for the *live* path's per-query breadcrumb confirmation
+    // (`structured-data.ts`'s `matchBreadcrumbLocation`), and nulls country/city on every read for
+    // any row carrying that tag. `resolveLocationFromBreadcrumb`'s result is a genuinely different,
+    // non-query-scoped fact (that module's own doc comment) and needs its own source so that guard
+    // leaves it alone — a second, immediately-following `recordExtraction` call overwrites just these
+    // two fields' provenance via the ordinary "confirmed, same value" merge path (the value itself
+    // already went into `normalized`/the call above; this only corrects who gets credited for it).
+    // Observed effect of not doing this: every location-scoped search against a source whose location
+    // comes from structured data (any `STRUCTURED_DATA`-strategy source) silently returned zero
+    // external candidates — `matchesKnownCriteria`'s hard "no location at all" filter saw a
+    // read-time-wiped-to-null location on every single row.
+    if (resolvedLocation?.country || resolvedLocation?.city) {
+      await recordExtraction({
+        sourceId,
+        url: candidate.url,
+        fields: { country: resolvedLocation.country, city: resolvedLocation.city },
+        fieldSource: "BREADCRUMB",
+        confidence: BREADCRUMB_CONFIDENCE,
+        sourceUrl: candidate.url,
+        retrievedAt,
+        image: null,
+      });
+    }
 
     // `recordExtraction` owns the legacy flat comparison columns + provenance/conflicts above —
     // this only fills the Э5-only columns it doesn't touch.
