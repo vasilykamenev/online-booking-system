@@ -39,10 +39,17 @@ type UrlClassification = Database["public"]["Enums"]["search_url_classification"
 /** Server Actions inherit their invoking page's `maxDuration` (Next.js docs: "set maxDuration at the
  *  page level to change the default timeout of all Server Actions used on the page") — this page's
  *  `ReindexButton` kicks off `reindexSearchSource`'s `after()`-detached crawl (`actions/admin.ts`'s
- *  own doc comment), which needs materially more room than the platform default to have any chance
- *  of finishing a several-hundred-URL source at the crawler's 1 req/sec throttle. Vercel clamps this
- *  to whatever the project's actual plan allows, so requesting more than that is harmless. */
-export const maxDuration = 800;
+ *  own doc comment).
+ *
+ *  Fix (found live): a first attempt set this to `800`, assuming Vercel would silently clamp an
+ *  over-limit value to whatever the plan actually allows — wrong. On the Hobby plan this is a hard
+ *  build-time validation error ("must have a maxDuration between 1 and 300"), not a clamp, and broke
+ *  the production deploy outright. `300` is this plan's actual ceiling — already Next.js's own
+ *  platform default (per the project's own knowledge-update notes), so this line is mostly
+ *  documentation of *why* 300 rather than a real increase; the `after()` detachment's actual benefit
+ *  is that the button's own response no longer waits on the crawl, not that the crawl itself gets
+ *  more room to run than it already had. */
+export const maxDuration = 300;
 
 export async function generateMetadata({
   params,

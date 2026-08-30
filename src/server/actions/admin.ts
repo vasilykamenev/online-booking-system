@@ -740,10 +740,14 @@ export interface ReindexSearchSourceResult {
  * afternoon). `indexSource` now runs via `after()` instead — the response returns as soon as the
  * source is confirmed to exist, and the admin watches real progress through
  * `reindex-progress.ts`'s already-polled `reindex_started_at/total/processed` columns
- * (`ReindexProgressIndicator`) rather than this call's return value. This page sets its own
- * `maxDuration` (Server Actions inherit their invoking page's) so the background crawl gets more
- * room than the platform default — a source that still doesn't fit even that gets cut off same as
- * before, just visibly (its progress row simply stops advancing) instead of erroring the click.
+ * (`ReindexProgressIndicator`) rather than this call's return value.
+ *
+ * This does not raise the actual time budget — the Hobby plan hard-caps `maxDuration` at 300s (a
+ * first attempt tried `800`, which isn't a soft clamp but a build-time deploy error on this plan;
+ * see the `urls/page.tsx` `maxDuration` export this Server Action inherits) — a source whose crawl
+ * still can't finish inside that same 300s gets cut off exactly as before. What changed is how that
+ * shows up: the click itself never blocks or errors any more, and a truncated run is now visible as
+ * its progress row simply stopping instead of a scary `504` on the button.
  */
 export async function reindexSearchSource(locale: Locale, sourceId: string): Promise<ReindexSearchSourceResult> {
   const supabase = await createClient();
