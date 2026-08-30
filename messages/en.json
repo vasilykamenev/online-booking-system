@@ -1358,8 +1358,7 @@
         "resyncNoSitemap": "No sitemap found — URLs were collected by following links from the base URL",
         "reindexNow": "Index now",
         "reindexing": "Indexing…",
-        "reindexSuccess": "Indexing complete — {listed} of {total} added to the index",
-        "reindexFailed": "Couldn't fetch {count} pages",
+        "reindexStarted": "Indexing started in the background — progress is shown below",
         "reindexProgress": {
           "compact": "Indexing: {percent}%",
           "bar": "Processed {processed} of {total}"

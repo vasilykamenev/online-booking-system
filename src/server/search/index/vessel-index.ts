@@ -101,17 +101,28 @@ export function indexRowToResult(row: IndexCandidateRow): VesselSearchResult {
 
 /**
  * Every indexed listing from `sourceIds` fresh enough to offer (Э5's `last_seen_at`), narrowed to
- * this candidate query's cheap SQL-level filters — vessel type and guest capacity, both applied
- * null-tolerantly (an unclassified row stays a candidate; only a definite mismatch is excluded),
- * mirroring `matchesKnownCriteria`'s own null-tolerant rule so a row this query keeps is never one
- * that rule would then throw away anyway. Everything else criteria can hard-filter on (location,
- * per `matchesKnownCriteria`) or soft-score (price, per `ranking.ts`) is left to the caller — see
- * this module's own doc comment on why reading the (still small) index whole and filtering in
- * application code is the right trade-off today.
+ * this candidate query's cheap SQL-level filters — vessel type, guest capacity, and (fix below)
+ * country/city, all applied null-tolerantly (an unclassified row stays a candidate; only a definite
+ * mismatch is excluded), mirroring `matchesKnownCriteria`'s own null-tolerant rule so a row this
+ * query keeps is never one that rule would then throw away anyway. Price is the one thing left to
+ * the caller to soft-score (`ranking.ts`) rather than filter here.
  *
  * `sourceIds` empty (no enabled source covers this request's location, Э3) short-circuits to an
  * empty result without a query — an empty `.in()` filter would otherwise match nothing anyway, but
  * skipping the round-trip makes that case free rather than merely cheap.
+ *
+ * Fix (found live): this used to order every covered source's rows together by `indexed_at` and take
+ * only the freshest `CANDIDATE_QUERY_LIMIT`, on the doc comment's own now-stale assumption that the
+ * whole index across every source combined was small enough for that cap to matter only as a safety
+ * valve. Once a single source's catalog alone (sailica.com, ~1900 rows) exceeded that assumption,
+ * whichever source had most recently been reindexed silently crowded every other source's rows
+ * entirely out of the top-N window regardless of relevance — a location-scoped query for a country
+ * only sailica actually covers came back completely empty the moment brilions.com (an
+ * unrelated-country source) happened to have been reindexed more recently, since its ~300 fresh rows
+ * alone filled the whole cap before a single sailica row's turn came up. The SQL-level country/city
+ * filter below is exactly what this module's own doc comment already anticipated as the fix once the
+ * index outgrew "a few hundred rows across all sources combined" — narrowing the *competing* rows to
+ * ones that can actually match, before recency ever gets a say in which 300 survive.
  */
 export async function queryIndexCandidates(
   criteria: SearchCriteria,
@@ -133,6 +144,12 @@ export async function queryIndexCandidates(
   }
   if (criteria.capacity?.persons) {
     query = query.or(`guests.is.null,guests.gte.${criteria.capacity.persons}`);
+  }
+  if (criteria.location?.country) {
+    query = query.or(`country.is.null,country.eq.${criteria.location.country}`);
+  }
+  if (criteria.location?.city) {
+    query = query.or(`city.is.null,city.eq.${criteria.location.city}`);
   }
 
   const { data, error } = await query;

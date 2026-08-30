@@ -36,6 +36,14 @@ import { ReindexProgressIndicator } from "../../reindex-progress-indicator";
 
 type UrlClassification = Database["public"]["Enums"]["search_url_classification"];
 
+/** Server Actions inherit their invoking page's `maxDuration` (Next.js docs: "set maxDuration at the
+ *  page level to change the default timeout of all Server Actions used on the page") — this page's
+ *  `ReindexButton` kicks off `reindexSearchSource`'s `after()`-detached crawl (`actions/admin.ts`'s
+ *  own doc comment), which needs materially more room than the platform default to have any chance
+ *  of finishing a several-hundred-URL source at the crawler's 1 req/sec throttle. Vercel clamps this
+ *  to whatever the project's actual plan allows, so requesting more than that is harmless. */
+export const maxDuration = 800;
+
 export async function generateMetadata({
   params,
 }: {

@@ -99,12 +99,30 @@ describe("matchesKnownCriteria — location", () => {
     ).toBe(false);
   });
 
-  it("keeps a result that states a city, even one that disagrees — ranking, not this filter, handles a mismatch", () => {
+  it("excludes a result whose known city is a definite mismatch, not just unverified", () => {
     const otherCity = fishingBoat({
       location: { country: null, region: null, city: "Bodrum", marina: null, latitude: null, longitude: null },
     });
     expect(
       matchesKnownCriteria(otherCity, searchCriteriaSchema.parse({ location: { city: "Antalya" } })),
+    ).toBe(false);
+  });
+
+  it("excludes a result whose known country is a definite mismatch (the observed 'Греция' query surfacing brilions.com's Turkey-only inventory)", () => {
+    const turkey = fishingBoat({
+      location: { country: "Turkey", region: null, city: "Alanya", marina: null, latitude: null, longitude: null },
+    });
+    expect(
+      matchesKnownCriteria(turkey, searchCriteriaSchema.parse({ location: { country: "Greece" } })),
+    ).toBe(false);
+  });
+
+  it("keeps a result whose country matches, regardless of which city it states", () => {
+    const greece = fishingBoat({
+      location: { country: "Greece", region: null, city: "Athens", marina: null, latitude: null, longitude: null },
+    });
+    expect(
+      matchesKnownCriteria(greece, searchCriteriaSchema.parse({ location: { country: "Greece" } })),
     ).toBe(true);
   });
 

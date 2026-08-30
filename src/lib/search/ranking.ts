@@ -45,7 +45,9 @@ function clamp01(value: number): number {
   return Math.min(1, Math.max(0, value));
 }
 
-function sameLabel(a: string | null, b: string | null): boolean {
+/** Exported for `match-criteria.ts`'s own country/city mismatch check — same normalized comparison,
+ *  not a second implementation of it. */
+export function sameLabel(a: string | null, b: string | null): boolean {
   if (!a || !b) return false;
   return normalizeForMatch(a) === normalizeForMatch(b);
 }

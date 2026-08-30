@@ -74,19 +74,36 @@ describe("normalizeBrilionsResult — vessel type mapping", () => {
   });
 });
 
-describe("normalizeBrilionsResult — country from city-slug", () => {
-  it("resolves a known Turkish city slug to Turkey", () => {
-    expect(normalize({ citySlugGuess: "bodrum" }).location.country).toBe("Turkey");
+describe("normalizeBrilionsResult — country from the page's own stated city", () => {
+  it("resolves country from the deterministic city, not just the slug (the observed bug: a boat-named slug like 'gulet-nevra-queen-bodrum' left country null for a listing that plainly states its port)", () => {
+    const result = normalize({ citySlugGuess: "gulet", deterministic: { ...FULL_DETERMINISTIC, city: "Бодрум" } });
+    expect(result.location.country).toBe("Turkey");
   });
 
-  it("resolves a known UAE city slug to the UAE", () => {
-    expect(normalize({ citySlugGuess: "dubai" }).location.country).toBe("United Arab Emirates");
+  it("resolves the same city string to the same country regardless of which slug happened to precede it — the exact inconsistency observed live (two rows both stating 'Бодрум', one 'Turkey', one null)", () => {
+    const cityPrefixed = normalize({ citySlugGuess: "bodrum", deterministic: { ...FULL_DETERMINISTIC, city: "Бодрум" } });
+    const boatNamed = normalize({ citySlugGuess: "okay", deterministic: { ...FULL_DETERMINISTIC, city: "Бодрум" } });
+    expect(cityPrefixed.location.country).toBe(boatNamed.location.country);
+    expect(boatNamed.location.country).toBe("Turkey");
   });
 
-  it("leaves country null for an unrecognized slug rather than guessing", () => {
-    // "gulet" names a boat category in some slugs, not a city — the normalizer must not pretend
-    // to know the country just because most slugs happen to be city-prefixed.
-    expect(normalize({ citySlugGuess: "gulet" }).location.country).toBeNull();
+  it("resolves a UAE city stated on the page even off a non-matching slug", () => {
+    const result = normalize({ citySlugGuess: "hadron", deterministic: { ...FULL_DETERMINISTIC, city: "Дубай" } });
+    expect(result.location.country).toBe("United Arab Emirates");
+  });
+
+  it("falls back to the slug guess when the page states no city at all", () => {
+    expect(
+      normalize({ citySlugGuess: "bodrum", deterministic: { ...FULL_DETERMINISTIC, city: null } }).location
+        .country,
+    ).toBe("Turkey");
+  });
+
+  it("leaves country null when neither the stated city nor the slug identify a known country", () => {
+    expect(
+      normalize({ citySlugGuess: "gulet", deterministic: { ...FULL_DETERMINISTIC, city: null } }).location
+        .country,
+    ).toBeNull();
   });
 });
 

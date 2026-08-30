@@ -10,8 +10,10 @@ import { reindexSearchSource } from "@/server/actions/admin";
 import { Button } from "@/components/ui/button";
 
 /** Э5's manual trigger — same "run the background job on demand" pattern as `ResyncUrlsButton`,
- *  for the indexer instead of the URL Registry sync. Can take a while (every `selected` URL, live
- *  fetches included) — the pending spinner is the only feedback until it resolves, same as resync. */
+ *  for the indexer instead of the URL Registry sync. The action itself now returns as soon as the
+ *  crawl is scheduled (`actions/admin.ts`'s own doc comment on why) — this button's own pending
+ *  spinner is therefore only ever brief; `ReindexProgressIndicator` on this same page is the actual
+ *  feedback for the run itself, polled independently of this click. */
 export function ReindexButton({ sourceId }: { sourceId: string }) {
   const t = useTranslations("admin.searchSources.urlRegistry");
   const locale = useLocale() as Locale;
@@ -25,10 +27,7 @@ export function ReindexButton({ sourceId }: { sourceId: string }) {
         toast.error(t(`resyncErrors.${result.error}`));
         return;
       }
-      toast.success(
-        t("reindexSuccess", { listed: result.listingsIndexed ?? 0, total: result.urlsConsidered ?? 0 }),
-      );
-      if (result.pagesFailed) toast.warning(t("reindexFailed", { count: result.pagesFailed }));
+      toast.success(t("reindexStarted"));
       router.refresh();
     });
   }

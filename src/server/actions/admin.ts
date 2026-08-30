@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { after } from "next/server";
 import { redirect } from "@/i18n/navigation";
 import type { Locale } from "@/i18n/routing";
 import { createClient } from "@/lib/supabase/server";
@@ -723,16 +724,26 @@ export async function resyncSearchSourceUrls(
 
 export interface ReindexSearchSourceResult {
   error?: "unauthenticated" | "forbidden" | "notFound" | "generic";
-  urlsConsidered?: number;
-  listingsIndexed?: number;
-  pagesFailed?: number;
-  aiCalls?: number;
+  started?: boolean;
 }
 
 /**
  * Manual "Индексировать сейчас" trigger (URL Registry page, Э5) — the same background walk the
  * `index-sources` cron runs on a schedule, exposed on demand: useful right after approving a new
  * source or editing its `selectorConfig`, rather than waiting for the next scheduled run.
+ *
+ * Fix (found live on prod): this used to `await indexSource(sourceId)` directly, holding the
+ * response open for the entire crawl — fine locally, but on Vercel any source with more than a
+ * couple hundred URLs at the crawler's 1 req/sec throttle (`resilience/rate-limiter.ts`) blew past
+ * the platform's function duration limit, surfacing as a bare `504`/`Vercel Runtime Timeout Error`
+ * with no partial result at all (observed on two separate production sources within the same
+ * afternoon). `indexSource` now runs via `after()` instead — the response returns as soon as the
+ * source is confirmed to exist, and the admin watches real progress through
+ * `reindex-progress.ts`'s already-polled `reindex_started_at/total/processed` columns
+ * (`ReindexProgressIndicator`) rather than this call's return value. This page sets its own
+ * `maxDuration` (Server Actions inherit their invoking page's) so the background crawl gets more
+ * room than the platform default — a source that still doesn't fit even that gets cut off same as
+ * before, just visibly (its progress row simply stops advancing) instead of erroring the click.
  */
 export async function reindexSearchSource(locale: Locale, sourceId: string): Promise<ReindexSearchSourceResult> {
   const supabase = await createClient();
@@ -747,24 +758,22 @@ export async function reindexSearchSource(locale: Locale, sourceId: string): Pro
   if (error) return { error: "generic" };
   if (!source) return { error: "notFound" };
 
-  const result = await indexSource(sourceId);
+  after(async () => {
+    const result = await indexSource(sourceId);
 
-  await logAudit(supabase, admin.id, "reindex_search_source", "search_sources", sourceId, {
-    urlsConsidered: result.urlsConsidered,
-    listingsIndexed: result.listingsIndexed,
+    await logAudit(supabase, admin.id, "reindex_search_source", "search_sources", sourceId, {
+      urlsConsidered: result.urlsConsidered,
+      listingsIndexed: result.listingsIndexed,
+    });
+
+    // Э10: `indexSource` above also just recomputed this source's `needs_reanalysis` verdict
+    // (`checkSourceStructureHealth`) — the list page's own badge needs revalidating too, not just
+    // the URL Registry page this trigger lives on.
+    revalidatePath(`/${locale}/admin/search-sources`);
+    revalidatePath(`/${locale}/admin/search-sources/${sourceId}/urls`);
   });
 
-  // Э10: `indexSource` (called above) also just recomputed this source's `needs_reanalysis` verdict
-  // (`checkSourceStructureHealth`) — the list page's own badge needs revalidating too, not just the
-  // URL Registry page this trigger lives on.
-  revalidatePath(`/${locale}/admin/search-sources`);
-  revalidatePath(`/${locale}/admin/search-sources/${sourceId}/urls`);
-  return {
-    urlsConsidered: result.urlsConsidered,
-    listingsIndexed: result.listingsIndexed,
-    pagesFailed: result.pagesFailed,
-    aiCalls: result.aiCalls,
-  };
+  return { started: true };
 }
 
 export interface FetchReindexProgressResult extends AdminReindexProgress {

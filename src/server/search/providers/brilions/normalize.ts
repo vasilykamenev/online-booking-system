@@ -55,6 +55,46 @@ function guessCountry(citySlugGuess: string): string | null {
   return null;
 }
 
+/**
+ * Fix (found live): `guessCountry(citySlugGuess)` alone left `country` null for any listing whose
+ * URL slug doesn't start with a recognized city — a boat-named slug (`gulet-alaturka-1`,
+ * `hadron-gocek`, `okay-ii-bodrum`) has a `citySlugGuess` of "gulet"/"hadron"/"okay", not the real
+ * city, even though `deterministic.city` states the real one correctly (confirmed live: the exact
+ * same "Бодрум" appears with `country: 'Turkey'` on 57 rows whose slug happened to start with
+ * "bodrum", and `country: null` on 2 rows with the identical city text but a boat-named slug) — a
+ * `location.country`-scoped search then can't hard-exclude these as a known non-match
+ * (`match-criteria.ts`'s own fix for the same underlying symptom), so they kept surfacing for
+ * queries naming a different country entirely (observed: brilions.com's Turkey-only listings
+ * showing up for a "Греция" query). `deterministic.city` — the page's own stated port, this
+ * module's only actually-reliable location signal per `sitemap.ts`'s own doc comment on
+ * `citySlugGuess` — resolves it correctly regardless of which word the slug happened to start
+ * with, and is tried first; the slug guess remains only for the rarer case where the page stated no
+ * city at all. A multi-port row ("Бодрум, Гёджек, Мармарис") still resolves via `includes` — every
+ * currently-seen combination is entirely within one of these two fleets, never split across them.
+ */
+const TURKEY_CITY_NAMES = [
+  "бодрум",
+  "гёджек",
+  "фетхие",
+  "алания",
+  "анталия",
+  "мармарис",
+  "измир",
+  "каш",
+  "кемер",
+  "стамбул",
+  "турция",
+];
+const UAE_CITY_NAMES = ["абу-даби", "дубай"];
+
+function guessCountryFromCity(city: string | null): string | null {
+  if (!city) return null;
+  const normalized = city.toLowerCase();
+  if (TURKEY_CITY_NAMES.some((name) => normalized.includes(name))) return "Turkey";
+  if (UAE_CITY_NAMES.some((name) => normalized.includes(name))) return "United Arab Emirates";
+  return null;
+}
+
 export interface NormalizeInput {
   vesselId: string;
   sourceUrl: string;
@@ -91,7 +131,7 @@ export function normalizeBrilionsResult({
     lengthMeters: deterministic.lengthMeters,
     capacity: { guests: deterministic.guests, cabins: deterministic.cabins, beds: null },
     location: {
-      country: guessCountry(citySlugGuess),
+      country: guessCountryFromCity(deterministic.city) ?? guessCountry(citySlugGuess),
       region: null,
       city: deterministic.city,
       marina: null,
