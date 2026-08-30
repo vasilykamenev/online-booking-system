@@ -333,6 +333,38 @@ export async function getSearchSourceHealthMap(): Promise<Record<string, AdminSo
   return map;
 }
 
+export interface AdminReindexProgress {
+  startedAt: string | null;
+  finishedAt: string | null;
+  total: number | null;
+  processed: number | null;
+}
+
+/**
+ * Live progress for one source's currently-running (or most recent) indexing pass — read side of
+ * `index/reindex-progress.ts`'s writes, polled from the admin UI while a run is in flight (Э5's
+ * "Индексировать сейчас" button previously had nothing to show between click and completion for a
+ * large source). Single-row, not the keyed-map shape `getSearchSourceHealthMap` uses — polled per
+ * source, not once for the whole list.
+ */
+export async function getSearchSourceReindexProgress(sourceId: string): Promise<AdminReindexProgress> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("search_sources")
+    .select("reindex_started_at, reindex_finished_at, reindex_total, reindex_processed")
+    .eq("id", sourceId)
+    .maybeSingle();
+
+  throwIfSupabaseError(error);
+
+  return {
+    startedAt: data?.reindex_started_at ?? null,
+    finishedAt: data?.reindex_finished_at ?? null,
+    total: data?.reindex_total ?? null,
+    processed: data?.reindex_processed ?? null,
+  };
+}
+
 export async function getSearchSourceById(id: string): Promise<AdminSearchSource | null> {
   const supabase = await createClient();
 

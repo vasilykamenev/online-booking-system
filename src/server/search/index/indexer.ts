@@ -21,6 +21,7 @@ import { type IndexRunResult, emptyRunResult, throttle } from "@/server/search/i
 import { isSourceCallAllowed, recordSourceFailure, recordSourceSuccess } from "@/server/search/resilience/source-health";
 import { checkSourceStructureHealth } from "@/server/search/source-structure-health";
 import { resolveVesselIdentity } from "@/server/search/identity/vessel-identity";
+import { bumpReindexProgress, finishReindexProgress, startReindexProgress } from "@/server/search/index/reindex-progress";
 
 /**
  * The background counterpart to the live path's per-request sampling (Э5, Арх §12) — walks every
@@ -92,12 +93,19 @@ async function indexGenericSource(source: NonNullable<Awaited<ReturnType<typeof 
 
   const [urls, aliases] = await Promise.all([listAllSelectedUrls(sourceId), getVesselTypeAliases(sourceId)]);
   result.urlsConsidered = urls.length;
+  startReindexProgress(sourceId, urls.length).catch(() => {});
 
   // `HTML` must stay free/deterministic (docs/search-source-processing-strategies.md §2) — same
   // rule `fetchAndNormalize`'s own `allowAi` follows.
   const allowAi = source.processingType !== "HTML";
 
-  for (const candidate of urls) {
+  for (const [urlIndex, candidate] of urls.entries()) {
+    // `bumpReindexProgress` is called once at every exit point of this loop body (each `continue`
+    // below, and the natural fall-through at the end) rather than wrapped in a `finally`, to avoid
+    // reindenting this whole already-large loop body for a progress side-effect.
+    const position = urlIndex + 1;
+    const isLastUrl = position === urls.length;
+
     // Э8: shared with `orchestrator/verification-phase.ts` now — see `resilience/rate-limiter.ts`'s
     // own doc comment. Unconditional (no more `if (index > 0)` guard): the first call for a source
     // has nothing recorded yet and returns immediately on its own.
@@ -116,6 +124,7 @@ async function indexGenericSource(source: NonNullable<Awaited<ReturnType<typeof 
       // reachability signal the circuit breaker tracks. Fire-and-forget, same as this file's other
       // best-effort side writes (`recordBreadcrumbTrail`).
       recordSourceFailure(sourceId, `fetch failed: ${candidate.url}`).catch(() => {});
+      bumpReindexProgress(sourceId, position, isLastUrl).catch(() => {});
       continue;
     }
     recordSourceSuccess(sourceId).catch(() => {});
@@ -126,6 +135,7 @@ async function indexGenericSource(source: NonNullable<Awaited<ReturnType<typeof 
       result.pagesUnchanged += 1;
       await recordFetchOutcome(candidate.id, { httpStatus: 200, contentHash, crawlStatus: "FETCHED", ranAi: false });
       await touchExtraction(sourceId, candidate.url, new Date().toISOString());
+      bumpReindexProgress(sourceId, position, isLastUrl).catch(() => {});
       continue;
     }
 
@@ -197,7 +207,10 @@ async function indexGenericSource(source: NonNullable<Awaited<ReturnType<typeof 
 
     await recordFetchOutcome(candidate.id, { httpStatus: 200, contentHash, crawlStatus: "FETCHED", ranAi });
 
-    if (!genericFields || !fieldSource || confidence === null) continue; // not a listing — nothing to index
+    if (!genericFields || !fieldSource || confidence === null) {
+      bumpReindexProgress(sourceId, position, isLastUrl).catch(() => {});
+      continue; // not a listing — nothing to index
+    }
 
     const retrievedAt = new Date().toISOString();
     const resolvedLocation = await resolveLocationFromBreadcrumb(breadcrumbLabels).catch(() => null);
@@ -272,8 +285,10 @@ async function indexGenericSource(source: NonNullable<Awaited<ReturnType<typeof 
     if (extracted) await resolveVesselIdentity(extracted.id, normalized);
 
     result.listingsIndexed += 1;
+    bumpReindexProgress(sourceId, position, isLastUrl).catch(() => {});
   }
 
+  await finishReindexProgress(sourceId, urls.length);
   return result;
 }
 

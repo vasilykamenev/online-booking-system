@@ -42,6 +42,7 @@ import {
   type CrawlPreviewResult,
 } from "@/server/search/registry/url-registry-sync";
 import { fetchRobotsInfo } from "@/server/search/crawl/robots";
+import { getSearchSourceReindexProgress, type AdminReindexProgress } from "@/server/queries/admin";
 
 type SupabaseServerClient = Awaited<ReturnType<typeof createClient>>;
 
@@ -764,6 +765,24 @@ export async function reindexSearchSource(locale: Locale, sourceId: string): Pro
     pagesFailed: result.pagesFailed,
     aiCalls: result.aiCalls,
   };
+}
+
+export interface FetchReindexProgressResult extends AdminReindexProgress {
+  error?: "unauthenticated" | "forbidden";
+}
+
+/**
+ * Client-polled read (`ReindexProgressIndicator`) behind the same admin gate as every other action
+ * here — a plain read, not a mutation, but exposed as an action rather than a route handler since
+ * the polling component is otherwise a client-only leaf with no server-rendered parent to hand it
+ * fresh props on an interval.
+ */
+export async function fetchReindexProgress(sourceId: string): Promise<FetchReindexProgressResult> {
+  const supabase = await createClient();
+  const admin = await requireAdmin(supabase);
+  if ("error" in admin) return { error: admin.error, startedAt: null, finishedAt: null, total: null, processed: null };
+
+  return getSearchSourceReindexProgress(sourceId);
 }
 
 export interface AddManualUrlsActionResult {

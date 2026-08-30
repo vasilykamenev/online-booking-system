@@ -1360,6 +1360,10 @@
         "reindexing": "Indexing…",
         "reindexSuccess": "Indexing complete — {listed} of {total} added to the index",
         "reindexFailed": "Couldn't fetch {count} pages",
+        "reindexProgress": {
+          "compact": "Indexing: {percent}%",
+          "bar": "Processed {processed} of {total}"
+        },
         "clearAll": "Clear list",
         "clearConfirm": "Delete every discovered URL for this source? This can't be undone — the next sync will rediscover them if they still exist on the site.",
         "clearSuccess": "Deleted {count} URLs",

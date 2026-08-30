@@ -1471,6 +1471,10 @@ export type Database = {
           processing_type: Database["public"]["Enums"]["search_processing_type"]
           reanalysis_sample_size: number | null
           reanalysis_success_count: number | null
+          reindex_finished_at: string | null
+          reindex_processed: number | null
+          reindex_started_at: string | null
+          reindex_total: number | null
           reliability_score: number | null
           robots_allows: boolean | null
           selector_config: Json | null
@@ -1510,6 +1514,10 @@ export type Database = {
           processing_type?: Database["public"]["Enums"]["search_processing_type"]
           reanalysis_sample_size?: number | null
           reanalysis_success_count?: number | null
+          reindex_finished_at?: string | null
+          reindex_processed?: number | null
+          reindex_started_at?: string | null
+          reindex_total?: number | null
           reliability_score?: number | null
           robots_allows?: boolean | null
           selector_config?: Json | null
@@ -1549,6 +1557,10 @@ export type Database = {
           processing_type?: Database["public"]["Enums"]["search_processing_type"]
           reanalysis_sample_size?: number | null
           reanalysis_success_count?: number | null
+          reindex_finished_at?: string | null
+          reindex_processed?: number | null
+          reindex_started_at?: string | null
+          reindex_total?: number | null
           reliability_score?: number | null
           robots_allows?: boolean | null
           selector_config?: Json | null

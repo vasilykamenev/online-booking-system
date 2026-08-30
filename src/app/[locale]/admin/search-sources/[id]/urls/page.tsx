@@ -32,6 +32,7 @@ import { UrlSelectionToggle } from "./url-selection-toggle";
 import { ResolveConflictButtons } from "./resolve-conflict-buttons";
 import { CrawlRulePreview } from "./crawl-rule-preview";
 import { CLASSIFICATION_BADGE_VARIANT } from "./classification-badge";
+import { ReindexProgressIndicator } from "../../reindex-progress-indicator";
 
 type UrlClassification = Database["public"]["Enums"]["search_url_classification"];
 
@@ -88,6 +89,8 @@ export default async function SearchSourceUrlsPage({
           <ReindexButton sourceId={id} />
         </div>
       </div>
+
+      <ReindexProgressIndicator sourceId={id} variant="bar" />
 
       {total === 0 ? (
         <p className="mt-6 rounded-2xl border border-dashed border-border p-10 text-center text-sm font-light text-muted-foreground">

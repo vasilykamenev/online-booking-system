@@ -351,7 +351,13 @@ function resolveOffers(
     .map((entry) => resolveReference(entry, idIndex))
     .filter((entry): entry is Record<string, unknown> => entry !== null)
     .map((entry) => ({
-      price: parsePrice(entry.price),
+      // `Offer.price` is the common case, but a site quoting a range across cabin/rate variants
+      // publishes `AggregateOffer` instead, which has no `price` field at all — only `lowPrice`/
+      // `highPrice` (observed live on sailica.com: every listing's only offer node is an
+      // `AggregateOffer` with `lowPrice`/`highPrice` and no `price`). `lowPrice` matches this
+      // function's own "starting from" framing (its doc comment above), same as picking the
+      // cheapest of several plain `Offer`s already does.
+      price: parsePrice(entry.price ?? entry.lowPrice),
       currency: typeof entry.priceCurrency === "string" ? entry.priceCurrency.toUpperCase() : null,
       available: !UNAVAILABLE.has(availabilityTail(entry.availability) ?? ""),
     }))

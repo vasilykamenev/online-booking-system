@@ -10,6 +10,7 @@ import { recordExtraction, resultToListingFields } from "@/server/search/registr
 import { type IndexRunResult, emptyRunResult, throttle } from "@/server/search/index/shared";
 import { recordSourceFailure, recordSourceSuccess } from "@/server/search/resilience/source-health";
 import { resolveVesselIdentity } from "@/server/search/identity/vessel-identity";
+import { bumpReindexProgress, finishReindexProgress, startReindexProgress } from "@/server/search/index/reindex-progress";
 
 /**
  * Brilions' own indexing path (Э5) — every sitemap entry, not a criteria-matched sample. Reuses
@@ -33,8 +34,12 @@ export async function indexBrilionsSource(sourceId: string): Promise<IndexRunRes
   const entries = await loadSitemapEntries();
   if (!entries) return result;
   result.urlsConsidered = entries.length;
+  startReindexProgress(sourceId, entries.length).catch(() => {});
 
-  for (const entry of entries) {
+  for (const [entryIndex, entry] of entries.entries()) {
+    const position = entryIndex + 1;
+    const isLastEntry = position === entries.length;
+
     // Э8: shared with the generic indexer and live verification now — see
     // `resilience/rate-limiter.ts`'s own doc comment.
     await throttle(sourceId);
@@ -49,6 +54,7 @@ export async function indexBrilionsSource(sourceId: string): Promise<IndexRunRes
     if (!normalized) {
       result.pagesFailed += 1;
       recordSourceFailure(sourceId, `fetch failed: ${entry.urlRu}`).catch(() => {});
+      bumpReindexProgress(sourceId, position, isLastEntry).catch(() => {});
       continue;
     }
     recordSourceSuccess(sourceId).catch(() => {});
@@ -94,7 +100,9 @@ export async function indexBrilionsSource(sourceId: string): Promise<IndexRunRes
     if (extracted) await resolveVesselIdentity(extracted.id, normalized);
 
     result.listingsIndexed += 1;
+    bumpReindexProgress(sourceId, position, isLastEntry).catch(() => {});
   }
 
+  await finishReindexProgress(sourceId, entries.length);
   return result;
 }

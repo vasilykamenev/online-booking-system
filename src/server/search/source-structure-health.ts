@@ -65,19 +65,31 @@ export async function checkSourceStructureHealth(sourceId: string): Promise<Stru
     const supabase = createAdminClient();
     const since = new Date(Date.now() - RECENT_WINDOW_MS).toISOString();
 
+    const { data: sourceRow } = await supabase
+      .from("search_sources")
+      .select("supports_price")
+      .eq("id", sourceId)
+      .maybeSingle();
+    // A source honestly declared as never publishing a price (e.g. brilions.com's hand-tuned
+    // adapter — see `adapters/brilions-adapter.ts`'s own doc comment) must not be judged against a
+    // field it was never expected to yield: that would flag "structure changed" permanently, on
+    // every single check, for a source whose structure never changes and never breaks.
+    const requirePrice = sourceRow?.supports_price ?? true;
+
     const { count: total } = await supabase
       .from("external_vessel_index")
       .select("id", { count: "exact", head: true })
       .eq("source_id", sourceId)
       .gte("last_extracted_at", since);
 
-    const { count: withFields } = await supabase
+    let withFieldsQuery = supabase
       .from("external_vessel_index")
       .select("id", { count: "exact", head: true })
       .eq("source_id", sourceId)
       .gte("last_extracted_at", since)
-      .not("name", "is", null)
-      .not("price_minor", "is", null);
+      .not("name", "is", null);
+    if (requirePrice) withFieldsQuery = withFieldsQuery.not("price_minor", "is", null);
+    const { count: withFields } = await withFieldsQuery;
 
     const verdict = evaluateStructureHealth(total ?? 0, withFields ?? 0);
 

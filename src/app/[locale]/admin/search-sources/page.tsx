@@ -16,6 +16,7 @@ import {
 } from "@/components/ui/table";
 import type { Database } from "@/lib/supabase/database.types";
 import { NewSearchSourceSection } from "./new-search-source-section";
+import { ReindexProgressIndicator } from "./reindex-progress-indicator";
 import { SearchSourceToggleButton } from "./search-source-toggle-button";
 import { SearchSourceStatusActions } from "./search-source-status-actions";
 import { SearchSourceDeleteButton } from "./search-source-delete-button";
@@ -104,6 +105,9 @@ export default async function AdminSearchSourcesPage({
                     >
                       {source.domain}
                     </a>
+                    <div>
+                      <ReindexProgressIndicator sourceId={source.id} variant="compact" />
+                    </div>
                   </TableCell>
                   <TableCell className="text-sm font-light text-muted-foreground">
                     {tProcessing(source.processingType)}
