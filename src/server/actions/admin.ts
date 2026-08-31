@@ -924,7 +924,9 @@ export interface FetchReindexProgressResult extends AdminReindexProgress {
 export async function fetchReindexProgress(sourceId: string): Promise<FetchReindexProgressResult> {
   const supabase = await createClient();
   const admin = await requireAdmin(supabase);
-  if ("error" in admin) return { error: admin.error, startedAt: null, finishedAt: null, total: null, processed: null };
+  if ("error" in admin) {
+    return { error: admin.error, startedAt: null, finishedAt: null, total: null, processed: null, stopReason: null };
+  }
 
   return getSearchSourceReindexProgress(sourceId);
 }

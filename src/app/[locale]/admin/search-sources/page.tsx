@@ -106,6 +106,7 @@ export default async function AdminSearchSourcesPage({
                 <TableHead>{t("columns.robots")}</TableHead>
                 <TableHead>{t("columns.health")}</TableHead>
                 <TableHead>{t("columns.structure")}</TableHead>
+                <TableHead>{t("columns.cronError")}</TableHead>
                 <TableHead>{t("columns.status")}</TableHead>
                 <TableHead className="text-right">{t("columns.actions")}</TableHead>
               </TableRow>
@@ -180,6 +181,13 @@ export default async function AdminSearchSourcesPage({
                       <span className="text-xs font-light text-muted-foreground">
                         {source.structureCheckedAt ? t("structure.ok") : t("structure.notChecked")}
                       </span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {source.lastCronError && (
+                      <Badge variant="destructive" title={source.lastCronError}>
+                        {t("cronError.badge")}
+                      </Badge>
                     )}
                   </TableCell>
                   <TableCell>

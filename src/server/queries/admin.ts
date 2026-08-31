@@ -222,6 +222,11 @@ export interface AdminSearchSource {
   reanalysisSampleSize: number | null;
   reanalysisSuccessCount: number | null;
   structureCheckedAt: string | null;
+  /** Set only by a genuine reject inside `indexSource` during a cron run
+   *  (`api/cron/index-sources/route.ts`) — never by a clean stop (deadline/manual Stop, both
+   *  ordinary results, not exceptions). Cleared on the next run that completes without throwing. */
+  lastCronError: string | null;
+  lastCronErrorAt: string | null;
   autoSelectClassifications: Database["public"]["Enums"]["search_url_classification"][];
   notes: string | null;
   createdAt: string;
@@ -249,7 +254,7 @@ export interface AdminSearchSource {
 }
 
 const SEARCH_SOURCE_COLUMNS =
-  "id, name, domain, base_url, enabled, status, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, selector_config, image_domains, needs_reanalysis, reanalysis_sample_size, reanalysis_success_count, structure_checked_at, auto_select_classifications, notes, created_at, detailed_logging, can_details, can_availability, can_pricing, can_contact, supports_dates, supports_price, supports_guests, contact_capability, search_source_coverage(worldwide, country, region, destination, latitude, longitude, radius_km), search_source_policies(access_policy, cache_policy, attribution_policy, rate_limit_policy, retention_policy)";
+  "id, name, domain, base_url, enabled, status, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, selector_config, image_domains, needs_reanalysis, reanalysis_sample_size, reanalysis_success_count, structure_checked_at, last_cron_error, last_cron_error_at, auto_select_classifications, notes, created_at, detailed_logging, can_details, can_availability, can_pricing, can_contact, supports_dates, supports_price, supports_guests, contact_capability, search_source_coverage(worldwide, country, region, destination, latitude, longitude, radius_km), search_source_policies(access_policy, cache_policy, attribution_policy, rate_limit_policy, retention_policy)";
 
 /** Same defensively-null-on-failure convention as `parseAdminSelectorConfig` below. */
 function parseAdminSourcePolicies(raw: {
@@ -308,6 +313,8 @@ export async function getAllSearchSourcesAdmin(): Promise<AdminSearchSource[]> {
     reanalysisSampleSize: row.reanalysis_sample_size,
     reanalysisSuccessCount: row.reanalysis_success_count,
     structureCheckedAt: row.structure_checked_at,
+    lastCronError: row.last_cron_error,
+    lastCronErrorAt: row.last_cron_error_at,
     autoSelectClassifications: row.auto_select_classifications,
     notes: row.notes,
     createdAt: row.created_at,
@@ -377,6 +384,11 @@ export interface AdminReindexProgress {
   finishedAt: string | null;
   total: number | null;
   processed: number | null;
+  /** Why the run stopped between batches — `"cancelled"` (admin's manual Stop) or `"deadline"` (its
+   *  own `reindex_max_duration_seconds` budget). `null` while running or once fully completed
+   *  (`startReindexProgress`/`finishReindexProgress` both clear it). The admin UI's auto-resume reads
+   *  this to pick a `"deadline"` stop back up on its own without ever overriding a manual Stop. */
+  stopReason: "cancelled" | "deadline" | null;
 }
 
 /**
@@ -390,7 +402,7 @@ export async function getSearchSourceReindexProgress(sourceId: string): Promise<
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("search_sources")
-    .select("reindex_started_at, reindex_finished_at, reindex_total, reindex_processed")
+    .select("reindex_started_at, reindex_finished_at, reindex_total, reindex_processed, last_stop_reason")
     .eq("id", sourceId)
     .maybeSingle();
 
@@ -401,6 +413,7 @@ export async function getSearchSourceReindexProgress(sourceId: string): Promise<
     finishedAt: data?.reindex_finished_at ?? null,
     total: data?.reindex_total ?? null,
     processed: data?.reindex_processed ?? null,
+    stopReason: (data?.last_stop_reason as "cancelled" | "deadline" | null) ?? null,
   };
 }
 
@@ -438,6 +451,8 @@ export async function getSearchSourceById(id: string): Promise<AdminSearchSource
     reanalysisSampleSize: data.reanalysis_sample_size,
     reanalysisSuccessCount: data.reanalysis_success_count,
     structureCheckedAt: data.structure_checked_at,
+    lastCronError: data.last_cron_error,
+    lastCronErrorAt: data.last_cron_error_at,
     autoSelectClassifications: data.auto_select_classifications,
     notes: data.notes,
     createdAt: data.created_at,

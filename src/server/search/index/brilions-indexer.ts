@@ -116,8 +116,9 @@ export async function indexBrilionsSource(
   // See `indexer.ts`'s identical batch loop for why cancellation/deadline only check between
   // batches and progress only writes at a batch boundary.
   for (let batchStart = 0; batchStart < entries.length; batchStart += concurrency) {
-    if (Date.now() >= deadlineAt || (await isCancelRequested(sourceId))) {
-      await cancelReindexProgress(sourceId, startFrom + batchStart);
+    const deadlineHit = Date.now() >= deadlineAt;
+    if (deadlineHit || (await isCancelRequested(sourceId))) {
+      await cancelReindexProgress(sourceId, startFrom + batchStart, deadlineHit ? "deadline" : "cancelled");
       return result;
     }
 

@@ -313,11 +313,13 @@ async function indexGenericSource(
   // `result.pagesFailed`/`recordFetchOutcome` bookkeeping rather than throwing.
   for (let batchStart = 0; batchStart < urls.length; batchStart += concurrency) {
     // Deadline check alongside cancellation: both stop the run the same way (`cancelReindexProgress`
-    // — resumable, indistinguishable in the UI from a manual Stop), just triggered by a different
-    // condition. Checked in this order since a cheap `Date.now()` comparison should never wait on the
-    // `isCancelRequested` round-trip first.
-    if (Date.now() >= deadlineAt || (await isCancelRequested(sourceId))) {
-      await cancelReindexProgress(sourceId, startFrom + batchStart);
+    // — resumable, distinguished in the DB by `cancelReindexProgress`'s `reason` (the admin UI's
+    // auto-resume needs to tell "stopped by deadline" apart from "stopped by manual Stop" — only the
+    // former should resume itself). Deadline checked first since a cheap `Date.now()` comparison
+    // should never wait on the `isCancelRequested` round-trip.
+    const deadlineHit = Date.now() >= deadlineAt;
+    if (deadlineHit || (await isCancelRequested(sourceId))) {
+      await cancelReindexProgress(sourceId, startFrom + batchStart, deadlineHit ? "deadline" : "cancelled");
       return result;
     }
 

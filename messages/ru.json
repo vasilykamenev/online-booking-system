@@ -1125,6 +1125,7 @@
         "robots": "robots.txt",
         "health": "Здоровье",
         "structure": "Структура",
+        "cronError": "Крон",
         "status": "Статус",
         "actions": "Действия"
       },
@@ -1143,6 +1144,9 @@
         "notChecked": "Ещё не проверялась",
         "needsReanalysis": "Структура сайта изменилась",
         "detailTitle": "Название и цена извлечены только у {success} из {total} страниц"
+      },
+      "cronError": {
+        "badge": "Ошибка"
       },
       "notFound": {
         "title": "Источник не найден",

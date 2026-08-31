@@ -15,6 +15,14 @@ export interface ReindexStatus {
   /** Stopped (Stop click) or presumed timed out, with pages left to go — `resumeSearchSourceIndexing`
    *  has something to work with. Never true while `isRunning` is. */
   canResume: boolean;
+  /** `canResume`, narrowed to runs that stopped themselves by hitting `reindex_max_duration_seconds`
+   *  — never true for a run the admin explicitly clicked "Остановить" on (`stopReason ===
+   *  "cancelled"`), nor for one presumed-timed-out with no recorded reason at all (an older/edge-case
+   *  row predating this field, or a genuinely still-running one this hook can't yet tell apart —
+   *  safer to require an explicit "deadline" than to auto-resume something merely presumed stale).
+   *  Drives `ReindexButton`'s auto-resume (manual testing's "keep scanning until 100% while the tab
+   *  is open" request). */
+  canAutoResume: boolean;
   percent: number;
 }
 
@@ -52,7 +60,7 @@ export function useReindexStatus(sourceId: string): ReindexStatus {
   const { progress, checkedAt } = state;
 
   if (!progress || progress.error || !progress.startedAt) {
-    return { progress, isRunning: false, canResume: false, percent: 0 };
+    return { progress, isRunning: false, canResume: false, canAutoResume: false, percent: 0 };
   }
 
   const startedAt = new Date(progress.startedAt).getTime();
@@ -66,7 +74,8 @@ export function useReindexStatus(sourceId: string): ReindexStatus {
   const isStale = !isFinished && checkedAt - startedAt > REINDEX_ASSUMED_TIMEOUT_MS;
   const isRunning = !isFinished && !isStale;
   const canResume = !isRunning && total > 0 && processed < total;
+  const canAutoResume = canResume && progress.stopReason === "deadline";
   const percent = total > 0 ? Math.round((processed / total) * 100) : 0;
 
-  return { progress, isRunning, canResume, percent };
+  return { progress, isRunning, canResume, canAutoResume, percent };
 }

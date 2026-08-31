@@ -37,6 +37,9 @@ export async function startReindexProgress(sourceId: string, total: number): Pro
         // natural finish) must never bleed into a brand-new run — a fresh start always begins
         // un-cancelled.
         reindex_cancel_requested: false,
+        // Likewise a stale reason from whatever stopped the *previous* run — irrelevant to this one
+        // until it stops too.
+        last_stop_reason: null,
       })
       .eq("id", sourceId);
   } catch {
@@ -61,10 +64,18 @@ export async function isCancelRequested(sourceId: string): Promise<boolean> {
   }
 }
 
-/** Terminal write for a run stopped between batches by `isCancelRequested` — `processed` is the
- *  caller's own batch-boundary position (every page up to here is genuinely done). Resets the flag:
- *  it has now been acted on. */
-export async function cancelReindexProgress(sourceId: string, processed: number): Promise<void> {
+/** Terminal write for a run stopped between batches — `processed` is the caller's own batch-boundary
+ *  position (every page up to here is genuinely done). Resets `reindex_cancel_requested`: it has now
+ *  been acted on either way. `reason` records *why* — `"cancelled"` for the admin's manual "Остановить"
+ *  (`isCancelRequested`), `"deadline"` for the run's own `reindex_max_duration_seconds` budget — so
+ *  the admin UI's auto-resume (manual testing's "keep scanning until 100% while the tab is open"
+ *  request) can tell them apart: it should pick a `"deadline"` stop back up on its own, but must never
+ *  override an admin's explicit `"cancelled"` Stop. */
+export async function cancelReindexProgress(
+  sourceId: string,
+  processed: number,
+  reason: "cancelled" | "deadline",
+): Promise<void> {
   try {
     await createAdminClient()
       .from("search_sources")
@@ -72,6 +83,7 @@ export async function cancelReindexProgress(sourceId: string, processed: number)
         reindex_finished_at: new Date().toISOString(),
         reindex_processed: processed,
         reindex_cancel_requested: false,
+        last_stop_reason: reason,
       })
       .eq("id", sourceId);
   } catch {
@@ -112,6 +124,7 @@ export async function beginResume(sourceId: string): Promise<{ startFrom: number
         reindex_started_at: new Date().toISOString(),
         reindex_finished_at: null,
         reindex_cancel_requested: false,
+        last_stop_reason: null,
       })
       .eq("id", sourceId);
   } catch {
@@ -136,7 +149,63 @@ export async function finishReindexProgress(sourceId: string, processed: number)
   try {
     await createAdminClient()
       .from("search_sources")
-      .update({ reindex_finished_at: new Date().toISOString(), reindex_processed: processed })
+      .update({
+        reindex_finished_at: new Date().toISOString(),
+        reindex_processed: processed,
+        last_stop_reason: null,
+      })
+      .eq("id", sourceId);
+  } catch {
+    // best-effort — see module doc comment
+  }
+}
+
+/**
+ * Cron's per-tick decision for one source: fresh full pass, resume from where a previous run left
+ * off, or skip this tick entirely. Distinct from `beginResume` (which only answers "is there a
+ * genuinely resumable incomplete run" for the admin's manual "Продолжить") — cron additionally needs
+ * "never run before" and "fully completed last time" to both mean *fresh*, not "nothing to resume",
+ * since a daily reindex must keep re-walking a finished catalog, not stop forever once it once hit
+ * 100%.
+ */
+export async function resolveCronStartFrom(sourceId: string): Promise<{ startFrom: number } | null> {
+  const { data } = await createAdminClient()
+    .from("search_sources")
+    .select("reindex_total, reindex_processed")
+    .eq("id", sourceId)
+    .maybeSingle();
+
+  const total = data?.reindex_total ?? null;
+  const processed = data?.reindex_processed ?? null;
+  if (total === null || processed === null || processed >= total) {
+    return { startFrom: 0 }; // never run, or fully completed last time
+  }
+
+  const resumed = await beginResume(sourceId);
+  return resumed ? { startFrom: resumed.startFrom } : null; // null: looks genuinely still running
+}
+
+/** Set only by a genuine reject inside `indexSource` during a cron run (`index-sources/route.ts`) —
+ *  never by a clean stop (deadline/manual Stop, both ordinary results, not exceptions). Best-effort,
+ *  mirrors this module's other writes. */
+export async function recordCronError(sourceId: string, message: string): Promise<void> {
+  try {
+    await createAdminClient()
+      .from("search_sources")
+      .update({ last_cron_error: message, last_cron_error_at: new Date().toISOString() })
+      .eq("id", sourceId);
+  } catch {
+    // best-effort — see module doc comment
+  }
+}
+
+/** Cleared on any cron run that completes without throwing, regardless of whether it fully finished,
+ *  was cancelled, or hit its own deadline — none of those are errors, only an actual reject is. */
+export async function clearCronError(sourceId: string): Promise<void> {
+  try {
+    await createAdminClient()
+      .from("search_sources")
+      .update({ last_cron_error: null, last_cron_error_at: null })
       .eq("id", sourceId);
   } catch {
     // best-effort — see module doc comment

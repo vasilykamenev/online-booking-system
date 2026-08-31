@@ -1470,6 +1470,9 @@ export type Database = {
           id: string
           image_domains: string[]
           last_checked_at: string | null
+          last_cron_error: string | null
+          last_cron_error_at: string | null
+          last_stop_reason: string | null
           name: string
           needs_reanalysis: boolean
           notes: string | null
@@ -1514,6 +1517,9 @@ export type Database = {
           id?: string
           image_domains?: string[]
           last_checked_at?: string | null
+          last_cron_error?: string | null
+          last_cron_error_at?: string | null
+          last_stop_reason?: string | null
           name: string
           needs_reanalysis?: boolean
           notes?: string | null
@@ -1558,6 +1564,9 @@ export type Database = {
           id?: string
           image_domains?: string[]
           last_checked_at?: string | null
+          last_cron_error?: string | null
+          last_cron_error_at?: string | null
+          last_stop_reason?: string | null
           name?: string
           needs_reanalysis?: boolean
           notes?: string | null

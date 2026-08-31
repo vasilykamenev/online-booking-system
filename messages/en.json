@@ -1125,6 +1125,7 @@
         "robots": "robots.txt",
         "health": "Health",
         "structure": "Structure",
+        "cronError": "Cron",
         "status": "Status",
         "actions": "Actions"
       },
@@ -1143,6 +1144,9 @@
         "notChecked": "Not checked yet",
         "needsReanalysis": "Site structure changed",
         "detailTitle": "Name and price were only extracted from {success} of {total} pages"
+      },
+      "cronError": {
+        "badge": "Error"
       },
       "notFound": {
         "title": "Source not found",
