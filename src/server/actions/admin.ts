@@ -18,6 +18,7 @@ import {
   locationSchema,
   amenityKeySchema,
   commissionRateSchema,
+  reindexConcurrencySchema,
   searchSourceSchema,
   crawlRuleSchema,
   parseSelectorConfig,
@@ -143,6 +144,40 @@ export async function updateCommissionRate(
   await logAudit(supabase, admin.id, "update_commission_rate", "platform_settings", null, { rate });
 
   revalidatePath(`/${locale}/admin/commissions`);
+  return { success: true };
+}
+
+export interface ReindexConcurrencyActionState {
+  error?: "unauthenticated" | "forbidden" | "invalid" | "generic";
+  success?: boolean;
+}
+
+/** How many candidates the background reindexer processes at once (manual testing's speed-up
+ *  request) — a single platform-wide setting, edited here the same way `updateCommissionRate` edits
+ *  its own `platform_settings` field, read back by `getReindexConcurrency`
+ *  (`src/server/queries/admin.ts`) from inside `indexSource` on every run. */
+export async function updateReindexConcurrency(
+  locale: Locale,
+  _prevState: ReindexConcurrencyActionState,
+  formData: FormData,
+): Promise<ReindexConcurrencyActionState> {
+  const parsed = reindexConcurrencySchema.safeParse({ concurrency: formData.get("concurrency") });
+  if (!parsed.success) return { error: "invalid" };
+
+  const supabase = await createClient();
+  const admin = await requireAdmin(supabase);
+  if ("error" in admin) return { error: admin.error };
+
+  const { concurrency } = parsed.data;
+  const { error } = await supabase
+    .from("platform_settings")
+    .update({ reindex_concurrency: concurrency })
+    .eq("id", true);
+  if (error) return { error: "generic" };
+
+  await logAudit(supabase, admin.id, "update_reindex_concurrency", "platform_settings", null, { concurrency });
+
+  revalidatePath(`/${locale}/admin/search-sources`);
   return { success: true };
 }
 

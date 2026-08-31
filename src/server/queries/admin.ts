@@ -59,6 +59,26 @@ export async function getInternalFirstSettings(): Promise<InternalFirstSettings>
   return { enabled: data.internal_first_enabled, minInternalResults: data.min_internal_results };
 }
 
+/** Falls back to this migration's own column default — code running the indexer (cron, or the
+ *  admin's manual trigger's `after()`) has no admin session, hence the service-role read, same
+ *  reasoning as `getInternalFirstSettings`. */
+const DEFAULT_REINDEX_CONCURRENCY = 3;
+
+/** How many candidates the background reindexer (`index/indexer.ts`, `index/brilions-indexer.ts`)
+ *  processes at once — a single platform-wide knob, not per-source (see the migration's own doc
+ *  comment on why: it governs how much post-fetch work overlaps, not per-source crawl politeness,
+ *  which stays `search_source_policies.rate_limit_policy`). */
+export async function getReindexConcurrency(): Promise<number> {
+  const { data, error } = await createAdminClient()
+    .from("platform_settings")
+    .select("reindex_concurrency")
+    .eq("id", true)
+    .maybeSingle();
+
+  if (error || !data) return DEFAULT_REINDEX_CONCURRENCY;
+  return data.reindex_concurrency;
+}
+
 export interface AdminProfile {
   id: string;
   email: string | null;

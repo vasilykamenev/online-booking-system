@@ -28,6 +28,7 @@ import {
   isCancelRequested,
   startReindexProgress,
 } from "@/server/search/index/reindex-progress";
+import { getReindexConcurrency } from "@/server/queries/admin";
 
 /**
  * The background counterpart to the live path's per-request sampling (Э5, Арх §12) — walks every
@@ -92,10 +93,19 @@ export type { IndexRunResult } from "@/server/search/index/shared";
  * A URL this pass never got a listing out of (fetch failed, or fetched but didn't classify as a
  * listing) simply doesn't get its `external_vessel_index.last_seen_at` refreshed — the "gone from
  * the source" signal a future retention sweep reads, with no separate bookkeeping needed for it.
+ *
+ * Processes `concurrency` candidates at a time (manual testing's speed-up request) rather than one
+ * at a time — `throttle` still paces the actual network fetch to the source's configured rps (see
+ * `rate-limiter.ts`'s `reservationChains`), but the slower post-fetch work (AI classification, DB
+ * writes, identity resolution) now overlaps across candidates instead of blocking the next fetch.
+ * Cancellation is checked only *between* batches, never mid-batch, and progress is only ever written
+ * at a batch boundary — see this function's own batch loop for why that keeps Stop/Resume correct
+ * without any extra bookkeeping beyond what `recordExtraction`'s idempotent upsert already gives.
  */
 async function indexGenericSource(
   source: NonNullable<Awaited<ReturnType<typeof getSourceById>>>,
   startFrom = 0,
+  concurrency = 1,
 ): Promise<IndexRunResult> {
   const sourceId = source.id;
   const result = emptyRunResult(sourceId);
@@ -112,24 +122,13 @@ async function indexGenericSource(
   // rule `fetchAndNormalize`'s own `allowAi` follows.
   const allowAi = source.processingType !== "HTML";
 
-  for (const [localIndex, candidate] of urls.entries()) {
-    // `bumpReindexProgress` is called once at every exit point of this loop body (each `continue`
-    // below, and the natural fall-through at the end) rather than wrapped in a `finally`, to avoid
-    // reindenting this whole already-large loop body for a progress side-effect.
-    const position = startFrom + localIndex + 1;
-    const isLastUrl = position === allUrls.length;
-
-    // Manual testing's "Остановить" (Stop) — checked first, before the paced fetch below, so a click
-    // doesn't have to wait out a rate-limit sleep it no longer needs. Best-effort/fail-safe: see
-    // `isCancelRequested`'s own doc comment.
-    if (await isCancelRequested(sourceId)) {
-      await cancelReindexProgress(sourceId, position - 1);
-      return result;
-    }
-
+  /** One candidate's full fetch→extract→write pipeline, awaited together with up to `concurrency-1`
+   *  siblings by the batch loop below — unchanged from before batching except every early `continue`
+   *  is now a `return` (this is a standalone unit, not a loop body) and it no longer touches
+   *  cancellation or progress itself; those are the batch loop's job now, not each candidate's. */
+  async function processCandidate(candidate: { id: string; url: string }): Promise<void> {
     // Э8: shared with `orchestrator/verification-phase.ts` now — see `resilience/rate-limiter.ts`'s
-    // own doc comment. Unconditional (no more `if (index > 0)` guard): the first call for a source
-    // has nothing recorded yet and returns immediately on its own.
+    // own doc comment. Safe to call concurrently for this same `sourceId` (`reservationChains`).
     await throttle(sourceId);
 
     const page = await fetchWithCache(candidate.url, PAGE_CACHE_MS);
@@ -145,8 +144,7 @@ async function indexGenericSource(
       // reachability signal the circuit breaker tracks. Fire-and-forget, same as this file's other
       // best-effort side writes (`recordBreadcrumbTrail`).
       recordSourceFailure(sourceId, `fetch failed: ${candidate.url}`).catch(() => {});
-      bumpReindexProgress(sourceId, position, isLastUrl).catch(() => {});
-      continue;
+      return;
     }
     recordSourceSuccess(sourceId).catch(() => {});
 
@@ -156,8 +154,7 @@ async function indexGenericSource(
       result.pagesUnchanged += 1;
       await recordFetchOutcome(candidate.id, { httpStatus: 200, contentHash, crawlStatus: "FETCHED", ranAi: false });
       await touchExtraction(sourceId, candidate.url, new Date().toISOString());
-      bumpReindexProgress(sourceId, position, isLastUrl).catch(() => {});
-      continue;
+      return;
     }
 
     result.pagesFetched += 1;
@@ -229,8 +226,7 @@ async function indexGenericSource(
     await recordFetchOutcome(candidate.id, { httpStatus: 200, contentHash, crawlStatus: "FETCHED", ranAi });
 
     if (!genericFields || !fieldSource || confidence === null) {
-      bumpReindexProgress(sourceId, position, isLastUrl).catch(() => {});
-      continue; // not a listing — nothing to index
+      return; // not a listing — nothing to index
     }
 
     const retrievedAt = new Date().toISOString();
@@ -306,7 +302,25 @@ async function indexGenericSource(
     if (extracted) await resolveVesselIdentity(extracted.id, normalized);
 
     result.listingsIndexed += 1;
-    bumpReindexProgress(sourceId, position, isLastUrl).catch(() => {});
+  }
+
+  // Cancellation is checked only between batches — a batch either completes fully or never starts,
+  // so `reindex_processed` after a Stop is always "every page up to here is genuinely done", and
+  // Resume's `startFrom` (that same number) never has to skip or double-check a partially-finished
+  // batch. `Promise.allSettled` (not `Promise.all`): one candidate's unexpected throw must not lose
+  // the rest of its batch — matches this function's own "one broken page must not break the whole
+  // run" discipline, and `processCandidate` already routes every *expected* failure through its own
+  // `result.pagesFailed`/`recordFetchOutcome` bookkeeping rather than throwing.
+  for (let batchStart = 0; batchStart < urls.length; batchStart += concurrency) {
+    if (await isCancelRequested(sourceId)) {
+      await cancelReindexProgress(sourceId, startFrom + batchStart);
+      return result;
+    }
+
+    const batch = urls.slice(batchStart, batchStart + concurrency);
+    await Promise.allSettled(batch.map((candidate) => processCandidate(candidate)));
+
+    await bumpReindexProgress(sourceId, startFrom + batchStart + batch.length);
   }
 
   await finishReindexProgress(sourceId, allUrls.length);
@@ -316,7 +330,10 @@ async function indexGenericSource(
 /** Domain → its own indexing path, mirroring `adapters/adapter-registry.ts`'s
  *  `ADAPTER_FACTORIES_BY_DOMAIN` — a domain listed here has a bespoke crawl/extraction pipeline
  *  that doesn't go through the URL Registry at all, same reasoning as that map. */
-const DOMAIN_INDEXERS: Record<string, (sourceId: string, startFrom?: number) => Promise<IndexRunResult>> = {
+const DOMAIN_INDEXERS: Record<
+  string,
+  (sourceId: string, startFrom?: number, concurrency?: number) => Promise<IndexRunResult>
+> = {
   "brilions.com": indexBrilionsSource,
 };
 
@@ -337,8 +354,13 @@ export async function indexSource(sourceId: string, options?: { startFrom?: numb
   if (!(await isSourceCallAllowed(sourceId))) return emptyRunResult(sourceId);
 
   const startFrom = options?.startFrom ?? 0;
+  // Read fresh on every run (not cached) — an admin's edit to this global setting on
+  // `/admin/search-sources` takes effect on the very next reindex, no redeploy needed.
+  const concurrency = await getReindexConcurrency();
   const domainIndexer = DOMAIN_INDEXERS[source.domain];
-  const result = await (domainIndexer ? domainIndexer(sourceId, startFrom) : indexGenericSource(source, startFrom));
+  const result = await (domainIndexer
+    ? domainIndexer(sourceId, startFrom, concurrency)
+    : indexGenericSource(source, startFrom, concurrency));
 
   // Э10 (Арх §19): piggybacks on the indexer's own cadence — checked here, not on every live search
   // request. Best-effort and never awaited-into-failure: `checkSourceStructureHealth` already

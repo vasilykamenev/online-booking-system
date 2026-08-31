@@ -7,7 +7,8 @@ import { REINDEX_ASSUMED_TIMEOUT_MS } from "@/lib/search/reindex-timing";
  * a percentage/count instead of only a before/after result once `reindexSearchSource` returns
  * (Э5's "Индексировать сейчас" button, a blank wait for minutes on a large source like sailica.com's
  * ~2000 catalog pages otherwise). Written from inside `indexGenericSource`/`indexBrilionsSource`'s
- * own per-candidate loop, which already knows the total upfront and walks it one page at a time.
+ * own batch loop, which already knows the total upfront and walks it `concurrency` candidates at a
+ * time (manual testing's speed-up request).
  *
  * Best-effort throughout, same "telemetry doesn't sink the call it's describing" discipline as
  * `source-structure-health.ts`'s checker — a progress-write failure must never fail or slow the
@@ -22,12 +23,6 @@ import { REINDEX_ASSUMED_TIMEOUT_MS } from "@/lib/search/reindex-timing";
  * stale: "cancelled, resumable" is `finished_at` set with `processed < total`, "completed" is
  * `processed === total`, both already expressible with the four columns that existed before this.
  */
-
-/** Every single processed item would mean one `UPDATE` per page — fine for correctness, wasteful at
- *  sailica.com's scale. `bumpReindexProgress` only writes on a multiple of this (plus whenever the
- *  caller passes `force`), same throttling reasoning as this module's siblings elsewhere in this
- *  codebase (e.g. `resilience/rate-limiter.ts`). */
-const PROGRESS_WRITE_STRIDE = 10;
 
 export async function startReindexProgress(sourceId: string, total: number): Promise<void> {
   try {
@@ -49,9 +44,9 @@ export async function startReindexProgress(sourceId: string, total: number): Pro
   }
 }
 
-/** Polled once per loop iteration by both indexers, before the paced network fetch — cheap relative
- *  to everything else an iteration already does (see plan's "Stop" semantics), and failing safe to
- *  `false` means a transient DB hiccup never mistakenly aborts a run that wasn't actually asked to
+/** Checked once per batch by both indexers, before dispatching it (never mid-batch — see each
+ *  indexer's own batch loop for why) — cheap relative to a whole batch of fetches, and failing safe
+ *  to `false` means a transient DB hiccup never mistakenly aborts a run that wasn't actually asked to
  *  stop. */
 export async function isCancelRequested(sourceId: string): Promise<boolean> {
   try {
@@ -66,9 +61,9 @@ export async function isCancelRequested(sourceId: string): Promise<boolean> {
   }
 }
 
-/** Terminal write for a run stopped mid-way by `isCancelRequested` — `processed` is the caller's own
- *  loop position, written unconditionally (unlike `bumpReindexProgress`'s throttled stride) since
- *  this is the run's last write. Resets the flag: it has now been acted on. */
+/** Terminal write for a run stopped between batches by `isCancelRequested` — `processed` is the
+ *  caller's own batch-boundary position (every page up to here is genuinely done). Resets the flag:
+ *  it has now been acted on. */
 export async function cancelReindexProgress(sourceId: string, processed: number): Promise<void> {
   try {
     await createAdminClient()
@@ -126,12 +121,10 @@ export async function beginResume(sourceId: string): Promise<{ startFrom: number
   return { startFrom: processed, total };
 }
 
-/** `force` bypasses the write-stride throttle — pass it for the very last item so a run's own final
- *  count is always visible immediately, not up to `PROGRESS_WRITE_STRIDE - 1` items stale until
- *  `finishReindexProgress` writes anyway (harmless either way, just avoids a needlessly stale-looking
- *  progress bar right before a run ends). */
-export async function bumpReindexProgress(sourceId: string, processed: number, force = false): Promise<void> {
-  if (!force && processed % PROGRESS_WRITE_STRIDE !== 0) return;
+/** Called once per completed batch (manual testing's concurrency speed-up), not once per page —
+ *  the batch size itself is now the natural write-frequency throttle a stride constant used to
+ *  provide for the old one-page-at-a-time loop, so every call here writes unconditionally. */
+export async function bumpReindexProgress(sourceId: string, processed: number): Promise<void> {
   try {
     await createAdminClient().from("search_sources").update({ reindex_processed: processed }).eq("id", sourceId);
   } catch {

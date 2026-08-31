@@ -31,7 +31,11 @@ import {
  * sitemap parse is the whole discovery mechanism), so there is no `recordFetchOutcome` bookkeeping
  * to do either — nothing reads that table for this domain.
  */
-export async function indexBrilionsSource(sourceId: string, startFrom = 0): Promise<IndexRunResult> {
+export async function indexBrilionsSource(
+  sourceId: string,
+  startFrom = 0,
+  concurrency = 1,
+): Promise<IndexRunResult> {
   const result = emptyRunResult(sourceId);
 
   const allowed = await resolveRobotsAllowed();
@@ -44,19 +48,13 @@ export async function indexBrilionsSource(sourceId: string, startFrom = 0): Prom
   if (startFrom === 0) startReindexProgress(sourceId, allEntries.length).catch(() => {});
   const entries = allEntries.slice(startFrom);
 
-  for (const [localIndex, entry] of entries.entries()) {
-    const position = startFrom + localIndex + 1;
-    const isLastEntry = position === allEntries.length;
-
-    // Manual testing's "Остановить" (Stop) — see `indexer.ts`'s identical check for why this runs
-    // before the paced fetch below.
-    if (await isCancelRequested(sourceId)) {
-      await cancelReindexProgress(sourceId, position - 1);
-      return result;
-    }
-
+  /** One sitemap entry's full fetch→normalize→write pipeline — see `indexer.ts`'s identical
+   *  `processCandidate` for why this is now a standalone unit the batch loop below awaits together
+   *  with up to `concurrency-1` siblings, rather than a loop body. */
+  async function processEntry(entry: (typeof entries)[number]): Promise<void> {
     // Э8: shared with the generic indexer and live verification now — see
-    // `resilience/rate-limiter.ts`'s own doc comment.
+    // `resilience/rate-limiter.ts`'s own doc comment. Safe to call concurrently for this same
+    // `sourceId` (`reservationChains`).
     await throttle(sourceId);
 
     const { result: normalized, usedAi, contentHash } = await fetchAndNormalize(entry, {
@@ -69,8 +67,7 @@ export async function indexBrilionsSource(sourceId: string, startFrom = 0): Prom
     if (!normalized) {
       result.pagesFailed += 1;
       recordSourceFailure(sourceId, `fetch failed: ${entry.urlRu}`).catch(() => {});
-      bumpReindexProgress(sourceId, position, isLastEntry).catch(() => {});
-      continue;
+      return;
     }
     recordSourceSuccess(sourceId).catch(() => {});
     result.pagesFetched += 1;
@@ -115,7 +112,20 @@ export async function indexBrilionsSource(sourceId: string, startFrom = 0): Prom
     if (extracted) await resolveVesselIdentity(extracted.id, normalized);
 
     result.listingsIndexed += 1;
-    bumpReindexProgress(sourceId, position, isLastEntry).catch(() => {});
+  }
+
+  // See `indexer.ts`'s identical batch loop for why cancellation only checks between batches and
+  // progress only writes at a batch boundary.
+  for (let batchStart = 0; batchStart < entries.length; batchStart += concurrency) {
+    if (await isCancelRequested(sourceId)) {
+      await cancelReindexProgress(sourceId, startFrom + batchStart);
+      return result;
+    }
+
+    const batch = entries.slice(batchStart, batchStart + concurrency);
+    await Promise.allSettled(batch.map((entry) => processEntry(entry)));
+
+    await bumpReindexProgress(sourceId, startFrom + batchStart + batch.length);
   }
 
   await finishReindexProgress(sourceId, allEntries.length);

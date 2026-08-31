@@ -16,6 +16,11 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * bug: true cross-instance pacing would need a DB- or Redis-backed token bucket, which nothing about
  * this project's current traffic volume (a handful of registered sources, indexed roughly daily)
  * justifies yet.
+ *
+ * `throttle` is safe to call concurrently for the same `sourceId` — both `verification-phase.ts`'s
+ * `mapWithConcurrency` and the indexer's own batch-concurrent processing (manual testing's
+ * speed-up request, `index/indexer.ts`/`index/brilions-indexer.ts`) do exactly that. See
+ * `reservationChains` below for how that's kept correct.
  */
 
 /** Politeness floor when a source's `rate_limit_policy` states no `requestsPerSecond` (or an
@@ -27,6 +32,28 @@ const lastCallAt = new Map<string, number>();
 
 export function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Per-`sourceId` promise chain — the actual serialization mechanism behind `throttle`'s
+ * concurrency-safety. Without this, two concurrent callers for the same source could both read the
+ * same `lastCallAt` value (there's an `await` — `getRequestsPerSecond` — between the read and the
+ * write below) and both proceed at once, bursting past the configured `requestsPerSecond` instead of
+ * spacing out. Chaining each call's slot-reservation after the previous one's means only one
+ * reservation is ever in flight per source, while everything a caller does *after* `throttle`
+ * resolves (fetch, extraction, DB writes) still runs fully concurrently with other callers' own
+ * post-throttle work — this only serializes the "claim a paced slot" moment itself.
+ */
+const reservationChains = new Map<string, Promise<unknown>>();
+
+async function reserveSlot(sourceId: string, minIntervalMs: number): Promise<void> {
+  const last = lastCallAt.get(sourceId);
+  const now = Date.now();
+  if (last !== undefined) {
+    const wait = last + minIntervalMs - now;
+    if (wait > 0) await sleep(wait);
+  }
+  lastCallAt.set(sourceId, Date.now());
 }
 
 /** `rate_limit_policy` has no fixed shape yet (Э3's admin form accepts arbitrary JSON under this
@@ -56,11 +83,15 @@ export async function throttle(sourceId: string): Promise<void> {
   const requestsPerSecond = await getRequestsPerSecond(sourceId);
   const minIntervalMs = 1000 / requestsPerSecond;
 
-  const last = lastCallAt.get(sourceId);
-  const now = Date.now();
-  if (last !== undefined) {
-    const wait = last + minIntervalMs - now;
-    if (wait > 0) await sleep(wait);
-  }
-  lastCallAt.set(sourceId, Date.now());
+  // Chain onto this source's own queue so concurrent callers each get a distinct, correctly-spaced
+  // slot instead of racing on `lastCallAt` — see `reservationChains`'s own doc comment. The second
+  // `.then` handler covers a previous link that itself rejected (shouldn't happen — `reserveSlot`
+  // has nothing that throws — but a broken chain must never wedge every future call to this source).
+  const previous = reservationChains.get(sourceId) ?? Promise.resolve();
+  const mine = previous.then(
+    () => reserveSlot(sourceId, minIntervalMs),
+    () => reserveSlot(sourceId, minIntervalMs),
+  );
+  reservationChains.set(sourceId, mine);
+  await mine;
 }

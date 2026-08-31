@@ -49,6 +49,12 @@ export const commissionRateSchema = z.object({
 });
 export type CommissionRateInput = z.infer<typeof commissionRateSchema>;
 
+// Bounds mirror the migration's own CHECK constraint (platform_settings_reindex_concurrency_range).
+export const reindexConcurrencySchema = z.object({
+  concurrency: z.coerce.number().int().min(1).max(10),
+});
+export type ReindexConcurrencyInput = z.infer<typeof reindexConcurrencySchema>;
+
 export const searchSourceTypeValues = [
   "WEBSITE",
   "API",
