@@ -49,11 +49,14 @@ export const commissionRateSchema = z.object({
 });
 export type CommissionRateInput = z.infer<typeof commissionRateSchema>;
 
-// Bounds mirror the migration's own CHECK constraint (platform_settings_reindex_concurrency_range).
-export const reindexConcurrencySchema = z.object({
+// Bounds mirror the migrations' own CHECK constraints (platform_settings_reindex_concurrency_range,
+// platform_settings_reindex_max_duration_range) — the latter's upper bound (280) stays below
+// Vercel's own 300s `maxDuration` ceiling so the indexer's self-imposed stop always fires first.
+export const indexingSettingsSchema = z.object({
   concurrency: z.coerce.number().int().min(1).max(10),
+  maxDurationSeconds: z.coerce.number().int().min(30).max(280),
 });
-export type ReindexConcurrencyInput = z.infer<typeof reindexConcurrencySchema>;
+export type IndexingSettingsInput = z.infer<typeof indexingSettingsSchema>;
 
 export const searchSourceTypeValues = [
   "WEBSITE",

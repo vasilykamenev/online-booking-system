@@ -2,7 +2,12 @@ import type { Metadata } from "next";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Locale } from "@/i18n/routing";
 import { Link } from "@/i18n/navigation";
-import { getAllSearchSourcesAdmin, getSearchSourceHealthMap, getReindexConcurrency } from "@/server/queries/admin";
+import {
+  getAllSearchSourcesAdmin,
+  getSearchSourceHealthMap,
+  getReindexConcurrency,
+  getReindexMaxDurationSeconds,
+} from "@/server/queries/admin";
 import { buildTitle } from "@/lib/site";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -16,7 +21,7 @@ import {
 } from "@/components/ui/table";
 import type { Database } from "@/lib/supabase/database.types";
 import { NewSearchSourceSection } from "./new-search-source-section";
-import { ConcurrencyForm } from "./concurrency-form";
+import { IndexingSettingsForm } from "./indexing-settings-form";
 import { ReindexProgressIndicator } from "./reindex-progress-indicator";
 import { SearchSourceToggleButton } from "./search-source-toggle-button";
 import { SearchSourceStatusActions } from "./search-source-status-actions";
@@ -64,10 +69,11 @@ export default async function AdminSearchSourcesPage({
   const tProcessing = await getTranslations("admin.searchSources.processingType");
   const tLifecycle = await getTranslations("admin.searchSources.lifecycle");
 
-  const [sources, health, reindexConcurrency] = await Promise.all([
+  const [sources, health, reindexConcurrency, reindexMaxDurationSeconds] = await Promise.all([
     getAllSearchSourcesAdmin(),
     getSearchSourceHealthMap(),
     getReindexConcurrency(),
+    getReindexMaxDurationSeconds(),
   ]);
 
   return (
@@ -75,9 +81,12 @@ export default async function AdminSearchSourcesPage({
       <h1 className="text-xl font-medium tracking-tight">{t("title")}</h1>
       <p className="mt-1 text-sm font-light text-muted-foreground">{t("subtitle")}</p>
       <p className="mt-1 text-xs font-light text-muted-foreground">{t("wiringHint")}</p>
-      <p className="mt-3 text-xs font-light text-muted-foreground">{t("concurrency.hint")}</p>
+      <p className="mt-3 text-xs font-light text-muted-foreground">{t("indexingSettings.hint")}</p>
       <div className="mt-2">
-        <ConcurrencyForm currentConcurrency={reindexConcurrency} />
+        <IndexingSettingsForm
+          currentConcurrency={reindexConcurrency}
+          currentMaxDurationSeconds={reindexMaxDurationSeconds}
+        />
       </div>
 
       <NewSearchSourceSection />

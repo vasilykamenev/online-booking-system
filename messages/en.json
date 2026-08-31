@@ -1085,16 +1085,17 @@
       "title": "Search sources",
       "subtitle": "External sites the smart search can use as an additional source of listings.",
       "wiringHint": "A new source is added as a draft and stays out of search until it's checked (\"Check\" — reachability, robots.txt, sitemap, structured data, a candidate-card preview) and approved. Approving a source with the \"Structured data\" or \"AI extraction\" strategy starts crawling it immediately — no deploy needed, through a generic provider with no site-specific code. For \"HTML parsing\" and \"Hybrid\", filling in the selector configuration in the form (or applying the AI suggestion from the check result) is enough — without it the source still isn't crawled. The \"API\" strategy, and any source with no purpose-built provider in code (see src/server/search/providers/, provider-registry.ts), still needs one written. Enabling or disabling an already-active source takes effect immediately.",
-      "concurrency": {
-        "label": "Concurrent requests",
-        "hint": "How many pages the indexer processes at once during reindexing — a single setting shared by every source.",
+      "indexingSettings": {
+        "hint": "Background indexer settings, shared by every source. \"Concurrent requests\" speeds up processing; \"Max run duration\" is how many seconds a run goes before stopping itself cleanly (resumable with \"Resume\") — separate from, and more conservative than, the platform's own hard 300s limit.",
+        "concurrencyLabel": "Concurrent requests",
+        "maxDurationLabel": "Max run duration, sec",
         "save": "Save",
-        "saved": "Concurrency setting updated",
+        "saved": "Indexing settings updated",
         "errors": {
-          "unauthenticated": "Sign in to change this setting",
+          "unauthenticated": "Sign in to change these settings",
           "forbidden": "Not enough permissions",
-          "invalid": "Enter a whole number from 1 to 10",
-          "generic": "Couldn't save the setting"
+          "invalid": "Concurrent requests: 1-10. Max run duration: 30-280 seconds",
+          "generic": "Couldn't save the settings"
         }
       },
       "empty": "No sources yet.",

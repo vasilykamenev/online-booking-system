@@ -17,7 +17,7 @@ import { resolveLocationFromBreadcrumb } from "@/server/search/index/location-re
 import { normalizeVesselType, type VesselTypeAlias } from "@/lib/search/vocabulary/vessel-types";
 import type { FieldSource } from "@/server/search/registry/listing-merge";
 import { indexBrilionsSource } from "@/server/search/index/brilions-indexer";
-import { type IndexRunResult, emptyRunResult, throttle } from "@/server/search/index/shared";
+import { type IndexRunResult, type RunOptions, emptyRunResult, throttle } from "@/server/search/index/shared";
 import { isSourceCallAllowed, recordSourceFailure, recordSourceSuccess } from "@/server/search/resilience/source-health";
 import { checkSourceStructureHealth } from "@/server/search/source-structure-health";
 import { resolveVesselIdentity } from "@/server/search/identity/vessel-identity";
@@ -28,7 +28,7 @@ import {
   isCancelRequested,
   startReindexProgress,
 } from "@/server/search/index/reindex-progress";
-import { getReindexConcurrency } from "@/server/queries/admin";
+import { getReindexConcurrency, getReindexMaxDurationSeconds } from "@/server/queries/admin";
 
 /**
  * The background counterpart to the live path's per-request sampling (Э5, Арх §12) — walks every
@@ -98,14 +98,14 @@ export type { IndexRunResult } from "@/server/search/index/shared";
  * at a time — `throttle` still paces the actual network fetch to the source's configured rps (see
  * `rate-limiter.ts`'s `reservationChains`), but the slower post-fetch work (AI classification, DB
  * writes, identity resolution) now overlaps across candidates instead of blocking the next fetch.
- * Cancellation is checked only *between* batches, never mid-batch, and progress is only ever written
- * at a batch boundary — see this function's own batch loop for why that keeps Stop/Resume correct
- * without any extra bookkeeping beyond what `recordExtraction`'s idempotent upsert already gives.
+ * Cancellation and the run's own time budget (`deadlineAt`) are both checked only *between* batches,
+ * never mid-batch, and progress is only ever written at a batch boundary — see this function's own
+ * batch loop for why that keeps Stop/Resume correct without any extra bookkeeping beyond what
+ * `recordExtraction`'s idempotent upsert already gives.
  */
 async function indexGenericSource(
   source: NonNullable<Awaited<ReturnType<typeof getSourceById>>>,
-  startFrom = 0,
-  concurrency = 1,
+  { startFrom, concurrency, deadlineAt }: RunOptions,
 ): Promise<IndexRunResult> {
   const sourceId = source.id;
   const result = emptyRunResult(sourceId);
@@ -312,7 +312,11 @@ async function indexGenericSource(
   // run" discipline, and `processCandidate` already routes every *expected* failure through its own
   // `result.pagesFailed`/`recordFetchOutcome` bookkeeping rather than throwing.
   for (let batchStart = 0; batchStart < urls.length; batchStart += concurrency) {
-    if (await isCancelRequested(sourceId)) {
+    // Deadline check alongside cancellation: both stop the run the same way (`cancelReindexProgress`
+    // — resumable, indistinguishable in the UI from a manual Stop), just triggered by a different
+    // condition. Checked in this order since a cheap `Date.now()` comparison should never wait on the
+    // `isCancelRequested` round-trip first.
+    if (Date.now() >= deadlineAt || (await isCancelRequested(sourceId))) {
       await cancelReindexProgress(sourceId, startFrom + batchStart);
       return result;
     }
@@ -330,10 +334,7 @@ async function indexGenericSource(
 /** Domain → its own indexing path, mirroring `adapters/adapter-registry.ts`'s
  *  `ADAPTER_FACTORIES_BY_DOMAIN` — a domain listed here has a bespoke crawl/extraction pipeline
  *  that doesn't go through the URL Registry at all, same reasoning as that map. */
-const DOMAIN_INDEXERS: Record<
-  string,
-  (sourceId: string, startFrom?: number, concurrency?: number) => Promise<IndexRunResult>
-> = {
+const DOMAIN_INDEXERS: Record<string, (sourceId: string, options: RunOptions) => Promise<IndexRunResult>> = {
   "brilions.com": indexBrilionsSource,
 };
 
@@ -353,14 +354,19 @@ export async function indexSource(sourceId: string, options?: { startFrom?: numb
   if (!source) return emptyRunResult(sourceId);
   if (!(await isSourceCallAllowed(sourceId))) return emptyRunResult(sourceId);
 
-  const startFrom = options?.startFrom ?? 0;
-  // Read fresh on every run (not cached) — an admin's edit to this global setting on
+  // Both read fresh on every run (not cached) — an admin's edit to either setting on
   // `/admin/search-sources` takes effect on the very next reindex, no redeploy needed.
-  const concurrency = await getReindexConcurrency();
+  const [concurrency, maxDurationSeconds] = await Promise.all([
+    getReindexConcurrency(),
+    getReindexMaxDurationSeconds(),
+  ]);
+  const runOptions: RunOptions = {
+    startFrom: options?.startFrom ?? 0,
+    concurrency,
+    deadlineAt: Date.now() + maxDurationSeconds * 1000,
+  };
   const domainIndexer = DOMAIN_INDEXERS[source.domain];
-  const result = await (domainIndexer
-    ? domainIndexer(sourceId, startFrom, concurrency)
-    : indexGenericSource(source, startFrom, concurrency));
+  const result = await (domainIndexer ? domainIndexer(sourceId, runOptions) : indexGenericSource(source, runOptions));
 
   // Э10 (Арх §19): piggybacks on the indexer's own cadence — checked here, not on every live search
   // request. Best-effort and never awaited-into-failure: `checkSourceStructureHealth` already

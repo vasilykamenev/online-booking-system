@@ -7,7 +7,7 @@ import {
   fetchAndNormalize,
 } from "@/server/search/providers/brilions/provider";
 import { recordExtraction, resultToListingFields } from "@/server/search/registry/extracted-listings";
-import { type IndexRunResult, emptyRunResult, throttle } from "@/server/search/index/shared";
+import { type IndexRunResult, type RunOptions, emptyRunResult, throttle } from "@/server/search/index/shared";
 import { recordSourceFailure, recordSourceSuccess } from "@/server/search/resilience/source-health";
 import { resolveVesselIdentity } from "@/server/search/identity/vessel-identity";
 import {
@@ -33,8 +33,7 @@ import {
  */
 export async function indexBrilionsSource(
   sourceId: string,
-  startFrom = 0,
-  concurrency = 1,
+  { startFrom, concurrency, deadlineAt }: RunOptions,
 ): Promise<IndexRunResult> {
   const result = emptyRunResult(sourceId);
 
@@ -114,10 +113,10 @@ export async function indexBrilionsSource(
     result.listingsIndexed += 1;
   }
 
-  // See `indexer.ts`'s identical batch loop for why cancellation only checks between batches and
-  // progress only writes at a batch boundary.
+  // See `indexer.ts`'s identical batch loop for why cancellation/deadline only check between
+  // batches and progress only writes at a batch boundary.
   for (let batchStart = 0; batchStart < entries.length; batchStart += concurrency) {
-    if (await isCancelRequested(sourceId)) {
+    if (Date.now() >= deadlineAt || (await isCancelRequested(sourceId))) {
       await cancelReindexProgress(sourceId, startFrom + batchStart);
       return result;
     }

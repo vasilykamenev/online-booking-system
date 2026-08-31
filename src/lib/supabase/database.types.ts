@@ -810,6 +810,7 @@ export type Database = {
           internal_first_enabled: boolean
           min_internal_results: number
           reindex_concurrency: number
+          reindex_max_duration_seconds: number
           updated_at: string
         }
         Insert: {
@@ -818,6 +819,7 @@ export type Database = {
           internal_first_enabled?: boolean
           min_internal_results?: number
           reindex_concurrency?: number
+          reindex_max_duration_seconds?: number
           updated_at?: string
         }
         Update: {
@@ -826,6 +828,7 @@ export type Database = {
           internal_first_enabled?: boolean
           min_internal_results?: number
           reindex_concurrency?: number
+          reindex_max_duration_seconds?: number
           updated_at?: string
         }
         Relationships: []

@@ -79,6 +79,25 @@ export async function getReindexConcurrency(): Promise<number> {
   return data.reindex_concurrency;
 }
 
+/** Falls back to this migration's own column default, same reasoning as `getReindexConcurrency`. */
+const DEFAULT_REINDEX_MAX_DURATION_SECONDS = 250;
+
+/** Soft, self-imposed run budget the indexer's batch loop checks alongside cancellation — distinct
+ *  from Vercel's own `maxDuration` (a deploy-time platform ceiling, not runtime-configurable; see
+ *  `urls/page.tsx`'s doc comment). Lets an admin tune how long a run goes before stopping itself
+ *  cleanly (resumable, exactly like a manual Stop) instead of risking the platform's hard cutoff
+ *  killing it mid-batch. */
+export async function getReindexMaxDurationSeconds(): Promise<number> {
+  const { data, error } = await createAdminClient()
+    .from("platform_settings")
+    .select("reindex_max_duration_seconds")
+    .eq("id", true)
+    .maybeSingle();
+
+  if (error || !data) return DEFAULT_REINDEX_MAX_DURATION_SECONDS;
+  return data.reindex_max_duration_seconds;
+}
+
 export interface AdminProfile {
   id: string;
   email: string | null;

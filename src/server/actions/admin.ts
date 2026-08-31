@@ -18,7 +18,7 @@ import {
   locationSchema,
   amenityKeySchema,
   commissionRateSchema,
-  reindexConcurrencySchema,
+  indexingSettingsSchema,
   searchSourceSchema,
   crawlRuleSchema,
   parseSelectorConfig,
@@ -147,35 +147,41 @@ export async function updateCommissionRate(
   return { success: true };
 }
 
-export interface ReindexConcurrencyActionState {
+export interface IndexingSettingsActionState {
   error?: "unauthenticated" | "forbidden" | "invalid" | "generic";
   success?: boolean;
 }
 
-/** How many candidates the background reindexer processes at once (manual testing's speed-up
- *  request) — a single platform-wide setting, edited here the same way `updateCommissionRate` edits
- *  its own `platform_settings` field, read back by `getReindexConcurrency`
+/** The background reindexer's two tunable knobs (manual testing's speed-up + self-stop requests) —
+ *  platform-wide, edited together here the same way `updateCommissionRate` edits its own
+ *  `platform_settings` field, read back by `getReindexConcurrency`/`getReindexMaxDurationSeconds`
  *  (`src/server/queries/admin.ts`) from inside `indexSource` on every run. */
-export async function updateReindexConcurrency(
+export async function updateIndexingSettings(
   locale: Locale,
-  _prevState: ReindexConcurrencyActionState,
+  _prevState: IndexingSettingsActionState,
   formData: FormData,
-): Promise<ReindexConcurrencyActionState> {
-  const parsed = reindexConcurrencySchema.safeParse({ concurrency: formData.get("concurrency") });
+): Promise<IndexingSettingsActionState> {
+  const parsed = indexingSettingsSchema.safeParse({
+    concurrency: formData.get("concurrency"),
+    maxDurationSeconds: formData.get("maxDurationSeconds"),
+  });
   if (!parsed.success) return { error: "invalid" };
 
   const supabase = await createClient();
   const admin = await requireAdmin(supabase);
   if ("error" in admin) return { error: admin.error };
 
-  const { concurrency } = parsed.data;
+  const { concurrency, maxDurationSeconds } = parsed.data;
   const { error } = await supabase
     .from("platform_settings")
-    .update({ reindex_concurrency: concurrency })
+    .update({ reindex_concurrency: concurrency, reindex_max_duration_seconds: maxDurationSeconds })
     .eq("id", true);
   if (error) return { error: "generic" };
 
-  await logAudit(supabase, admin.id, "update_reindex_concurrency", "platform_settings", null, { concurrency });
+  await logAudit(supabase, admin.id, "update_indexing_settings", "platform_settings", null, {
+    concurrency,
+    maxDurationSeconds,
+  });
 
   revalidatePath(`/${locale}/admin/search-sources`);
   return { success: true };
