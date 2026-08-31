@@ -29,6 +29,7 @@ import {
 } from "@/lib/validation/admin";
 import { accessStrategyFromProcessingType } from "@/server/search/source-registry";
 import { indexSource } from "@/server/search/index/indexer";
+import { beginResume } from "@/server/search/index/reindex-progress";
 import {
   validateSearchSource,
   previewCandidateAtUrl,
@@ -778,6 +779,95 @@ export async function reindexSearchSource(locale: Locale, sourceId: string): Pro
   });
 
   return { started: true };
+}
+
+export interface ResumeSearchSourceIndexingResult {
+  error?: "unauthenticated" | "forbidden" | "notFound" | "nothingToResume" | "generic";
+  started?: boolean;
+}
+
+/**
+ * Manual "Продолжить" (Resume) trigger — continues a run `reindexSearchSource` left cut off (Stop
+ * click, or the same `maxDuration` timeout that action's own doc comment describes) from its last
+ * recorded position, instead of walking the whole source from scratch again.
+ *
+ * `beginResume` runs here, synchronously, rather than inside `after()` below — it's a couple of fast
+ * queries, not a crawl, and doing it in the fast path means a genuinely non-resumable state (already
+ * completed, or a run that still looks like it might be in flight) comes back as an immediate
+ * `nothingToResume` error instead of a silent no-op behind a `{ started: true }` response.
+ */
+export async function resumeSearchSourceIndexing(
+  locale: Locale,
+  sourceId: string,
+): Promise<ResumeSearchSourceIndexingResult> {
+  const supabase = await createClient();
+  const admin = await requireAdmin(supabase);
+  if ("error" in admin) return { error: admin.error };
+
+  const { data: source, error } = await supabase
+    .from("search_sources")
+    .select("id")
+    .eq("id", sourceId)
+    .maybeSingle();
+  if (error) return { error: "generic" };
+  if (!source) return { error: "notFound" };
+
+  const cursor = await beginResume(sourceId);
+  if (!cursor) return { error: "nothingToResume" };
+
+  after(async () => {
+    const result = await indexSource(sourceId, { startFrom: cursor.startFrom });
+
+    await logAudit(supabase, admin.id, "resume_search_source_indexing", "search_sources", sourceId, {
+      startFrom: cursor.startFrom,
+      urlsConsidered: result.urlsConsidered,
+      listingsIndexed: result.listingsIndexed,
+    });
+
+    revalidatePath(`/${locale}/admin/search-sources`);
+    revalidatePath(`/${locale}/admin/search-sources/${sourceId}/urls`);
+  });
+
+  return { started: true };
+}
+
+export interface StopSearchSourceIndexingResult {
+  error?: "unauthenticated" | "forbidden" | "notRunning" | "generic";
+}
+
+/**
+ * Manual "Остановить" (Stop) trigger — sets the best-effort cancel flag both indexer loops poll
+ * (`isCancelRequested`, checked once per candidate before that iteration's paced fetch). Unlike
+ * `reindexSearchSource`/`resumeSearchSourceIndexing`, this never touches `after()`: it's a single
+ * conditional `UPDATE`, no crawl to schedule. The `.not(...).is(...)` filter is the only "is a run
+ * actually running" check this needs — it doubles as existence-checking (no matching row either way
+ * reports `notRunning`), so there's no separate upfront source lookup the way the other two actions
+ * have.
+ */
+export async function stopSearchSourceIndexing(
+  locale: Locale,
+  sourceId: string,
+): Promise<StopSearchSourceIndexingResult> {
+  const supabase = await createClient();
+  const admin = await requireAdmin(supabase);
+  if ("error" in admin) return { error: admin.error };
+
+  const { data, error } = await supabase
+    .from("search_sources")
+    .update({ reindex_cancel_requested: true })
+    .eq("id", sourceId)
+    .not("reindex_started_at", "is", null)
+    .is("reindex_finished_at", null)
+    .select("id")
+    .maybeSingle();
+  if (error) return { error: "generic" };
+  if (!data) return { error: "notRunning" };
+
+  await logAudit(supabase, admin.id, "stop_search_source_indexing", "search_sources", sourceId);
+
+  revalidatePath(`/${locale}/admin/search-sources`);
+  revalidatePath(`/${locale}/admin/search-sources/${sourceId}/urls`);
+  return {};
 }
 
 export interface FetchReindexProgressResult extends AdminReindexProgress {

@@ -21,7 +21,13 @@ import { type IndexRunResult, emptyRunResult, throttle } from "@/server/search/i
 import { isSourceCallAllowed, recordSourceFailure, recordSourceSuccess } from "@/server/search/resilience/source-health";
 import { checkSourceStructureHealth } from "@/server/search/source-structure-health";
 import { resolveVesselIdentity } from "@/server/search/identity/vessel-identity";
-import { bumpReindexProgress, finishReindexProgress, startReindexProgress } from "@/server/search/index/reindex-progress";
+import {
+  bumpReindexProgress,
+  cancelReindexProgress,
+  finishReindexProgress,
+  isCancelRequested,
+  startReindexProgress,
+} from "@/server/search/index/reindex-progress";
 
 /**
  * The background counterpart to the live path's per-request sampling (Э5, Арх §12) — walks every
@@ -87,24 +93,39 @@ export type { IndexRunResult } from "@/server/search/index/shared";
  * listing) simply doesn't get its `external_vessel_index.last_seen_at` refreshed — the "gone from
  * the source" signal a future retention sweep reads, with no separate bookkeeping needed for it.
  */
-async function indexGenericSource(source: NonNullable<Awaited<ReturnType<typeof getSourceById>>>): Promise<IndexRunResult> {
+async function indexGenericSource(
+  source: NonNullable<Awaited<ReturnType<typeof getSourceById>>>,
+  startFrom = 0,
+): Promise<IndexRunResult> {
   const sourceId = source.id;
   const result = emptyRunResult(sourceId);
 
-  const [urls, aliases] = await Promise.all([listAllSelectedUrls(sourceId), getVesselTypeAliases(sourceId)]);
-  result.urlsConsidered = urls.length;
-  startReindexProgress(sourceId, urls.length).catch(() => {});
+  const [allUrls, aliases] = await Promise.all([listAllSelectedUrls(sourceId), getVesselTypeAliases(sourceId)]);
+  result.urlsConsidered = allUrls.length;
+  // A resume (`startFrom > 0`) reuses the still-in-progress `started_at`/`total`/`processed` row that
+  // `beginResume` already prepared — calling this again would reset `reindex_processed` to 0 and lose
+  // the resume cursor. Only a genuinely fresh run (Э5's "Индексировать сейчас") resets progress.
+  if (startFrom === 0) startReindexProgress(sourceId, allUrls.length).catch(() => {});
+  const urls = allUrls.slice(startFrom);
 
   // `HTML` must stay free/deterministic (docs/search-source-processing-strategies.md §2) — same
   // rule `fetchAndNormalize`'s own `allowAi` follows.
   const allowAi = source.processingType !== "HTML";
 
-  for (const [urlIndex, candidate] of urls.entries()) {
+  for (const [localIndex, candidate] of urls.entries()) {
     // `bumpReindexProgress` is called once at every exit point of this loop body (each `continue`
     // below, and the natural fall-through at the end) rather than wrapped in a `finally`, to avoid
     // reindenting this whole already-large loop body for a progress side-effect.
-    const position = urlIndex + 1;
-    const isLastUrl = position === urls.length;
+    const position = startFrom + localIndex + 1;
+    const isLastUrl = position === allUrls.length;
+
+    // Manual testing's "Остановить" (Stop) — checked first, before the paced fetch below, so a click
+    // doesn't have to wait out a rate-limit sleep it no longer needs. Best-effort/fail-safe: see
+    // `isCancelRequested`'s own doc comment.
+    if (await isCancelRequested(sourceId)) {
+      await cancelReindexProgress(sourceId, position - 1);
+      return result;
+    }
 
     // Э8: shared with `orchestrator/verification-phase.ts` now — see `resilience/rate-limiter.ts`'s
     // own doc comment. Unconditional (no more `if (index > 0)` guard): the first call for a source
@@ -288,14 +309,14 @@ async function indexGenericSource(source: NonNullable<Awaited<ReturnType<typeof 
     bumpReindexProgress(sourceId, position, isLastUrl).catch(() => {});
   }
 
-  await finishReindexProgress(sourceId, urls.length);
+  await finishReindexProgress(sourceId, allUrls.length);
   return result;
 }
 
 /** Domain → its own indexing path, mirroring `adapters/adapter-registry.ts`'s
  *  `ADAPTER_FACTORIES_BY_DOMAIN` — a domain listed here has a bespoke crawl/extraction pipeline
  *  that doesn't go through the URL Registry at all, same reasoning as that map. */
-const DOMAIN_INDEXERS: Record<string, (sourceId: string) => Promise<IndexRunResult>> = {
+const DOMAIN_INDEXERS: Record<string, (sourceId: string, startFrom?: number) => Promise<IndexRunResult>> = {
   "brilions.com": indexBrilionsSource,
 };
 
@@ -310,13 +331,14 @@ const DOMAIN_INDEXERS: Record<string, (sourceId: string) => Promise<IndexRunResu
  * per-page decision. A skipped run simply leaves the existing index rows as they are (still served
  * by the read path, just not refreshed this cycle) — never an error the cron route needs to handle.
  */
-export async function indexSource(sourceId: string): Promise<IndexRunResult> {
+export async function indexSource(sourceId: string, options?: { startFrom?: number }): Promise<IndexRunResult> {
   const source = await getSourceById(sourceId);
   if (!source) return emptyRunResult(sourceId);
   if (!(await isSourceCallAllowed(sourceId))) return emptyRunResult(sourceId);
 
+  const startFrom = options?.startFrom ?? 0;
   const domainIndexer = DOMAIN_INDEXERS[source.domain];
-  const result = await (domainIndexer ? domainIndexer(sourceId) : indexGenericSource(source));
+  const result = await (domainIndexer ? domainIndexer(sourceId, startFrom) : indexGenericSource(source, startFrom));
 
   // Э10 (Арх §19): piggybacks on the indexer's own cadence — checked here, not on every live search
   // request. Best-effort and never awaited-into-failure: `checkSourceStructureHealth` already

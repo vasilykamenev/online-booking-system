@@ -457,17 +457,17 @@ export type Database = {
         }
         Relationships: [
           {
-            foreignKeyName: "search_extracted_listings_source_id_fkey"
-            columns: ["source_id"]
-            isOneToOne: false
-            referencedRelation: "search_sources"
-            referencedColumns: ["id"]
-          },
-          {
             foreignKeyName: "external_vessel_index_vessel_identity_id_fkey"
             columns: ["vessel_identity_id"]
             isOneToOne: false
             referencedRelation: "vessel_identities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "search_extracted_listings_source_id_fkey"
+            columns: ["source_id"]
+            isOneToOne: false
+            referencedRelation: "search_sources"
             referencedColumns: ["id"]
           },
         ]
@@ -1465,12 +1465,13 @@ export type Database = {
           image_domains: string[]
           last_checked_at: string | null
           name: string
-          notes: string | null
           needs_reanalysis: boolean
+          notes: string | null
           priority: number
           processing_type: Database["public"]["Enums"]["search_processing_type"]
           reanalysis_sample_size: number | null
           reanalysis_success_count: number | null
+          reindex_cancel_requested: boolean
           reindex_finished_at: string | null
           reindex_processed: number | null
           reindex_started_at: string | null
@@ -1508,12 +1509,13 @@ export type Database = {
           image_domains?: string[]
           last_checked_at?: string | null
           name: string
-          notes?: string | null
           needs_reanalysis?: boolean
+          notes?: string | null
           priority?: number
           processing_type?: Database["public"]["Enums"]["search_processing_type"]
           reanalysis_sample_size?: number | null
           reanalysis_success_count?: number | null
+          reindex_cancel_requested?: boolean
           reindex_finished_at?: string | null
           reindex_processed?: number | null
           reindex_started_at?: string | null
@@ -1551,12 +1553,13 @@ export type Database = {
           image_domains?: string[]
           last_checked_at?: string | null
           name?: string
-          notes?: string | null
           needs_reanalysis?: boolean
+          notes?: string | null
           priority?: number
           processing_type?: Database["public"]["Enums"]["search_processing_type"]
           reanalysis_sample_size?: number | null
           reanalysis_success_count?: number | null
+          reindex_cancel_requested?: boolean
           reindex_finished_at?: string | null
           reindex_processed?: number | null
           reindex_started_at?: string | null
@@ -1848,7 +1851,13 @@ export type Database = {
         | "collaboration"
         | "info_request"
       initiative_status: "open" | "closed"
-      intent_status: "DRAFT" | "CONFIRMED" | "SENT" | "ANSWERED" | "FAILED" | "CANCELLED"
+      intent_status:
+        | "DRAFT"
+        | "CONFIRMED"
+        | "SENT"
+        | "ANSWERED"
+        | "FAILED"
+        | "CANCELLED"
       intent_type: "CONTACT_REQUEST" | "BOOKING_REQUEST" | "INFO_REQUEST"
       payment_provider: "stripe" | "bank_transfer"
       payment_status:
@@ -1875,7 +1884,12 @@ export type Database = {
         | "REDIRECT_ONLY"
       search_crawl_rule_pattern_type: "PREFIX" | "REGEX"
       search_external_phase: "SKIPPED" | "PENDING" | "COMPLETE" | "FAILED"
-      search_field_source: "SELECTOR" | "JSON_LD" | "AI" | "MANUAL" | "BREADCRUMB"
+      search_field_source:
+        | "SELECTOR"
+        | "JSON_LD"
+        | "AI"
+        | "MANUAL"
+        | "BREADCRUMB"
       search_processing_type:
         | "API"
         | "HTML"
@@ -2043,7 +2057,14 @@ export const Constants = {
         "info_request",
       ],
       initiative_status: ["open", "closed"],
-      intent_status: ["DRAFT", "CONFIRMED", "SENT", "ANSWERED", "FAILED", "CANCELLED"],
+      intent_status: [
+        "DRAFT",
+        "CONFIRMED",
+        "SENT",
+        "ANSWERED",
+        "FAILED",
+        "CANCELLED",
+      ],
       intent_type: ["CONTACT_REQUEST", "BOOKING_REQUEST", "INFO_REQUEST"],
       payment_provider: ["stripe", "bank_transfer"],
       payment_status: [
@@ -2073,7 +2094,13 @@ export const Constants = {
       ],
       search_crawl_rule_pattern_type: ["PREFIX", "REGEX"],
       search_external_phase: ["SKIPPED", "PENDING", "COMPLETE", "FAILED"],
-      search_field_source: ["SELECTOR", "JSON_LD", "AI", "MANUAL", "BREADCRUMB"],
+      search_field_source: [
+        "SELECTOR",
+        "JSON_LD",
+        "AI",
+        "MANUAL",
+        "BREADCRUMB",
+      ],
       search_processing_type: [
         "API",
         "HTML",
@@ -2086,6 +2113,7 @@ export const Constants = {
       search_url_classification: ["HIGH", "MEDIUM", "LOW", "SKIP"],
       search_url_crawl_status: ["PENDING", "FETCHED", "FAILED", "SKIPPED"],
       user_role: ["client", "owner", "admin"],
+      vessel_identity_match_method: ["SEED", "DETERMINISTIC", "AI"],
       vessel_status: ["draft", "published", "archived"],
       vessel_type: [
         "MOTOR_YACHT",

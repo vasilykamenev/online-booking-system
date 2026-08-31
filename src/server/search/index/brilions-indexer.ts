@@ -10,7 +10,13 @@ import { recordExtraction, resultToListingFields } from "@/server/search/registr
 import { type IndexRunResult, emptyRunResult, throttle } from "@/server/search/index/shared";
 import { recordSourceFailure, recordSourceSuccess } from "@/server/search/resilience/source-health";
 import { resolveVesselIdentity } from "@/server/search/identity/vessel-identity";
-import { bumpReindexProgress, finishReindexProgress, startReindexProgress } from "@/server/search/index/reindex-progress";
+import {
+  bumpReindexProgress,
+  cancelReindexProgress,
+  finishReindexProgress,
+  isCancelRequested,
+  startReindexProgress,
+} from "@/server/search/index/reindex-progress";
 
 /**
  * Brilions' own indexing path (Э5) — every sitemap entry, not a criteria-matched sample. Reuses
@@ -25,20 +31,29 @@ import { bumpReindexProgress, finishReindexProgress, startReindexProgress } from
  * sitemap parse is the whole discovery mechanism), so there is no `recordFetchOutcome` bookkeeping
  * to do either — nothing reads that table for this domain.
  */
-export async function indexBrilionsSource(sourceId: string): Promise<IndexRunResult> {
+export async function indexBrilionsSource(sourceId: string, startFrom = 0): Promise<IndexRunResult> {
   const result = emptyRunResult(sourceId);
 
   const allowed = await resolveRobotsAllowed();
   if (!allowed) return result;
 
-  const entries = await loadSitemapEntries();
-  if (!entries) return result;
-  result.urlsConsidered = entries.length;
-  startReindexProgress(sourceId, entries.length).catch(() => {});
+  const allEntries = await loadSitemapEntries();
+  if (!allEntries) return result;
+  result.urlsConsidered = allEntries.length;
+  // See `indexer.ts`'s `indexGenericSource` — a resume reuses the row `beginResume` already set up.
+  if (startFrom === 0) startReindexProgress(sourceId, allEntries.length).catch(() => {});
+  const entries = allEntries.slice(startFrom);
 
-  for (const [entryIndex, entry] of entries.entries()) {
-    const position = entryIndex + 1;
-    const isLastEntry = position === entries.length;
+  for (const [localIndex, entry] of entries.entries()) {
+    const position = startFrom + localIndex + 1;
+    const isLastEntry = position === allEntries.length;
+
+    // Manual testing's "Остановить" (Stop) — see `indexer.ts`'s identical check for why this runs
+    // before the paced fetch below.
+    if (await isCancelRequested(sourceId)) {
+      await cancelReindexProgress(sourceId, position - 1);
+      return result;
+    }
 
     // Э8: shared with the generic indexer and live verification now — see
     // `resilience/rate-limiter.ts`'s own doc comment.
@@ -103,6 +118,6 @@ export async function indexBrilionsSource(sourceId: string): Promise<IndexRunRes
     bumpReindexProgress(sourceId, position, isLastEntry).catch(() => {});
   }
 
-  await finishReindexProgress(sourceId, entries.length);
+  await finishReindexProgress(sourceId, allEntries.length);
   return result;
 }

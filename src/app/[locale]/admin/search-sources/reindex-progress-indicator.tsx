@@ -1,24 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useTranslations } from "next-intl";
-import { fetchReindexProgress, type FetchReindexProgressResult } from "@/server/actions/admin";
-
-/** Frequent enough to feel live without hammering the DB on an admin-only, low-traffic page — same
- *  order of magnitude as `resilience/rate-limiter.ts`'s own throttle windows elsewhere in this
- *  codebase's search pipeline. */
-const POLL_INTERVAL_MS = 3000;
+import { useReindexStatus } from "@/lib/search/use-reindex-status";
 
 /**
- * Polls `fetchReindexProgress` (Server Action, admin-gated) for one source and renders nothing at
- * all unless a run is actually in flight — a source that has never been reindexed, or whose last
- * run already finished, shows neither variant. "In flight" is derived, not a stored flag: a start
- * with no finish yet, or a finish older than the current start (a run got kicked off again since).
+ * Renders one of three states for a source's indexing pass, derived by `useReindexStatus` from the
+ * same polled `fetchReindexProgress` row `ReindexButton` reads: nothing at all if there's neither a
+ * run in flight nor one left resumable; an animated bar/percent while running; or, since Resume/Stop
+ * (manual testing), a static bar at the last recorded percent with a "stopped" label when a run was
+ * cancelled or presumed timed out but still has pages left to resume — so a tester sees there's
+ * something to continue instead of the bar just vanishing.
  *
  * `variant="compact"`: a short inline label for the search-sources list row (Э5). `variant="bar"`:
  * the fuller progress bar for the source's own URL Registry page, next to `ReindexButton` — polls
- * independently of that button's own `isPending`, so a run started from the cron job or another
- * admin tab still shows here.
+ * independently of that button's own state, so a run started from the cron job or another admin tab
+ * still shows here.
  */
 export function ReindexProgressIndicator({
   sourceId,
@@ -28,46 +24,30 @@ export function ReindexProgressIndicator({
   variant?: "compact" | "bar";
 }) {
   const t = useTranslations("admin.searchSources.urlRegistry.reindexProgress");
-  const [progress, setProgress] = useState<FetchReindexProgressResult | null>(null);
+  const { progress, isRunning, canResume, percent } = useReindexStatus(sourceId);
 
-  useEffect(() => {
-    let cancelled = false;
+  if (!isRunning && !canResume) return null;
 
-    async function poll() {
-      const result = await fetchReindexProgress(sourceId);
-      if (!cancelled) setProgress(result);
-    }
-
-    poll();
-    const interval = setInterval(poll, POLL_INTERVAL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(interval);
-    };
-  }, [sourceId]);
-
-  if (!progress || progress.error || !progress.startedAt) return null;
-
-  const isRunning = !progress.finishedAt || progress.finishedAt < progress.startedAt;
-  if (!isRunning) return null;
-
-  const total = progress.total ?? 0;
-  const processed = progress.processed ?? 0;
-  const percent = total > 0 ? Math.round((processed / total) * 100) : 0;
+  const total = progress?.total ?? 0;
+  const processed = progress?.processed ?? 0;
 
   if (variant === "compact") {
-    return <span className="text-xs font-light text-muted-foreground">{t("compact", { percent })}</span>;
+    return (
+      <span className="text-xs font-light text-muted-foreground">
+        {isRunning ? t("compact", { percent }) : t("stopped", { processed, total })}
+      </span>
+    );
   }
 
   return (
     <div className="mt-3">
       <div className="flex items-center justify-between text-xs font-light text-muted-foreground">
-        <span>{t("bar", { processed, total })}</span>
-        <span>{t("compact", { percent })}</span>
+        <span>{isRunning ? t("bar", { processed, total }) : t("stopped", { processed, total })}</span>
+        {isRunning && <span>{t("compact", { percent })}</span>}
       </div>
       <div className="mt-1.5 h-1.5 w-full overflow-hidden rounded-full bg-muted">
         <div
-          className="h-full rounded-full bg-primary transition-[width] duration-500 ease-out"
+          className={`h-full rounded-full bg-primary ${isRunning ? "transition-[width] duration-500 ease-out" : "opacity-50"}`}
           style={{ width: `${percent}%` }}
         />
       </div>
