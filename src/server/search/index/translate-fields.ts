@@ -89,10 +89,28 @@ const SYSTEM_PROMPT = [
   "translating them would misrepresent them. Never invent content that isn't in the source value.",
 ].join("\n");
 
+/** Per-field instructions beyond the generic "translate this" — currently only `vesselTypeRaw`
+ *  needs one. Bug found live (2026-09-01): brilions.com's own Russian pages label the type widget
+ *  with a plural category name ("Тип: Моторные яхты", literally "Type: Motor Yachts") where the
+ *  English pages use a singular per-vessel descriptor ("Type: Motor yacht") for the exact same
+ *  vessel type — `extract.ts`'s `.yacht-meta-item` extraction is verbatim-correct on both (it
+ *  really does say that), so a faithful translation of the Russian widget produced "Motor yachts"
+ *  (plural) and reintroduced the exact cross-locale mismatch this whole module exists to remove.
+ *  One row never describes a category, always exactly one vessel, so the field is pinned to
+ *  singular regardless of the source's own grammatical number. */
+const FIELD_INSTRUCTIONS: Partial<Record<keyof TranslatableFields, string>> = {
+  vesselTypeRaw:
+    'English translation of "vesselTypeRaw", singular, describing this one vessel (e.g. "Motor ' +
+    'yacht", never "Motor yachts") — even if the source text is phrased as a plural category label.',
+};
+
 function buildTool(keys: string[]) {
   const properties: Record<string, { type: string[]; description: string }> = {};
   for (const key of keys) {
-    properties[key] = { type: ["string", "null"], description: `English translation of "${key}".` };
+    properties[key] = {
+      type: ["string", "null"],
+      description: FIELD_INSTRUCTIONS[key as keyof TranslatableFields] ?? `English translation of "${key}".`,
+    };
   }
   return {
     name: "record_translation",
@@ -158,7 +176,11 @@ async function callTranslationModel(
 
     cacheTranslation(key, translated).catch(() => {});
     return translated;
-  } catch {
+  } catch (error) {
+    // Degrades to the original, untranslated value (this function's own doc comment) — logged, not
+    // silent, so a persistently-failing key/quota/timeout is visible instead of quietly leaving
+    // every affected row in its source language forever.
+    console.error("[translateFieldsToEnglish] model call failed", error);
     return null;
   }
 }
