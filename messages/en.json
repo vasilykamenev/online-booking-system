@@ -1101,6 +1101,8 @@
       "empty": "No sources yet.",
       "addNew": "Add source",
       "collapseForm": "Collapse",
+      "expandValue": "Show full value",
+      "collapseValue": "Collapse value",
       "edit": "Edit",
       "urlRegistryLink": "URL registry",
       "enable": "Enable",

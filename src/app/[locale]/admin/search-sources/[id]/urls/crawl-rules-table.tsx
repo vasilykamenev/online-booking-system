@@ -14,6 +14,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CrawlRuleDeleteButton } from "./crawl-rule-delete-button";
 import { CLASSIFICATION_BADGE_VARIANT } from "./classification-badge";
+import { ExpandableValue } from "./expandable-value";
 
 /** Crawl-rules table with per-row and multi-select bulk delete. Selection lives in this client
  *  component's own state — the surrounding page stays a server component and just hands over the
@@ -109,7 +110,9 @@ export function CrawlRulesTable({ sourceId, rules }: { sourceId: string; rules: 
                 <TableCell>
                   <Badge variant="outline">{tPatternType(rule.patternType)}</Badge>
                 </TableCell>
-                <TableCell className="font-mono text-xs">{rule.pattern}</TableCell>
+                <TableCell className="font-mono text-xs">
+                  <ExpandableValue value={rule.pattern} />
+                </TableCell>
                 <TableCell>
                   <Badge variant={CLASSIFICATION_BADGE_VARIANT[rule.classification]}>
                     {tClassification(rule.classification)}
