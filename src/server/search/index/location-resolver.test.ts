@@ -47,12 +47,25 @@ describe("pickBestLocationMatch", () => {
     expect(result).toEqual({ country: "Greece", city: "Ikaria", marina: null, latitude: 37.5928, longitude: 26.2836 });
   });
 
-  it("falls back to the label that actually appeared, e.g. the Russian crumb, not a translation of it", () => {
+  it("matches on the Russian crumb but stores the row's English label, per the index's English-only policy", () => {
     const result = pickBestLocationMatch(["Икария"], [ikaria]);
-    expect(result?.city).toBe("Икария");
-    // Country wasn't in the trail at all — borrows the row's first available label rather than
-    // leaving it null, since the row itself is already the confirmed match via city.
-    expect(result?.country).toBe("Греция");
+    expect(result?.city).toBe("Ikaria");
+    // Country wasn't in the trail at all — borrows the row's own `en` label rather than leaving it
+    // null, since the row itself is already the confirmed match via city.
+    expect(result?.country).toBe("Greece");
+  });
+
+  it("falls back to whatever label a row has when it carries no `en` entry yet", () => {
+    const noEnglishYet = {
+      country: { ru: "Черногория" },
+      city: { ru: "Котор" },
+      marina: null,
+      latitude: 42.42,
+      longitude: 18.77,
+    };
+    const result = pickBestLocationMatch(["Котор"], [noEnglishYet]);
+    expect(result?.city).toBe("Котор");
+    expect(result?.country).toBe("Черногория");
   });
 
   it("falls back to country-only with no city/marina/coordinates when only the country crumb matches", () => {

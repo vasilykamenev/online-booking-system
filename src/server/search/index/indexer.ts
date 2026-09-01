@@ -21,6 +21,7 @@ import { type IndexRunResult, type RunOptions, emptyRunResult, throttle } from "
 import { isSourceCallAllowed, recordSourceFailure, recordSourceSuccess } from "@/server/search/resilience/source-health";
 import { checkSourceStructureHealth } from "@/server/search/source-structure-health";
 import { resolveVesselIdentity } from "@/server/search/identity/vessel-identity";
+import { translateFieldsToEnglish } from "@/server/search/index/translate-fields";
 import {
   bumpReindexProgress,
   cancelReindexProgress,
@@ -228,6 +229,12 @@ async function indexGenericSource(
     if (!genericFields || !fieldSource || confidence === null) {
       return; // not a listing — nothing to index
     }
+
+    // Index-wide English policy (translate-fields.ts's own doc comment) — layered on after
+    // extraction, not folded into any tier above: extraction stays a verbatim record of what the
+    // page said (provenance/confidence keep meaning "how sure are we this is what the page said",
+    // not "how sure are we about the translation"), and a no-op for already-English text either way.
+    genericFields = { ...genericFields, ...(await translateFieldsToEnglish(genericFields)) };
 
     const retrievedAt = new Date().toISOString();
     const resolvedLocation = await resolveLocationFromBreadcrumb(breadcrumbLabels).catch(() => null);
