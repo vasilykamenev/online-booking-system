@@ -27,6 +27,7 @@ import { ReindexButton } from "./reindex-button";
 import { ClearUrlsButton } from "./clear-urls-button";
 import { CrawlRuleForm } from "./crawl-rule-form";
 import { CrawlRulesTable } from "./crawl-rules-table";
+import { ExpandableValue } from "./expandable-value";
 import { AddManualUrlsForm } from "./add-manual-urls-form";
 import { UrlSelectionToggle } from "./url-selection-toggle";
 import { ResolveConflictButtons } from "./resolve-conflict-buttons";
@@ -166,7 +167,9 @@ export default async function SearchSourceUrlsPage({
                     </TableCell>
                     <TableCell className="text-sm">{tConflicts(`field.${conflict.field}`)}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">{String(conflict.previousValue)}</TableCell>
-                    <TableCell className="text-sm font-medium">{String(conflict.newValue)}</TableCell>
+                    <TableCell className="text-sm font-medium">
+                      <ExpandableValue value={String(conflict.newValue)} />
+                    </TableCell>
                     <TableCell className="text-xs text-muted-foreground">
                       {tConflicts(`source.${conflict.previousSource}`)} → {tConflicts(`source.${conflict.newSource}`)}
                     </TableCell>
