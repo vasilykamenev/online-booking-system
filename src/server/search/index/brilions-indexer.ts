@@ -10,6 +10,7 @@ import { recordExtraction, resultToListingFields } from "@/server/search/registr
 import { type IndexRunResult, type RunOptions, emptyRunResult, throttle } from "@/server/search/index/shared";
 import { recordSourceFailure, recordSourceSuccess } from "@/server/search/resilience/source-health";
 import { resolveVesselIdentity } from "@/server/search/identity/vessel-identity";
+import { translateFieldsToEnglish } from "@/server/search/index/translate-fields";
 import {
   bumpReindexProgress,
   cancelReindexProgress,
@@ -56,8 +57,19 @@ export async function indexBrilionsSource(
     // `sourceId` (`reservationChains`).
     await throttle(sourceId);
 
-    const { result: normalized, usedAi, contentHash } = await fetchAndNormalize(entry, {
-      locale: "ru",
+    // "en" here selects `entry.urlEn` inside `fetchAndNormalize` (falling back to `entry.urlRu` for
+    // the ~8% of vessels with no English page yet, per `sitemap.ts`'s own count) — not a UI locale.
+    // Deliberately not "ru": indexing this way means `location.city`/`vessels.name` etc. land in
+    // English on the vast majority of rows, matching `locations`' own canonical (English) labels
+    // (`vocabulary.ts`'s `collectEntries` picks the first label in `routing.locales` order, which is
+    // "en") instead of the Cyrillic the Russian page states — the exact mismatch that made
+    // `location.city.eq.<english value>`'s SQL-level filter (`vessel-index.ts`) and `sameLabel`'s
+    // exact-match ranking (`ranking.ts`) silently drop every brilions row from a location-scoped
+    // search, since neither does any translation of its own. `extractDeterministic`'s field labels
+    // (`FIELD_LABELS`, the `Порт|Port` regex) already parse either language's markup identically, so
+    // this needed no change on that side — only which sitemap URL got fetched.
+    let { result: normalized, usedAi, contentHash } = await fetchAndNormalize(entry, {
+      locale: "en",
       searchQueries: [],
       timeoutMs: 30_000,
     });
@@ -70,6 +82,22 @@ export async function indexBrilionsSource(
     }
     recordSourceSuccess(sourceId).catch(() => {});
     result.pagesFetched += 1;
+
+    // Covers only the ~8% of vessels with no English sitemap page (`entry.urlEn` null, this comment
+    // block's own note above) — the other ~92% already fetched English source text and this is a
+    // no-op (`translateFieldsToEnglish`'s ASCII fast path costs no AI call for those).
+    const translated = await translateFieldsToEnglish({
+      description: normalized.description,
+      vesselTypeRaw: normalized.vesselTypeRaw,
+      country: normalized.location.country,
+      city: normalized.location.city,
+    });
+    normalized = {
+      ...normalized,
+      description: translated.description,
+      vesselTypeRaw: translated.vesselTypeRaw,
+      location: { ...normalized.location, country: translated.country, city: translated.city },
+    };
 
     const pageUrl = normalized.source.url;
     const retrievedAt = normalized.source.retrievedAt;

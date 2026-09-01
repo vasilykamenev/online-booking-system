@@ -30,20 +30,24 @@ export interface ResolvedBreadcrumbLocation {
   longitude: number | null;
 }
 
-/** The label as it actually appeared in the trail (whichever locale that happens to be) — never a
- *  translation of it, so the stored value is exactly what was confirmed, not a guess at its
- *  Russian/English equivalent. */
+/** The place is still identified by whichever locale's label actually appeared in the trail (a
+ *  Russian breadcrumb confirms a Russian-labelled row exactly as well as an English one would) — but
+ *  the *stored* value is that row's own `en` label, not the matched-locale label, so the index's
+ *  English-only policy (`translate-fields.ts`'s own doc comment) is satisfied for free: this is an
+ *  authoritative field of the very row that was just positively matched, not a guess at one, so it
+ *  costs no AI call and carries none of translation's uncertainty. Falls back to the matched label
+ *  itself only for the rare row with no `en` entry yet. */
 function matchingLabel(record: LocalizedRecord | null, normalizedLabels: Set<string>): string | null {
   if (!record) return null;
   for (const label of Object.values(record)) {
-    if (label && normalizedLabels.has(normalizeForMatch(label))) return label;
+    if (label && normalizedLabels.has(normalizeForMatch(label))) return record.en ?? label;
   }
   return null;
 }
 
 function firstLabel(record: LocalizedRecord | null): string | null {
   if (!record) return null;
-  return Object.values(record).find((value): value is string => Boolean(value)) ?? null;
+  return record.en ?? Object.values(record).find((value): value is string => Boolean(value)) ?? null;
 }
 
 /**

@@ -1593,6 +1593,24 @@ export type Database = {
         }
         Relationships: []
       }
+      search_translation_cache: {
+        Row: {
+          created_at: string
+          text_hash: string
+          translated: Json
+        }
+        Insert: {
+          created_at?: string
+          text_hash: string
+          translated: Json
+        }
+        Update: {
+          created_at?: string
+          text_hash?: string
+          translated?: Json
+        }
+        Relationships: []
+      }
       vessel_amenities: {
         Row: {
           amenity_id: string
