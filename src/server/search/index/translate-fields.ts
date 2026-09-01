@@ -53,13 +53,22 @@ function needsTranslation(fields: TranslatableFields): Partial<Record<keyof Tran
   return candidates;
 }
 
+/** Bump whenever `SYSTEM_PROMPT`/`FIELD_INSTRUCTIONS` change what the model is asked to produce for
+ *  the same input text — folded into the cache key below so a prompt fix invalidates every cache row
+ *  it could have affected automatically, by simply no longer matching any key computed under the new
+ *  version, rather than needing a manual `DELETE` migration to purge stale output every time (found
+ *  live 2026-09-01: the singular/plural `vesselTypeRaw` fix needed exactly that one-time manual purge
+ *  because this version wasn't here yet). Old rows are simply never looked up again, not deleted —
+ *  harmless, orphaned data that ordinary index-retention housekeeping can eventually sweep. */
+const PROMPT_VERSION = 2;
+
 /** Stable regardless of key insertion order, so the same set of source-language values always hits
  *  the same cache row — mirrors `search_extraction_cache`'s content-hash keying. */
 function cacheKey(candidates: Partial<Record<keyof TranslatableFields, string>>): string {
   const sorted = Object.keys(candidates)
     .sort()
     .map((key) => [key, candidates[key as keyof TranslatableFields]] as const);
-  return hashContent(JSON.stringify(sorted));
+  return hashContent(JSON.stringify({ promptVersion: PROMPT_VERSION, fields: sorted }));
 }
 
 async function getCachedTranslation(key: string): Promise<Partial<Record<string, string>> | null> {
