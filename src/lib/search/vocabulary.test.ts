@@ -93,4 +93,36 @@ describe("withDistinctiveWordAliases", () => {
       expect(entry.aliases).toEqual(expect.arrayContaining(original.aliases));
     }
   });
+
+  // Reproduces the real `vessels.types.*` data — unlike the fixture above, both a motor and a
+  // sailing yacht say "яхта"/"yacht", which is exactly the case a flat uniqueness check gets wrong
+  // (bug found live: a bare "яхта" query matched no vessel type at all, silently searching every
+  // type instead of narrowing to yachts).
+  const yachtFamily = [
+    { value: "MOTOR_YACHT", aliases: ["Yacht", "Моторная яхта"] },
+    { value: "SAILING_YACHT", aliases: ["Yacht", "Парусная яхта"] },
+    { value: "CATAMARAN", aliases: ["Catamaran", "Катамаран"] },
+  ];
+
+  it("adds a word shared by up to maxSharedOwners entries to every one of them", () => {
+    const [motor, sailing, catamaran] = withDistinctiveWordAliases(yachtFamily, 4, 2);
+    expect(motor.aliases).toContain("яхта");
+    expect(sailing.aliases).toContain("яхта");
+    expect(catamaran.aliases).not.toContain("яхта");
+  });
+
+  it("still drops a word shared by more entries than maxSharedOwners allows", () => {
+    // "судно"/"vessel" span three unrelated types here, same as the default-threshold test above —
+    // raising the threshold to 2 must not suddenly treat a three-way word as a shared category.
+    for (const entry of withDistinctiveWordAliases(vesselTypes, 4, 2)) {
+      expect(entry.aliases).not.toContain("судно");
+      expect(entry.aliases).not.toContain("vessel");
+    }
+  });
+
+  it("defaults to the strict single-owner rule when maxSharedOwners is omitted", () => {
+    const [motor, sailing] = withDistinctiveWordAliases(yachtFamily);
+    expect(motor.aliases).not.toContain("яхта");
+    expect(sailing.aliases).not.toContain("яхта");
+  });
 });

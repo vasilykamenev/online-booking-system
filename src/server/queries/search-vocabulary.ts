@@ -91,7 +91,12 @@ export const buildSearchVocabulary = cache(async (): Promise<SearchVocabulary> =
     countries,
     cities,
     marinas,
-    vesselTypes: withDistinctiveWordAliases(vesselTypes),
+    // 2, not the default 1: real vessel-type labels pair a qualifier with a shared head noun
+    // ("Моторная яхта"/"Парусная яхта" both say "яхта") — see `withDistinctiveWordAliases`'s own
+    // doc comment for why a word shared by a couple of siblings should reach both of them rather
+    // than being dropped as ambiguous. `features` stays at the conservative default: amenity
+    // labels aren't built from this same qualifier+noun pattern, so there's no equivalent case for it yet.
+    vesselTypes: withDistinctiveWordAliases(vesselTypes, 4, 2),
     features: withDistinctiveWordAliases(features),
   };
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { interpretQueryDeterministic } from "./interpret-fallback";
-import type { SearchVocabulary } from "./vocabulary";
+import { withDistinctiveWordAliases, type SearchVocabulary } from "./vocabulary";
 
 const LOCALES = ["en", "ru"] as const;
 
@@ -334,5 +334,48 @@ describe("interpretQueryDeterministic — the Э2 worked example", () => {
     expect(criteria.duration).toBeNull();
     expect(criteria.crew?.captainRequired).toBe(true);
     expect(criteria.crew?.crewType).toBe("SKIPPERED");
+  });
+});
+
+describe("interpretQueryDeterministic — bare 'яхта' against the real two-owner vessel-type data", () => {
+  // Bug found live: "яхта Турция на октябрь для 3 человек" resolved guests and month correctly but
+  // dropped both the country and the vessel type. Unlike this file's shared `vocabulary` fixture
+  // above (which hands MOTOR_YACHT a pre-built "Яхта" alias, sidestepping the issue), this mirrors
+  // what `buildSearchVocabulary` actually derives via `withDistinctiveWordAliases`: MOTOR_YACHT and
+  // SAILING_YACHT both say "яхта" in their real `vessels.types.*` label, so it takes the *shared*
+  // uniqueness handling (`maxSharedOwners`) — not a hand-authored fixture — to reproduce the bug.
+  const realisticVocabulary: SearchVocabulary = {
+    countries: [{ value: "Turkey", aliases: ["Turkey", "Турция"] }],
+    cities: [],
+    marinas: [],
+    vesselTypes: withDistinctiveWordAliases(
+      [
+        { value: "MOTOR_YACHT", aliases: ["Motor yacht", "Моторная яхта"] },
+        { value: "SAILING_YACHT", aliases: ["Sailing yacht", "Парусная яхта"] },
+        { value: "CATAMARAN", aliases: ["Catamaran", "Катамаран"] },
+      ],
+      4,
+      2,
+    ),
+    features: [],
+  };
+
+  function interpretRealistic(query: string) {
+    return interpretQueryDeterministic({ query, vocabulary: realisticVocabulary, locales: LOCALES });
+  }
+
+  it("resolves the country, month and guest count from the exact reported query", () => {
+    const criteria = interpretRealistic("яхта Турция на октябрь для 3 человек");
+
+    expect(criteria.location?.country).toBe("Turkey");
+    expect(criteria.date?.month).toBe(10);
+    expect(criteria.capacity?.persons).toBe(3);
+  });
+
+  it("maps a bare 'яхта' to every yacht sub-type instead of matching none", () => {
+    const criteria = interpretRealistic("яхта Турция на октябрь для 3 человек");
+
+    expect(criteria.vesselTypes.sort()).toEqual(["MOTOR_YACHT", "SAILING_YACHT"]);
+    expect(criteria.vesselTypes).not.toContain("CATAMARAN");
   });
 });
