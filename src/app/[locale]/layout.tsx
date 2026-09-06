@@ -7,6 +7,7 @@ import { notFound } from "next/navigation";
 import { Toaster } from "sonner";
 import { routing } from "@/i18n/routing";
 import { ThemeProvider } from "@/components/providers/theme-provider";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { Header } from "@/components/layout/header";
 import { Footer } from "@/components/layout/footer";
 import { getCurrentProfile } from "@/server/queries/profile";
@@ -71,10 +72,12 @@ export default async function LocaleLayout({
             enableSystem
             disableTransitionOnChange
           >
-            <Header profile={profile} />
-            <main className="flex-1">{children}</main>
-            <Footer />
-            <Toaster position="bottom-right" richColors closeButton />
+            <TooltipProvider>
+              <Header profile={profile} />
+              <main className="flex-1">{children}</main>
+              <Footer />
+              <Toaster position="bottom-right" richColors closeButton />
+            </TooltipProvider>
           </ThemeProvider>
         </NextIntlClientProvider>
       </body>

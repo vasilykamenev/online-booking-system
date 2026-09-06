@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Pencil, Link2 } from "lucide-react";
 import { getTranslations, setRequestLocale } from "next-intl/server";
 import type { Locale } from "@/i18n/routing";
 import { Link } from "@/i18n/navigation";
@@ -19,6 +20,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Database } from "@/lib/supabase/database.types";
 import { NewSearchSourceSection } from "./new-search-source-section";
 import { IndexingSettingsForm } from "./indexing-settings-form";
@@ -204,12 +206,26 @@ export default async function AdminSearchSourcesPage({
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-wrap items-center gap-1">
-                      <Button asChild variant="outline" size="sm" className="rounded-full">
-                        <Link href={`/admin/search-sources/${source.id}/edit`}>{t("edit")}</Link>
-                      </Button>
-                      <Button asChild variant="outline" size="sm" className="rounded-full">
-                        <Link href={`/admin/search-sources/${source.id}/urls`}>{t("urlRegistryLink")}</Link>
-                      </Button>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button asChild variant="ghost" size="icon" aria-label={t("edit")}>
+                            <Link href={`/admin/search-sources/${source.id}/edit`}>
+                              <Pencil className="size-4" strokeWidth={1.5} />
+                            </Link>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{t("edit")}</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button asChild variant="ghost" size="icon" aria-label={t("urlRegistryLink")}>
+                            <Link href={`/admin/search-sources/${source.id}/urls`}>
+                              <Link2 className="size-4" strokeWidth={1.5} />
+                            </Link>
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>{t("urlRegistryLink")}</TooltipContent>
+                      </Tooltip>
                       {source.status === "active" ? (
                         <SearchSourceToggleButton sourceId={source.id} enabled={source.enabled} />
                       ) : (

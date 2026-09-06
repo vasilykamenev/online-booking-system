@@ -1,12 +1,14 @@
 "use client";
 
 import { useTransition } from "react";
+import { Power, PowerOff } from "lucide-react";
 import { toast } from "sonner";
 import { useLocale, useTranslations } from "next-intl";
 import type { Locale } from "@/i18n/routing";
 import { useRouter } from "@/i18n/navigation";
 import { setSearchSourceEnabled } from "@/server/actions/admin";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export function SearchSourceToggleButton({
   sourceId,
@@ -32,15 +34,26 @@ export function SearchSourceToggleButton({
     });
   }
 
+  const label = enabled ? t("disable") : t("enable");
+
   return (
-    <Button
-      variant="outline"
-      size="sm"
-      className="rounded-full"
-      disabled={isPending}
-      onClick={handleClick}
-    >
-      {enabled ? t("disable") : t("enable")}
-    </Button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={label}
+          disabled={isPending}
+          onClick={handleClick}
+        >
+          {enabled ? (
+            <PowerOff className="size-4" strokeWidth={1.5} />
+          ) : (
+            <Power className="size-4" strokeWidth={1.5} />
+          )}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{label}</TooltipContent>
+    </Tooltip>
   );
 }
