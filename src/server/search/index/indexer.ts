@@ -106,7 +106,7 @@ export type { IndexRunResult } from "@/server/search/index/shared";
  */
 async function indexGenericSource(
   source: NonNullable<Awaited<ReturnType<typeof getSourceById>>>,
-  { startFrom, concurrency, deadlineAt }: RunOptions,
+  { startFrom, concurrency, deadlineAt, autoResolveConflicts }: RunOptions,
 ): Promise<IndexRunResult> {
   const sourceId = source.id;
   const result = emptyRunResult(sourceId);
@@ -261,6 +261,7 @@ async function indexGenericSource(
       sourceUrl: candidate.url,
       retrievedAt,
       image: normalized.images[0]?.url ?? null,
+      autoResolveConflicts,
     });
 
     // Fix (found live): a resolved breadcrumb location must never be tagged with the tier's own
@@ -286,6 +287,7 @@ async function indexGenericSource(
         sourceUrl: candidate.url,
         retrievedAt,
         image: null,
+        autoResolveConflicts,
       });
     }
 
@@ -373,6 +375,7 @@ export async function indexSource(sourceId: string, options?: { startFrom?: numb
     startFrom: options?.startFrom ?? 0,
     concurrency,
     deadlineAt: Date.now() + maxDurationSeconds * 1000,
+    autoResolveConflicts: source.autoResolveConflicts,
   };
   const domainIndexer = DOMAIN_INDEXERS[source.domain];
   const result = await (domainIndexer ? domainIndexer(sourceId, runOptions) : indexGenericSource(source, runOptions));

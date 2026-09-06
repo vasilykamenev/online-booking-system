@@ -62,6 +62,13 @@ export interface SearchSource {
    *  Vercel runtime logs). Off by default: meant for actively debugging one misbehaving source, not
    *  standing observability every source carries all the time. */
   detailedLogging: boolean;
+  /** `search_sources.auto_resolve_conflicts`, admin-set per source — when true,
+   *  `registry/listing-merge.ts`'s `mergeExtractedListing` accepts a fresh, unconfirmed field
+   *  disagreement immediately instead of logging it as an open `search_field_conflicts` row that
+   *  waits on an admin's manual "Accept new"/"Keep previous". Off by default, same reasoning as
+   *  `detailedLogging`: overwriting a disputed value without review is a behavior change an admin
+   *  opts a source into, not a standing default. */
+  autoResolveConflicts: boolean;
   /** Арх §8's access-strategy ladder — kept alongside `processingType` rather than replacing it;
    *  see the Э3 migration's own comment for why both exist until Э4 cuts provider selection over. */
   accessStrategy: SearchAccessStrategy;
@@ -74,7 +81,7 @@ export interface SearchSource {
 }
 
 const SOURCE_COLUMNS =
-  "id, name, domain, base_url, enabled, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, selector_config, image_domains, detailed_logging, access_strategy, fallback_strategies, can_search, can_details, can_availability, can_pricing, can_contact, supports_location, supports_dates, supports_price, supports_guests, contact_capability, search_source_coverage(worldwide, country, region, destination, latitude, longitude, radius_km)";
+  "id, name, domain, base_url, enabled, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, selector_config, image_domains, detailed_logging, auto_resolve_conflicts, access_strategy, fallback_strategies, can_search, can_details, can_availability, can_pricing, can_contact, supports_location, supports_dates, supports_price, supports_guests, contact_capability, search_source_coverage(worldwide, country, region, destination, latitude, longitude, radius_km)";
 
 /** Shared row → `SearchSource` mapping between `listEnabledSources` and `getSourceById` — kept as
  *  one function so the two never drift into subtly different shapes for the same columns. */
@@ -93,6 +100,7 @@ function mapSourceRow(row: {
   selector_config: unknown;
   image_domains: string[] | null;
   detailed_logging: boolean;
+  auto_resolve_conflicts: boolean;
   access_strategy: SearchAccessStrategy;
   fallback_strategies: SearchAccessStrategy[] | null;
   can_search: boolean;
@@ -135,6 +143,7 @@ function mapSourceRow(row: {
     selectorConfig: parsedSelectorConfig.success ? parsedSelectorConfig.data : null,
     imageDomains: row.image_domains ?? [],
     detailedLogging: row.detailed_logging,
+    autoResolveConflicts: row.auto_resolve_conflicts,
     accessStrategy: row.access_strategy,
     fallbackStrategies: row.fallback_strategies ?? [],
     capabilities: {

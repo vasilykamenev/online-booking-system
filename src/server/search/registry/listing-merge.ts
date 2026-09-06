@@ -101,6 +101,13 @@ export interface MergeResult {
   resolvedConflicts: ResolvedConflict[];
 }
 
+export interface MergeOptions {
+  /** `search_sources.auto_resolve_conflicts` — when true, a fresh disagreement is accepted
+   *  immediately instead of being logged as an open conflict, same outcome as an admin clicking
+   *  "Accept new" but without ever waiting on one. Off by default. */
+  autoResolveConflicts?: boolean;
+}
+
 // A page's price rarely changes between two crawls of the *same* page, but rounding/rate noise does
 // happen — tolerance keeps that from being logged as a conflict. No real fluctuation sample exists yet
 // (design doc §5.3 leaves this open); 1%, floored at 100 minor units (one major unit in a 2-decimal
@@ -129,6 +136,7 @@ export function mergeExtractedListing(
   existing: StoredListing | null,
   openConflictsByField: Partial<Record<ListingFieldName, OpenConflict>>,
   incoming: IncomingExtraction,
+  options: MergeOptions = {},
 ): MergeResult {
   // A precise `Partial<ListingFields>` (one value type per named field) can't be *written* through a
   // loop variable typed as the general `ListingFieldName` union — TypeScript computes the intersection
@@ -175,6 +183,16 @@ export function mergeExtractedListing(
       // confirmation path. Accept it and close the conflict.
       accept();
       resolvedConflicts.push({ field, conflictId: openConflict.id });
+      continue;
+    }
+
+    if (options.autoResolveConflicts) {
+      // Source opted out of manual review — accept the freshest value immediately instead of
+      // opening a conflict that would otherwise wait on an admin. If a conflict from before this
+      // setting was turned on is still open for this field, close it out the same way (`kept_new`)
+      // rather than leaving it stranded now that nothing will ever click "Accept new" on it.
+      accept();
+      if (openConflict) resolvedConflicts.push({ field, conflictId: openConflict.id });
       continue;
     }
 

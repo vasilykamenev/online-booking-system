@@ -56,6 +56,10 @@ export interface RecordExtractionInput {
    *  ("no opinion") leaves the previously stored image untouched, same convention as every other
    *  field. */
   image: string | null;
+  /** `search_sources.auto_resolve_conflicts` for `sourceId` — threaded in by the caller (already
+   *  has the source row loaded) rather than re-queried here on every call. Defaults to `false`,
+   *  matching the column's own default for any caller not yet updated to pass it. */
+  autoResolveConflicts?: boolean;
 }
 
 interface ListingRow {
@@ -119,6 +123,7 @@ export async function recordExtraction(input: RecordExtractionInput): Promise<{ 
       sourceUrl: input.sourceUrl,
       retrievedAt: input.retrievedAt,
     },
+    { autoResolveConflicts: input.autoResolveConflicts ?? false },
   );
 
   const { data: upserted } = await supabase

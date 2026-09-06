@@ -29,6 +29,10 @@ export interface RunOptions {
    *  (`reindex-progress.ts`'s `cancelReindexProgress`), rather than risking Vercel's own hard
    *  `maxDuration` killing the run mid-batch. */
   deadlineAt: number;
+  /** `search_sources.auto_resolve_conflicts` for this run's source — read once by `indexSource`
+   *  and threaded through so `indexBrilionsSource` (which only gets `sourceId`, not the full
+   *  `SearchSource` row) can pass it to `recordExtraction` too. */
+  autoResolveConflicts: boolean;
 }
 
 export const emptyRunResult = (sourceId: string): IndexRunResult => ({

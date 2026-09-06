@@ -1229,6 +1229,8 @@
         "autoSelectClassificationsHint": "URL Registry classifications (docs/CLAUDE_SITEMAP_AI_CRAWLER_RULE.md §4) that get fetched automatically. Leave a classification unchecked to keep it out of search unless an admin picks specific URLs by hand on the URL registry page. \"High\" is the sane default for actual listing pages.",
         "detailedLogging": "Detailed logging",
         "detailedLoggingHint": "Logs (Vercel Runtime Logs) a step-by-step trace of every search run against this source: robots.txt check, where candidates came from (URL registry or sitemap fallback), per-page outcome (which tier matched, why accepted/rejected), location confirmation, final result count. Noticeably more log volume than usual — turn on to debug one specific source issue, not as a standing setting.",
+        "autoResolveConflicts": "Auto-resolve field conflicts",
+        "autoResolveConflictsHint": "When a new crawl of this source disagrees with a previously stored field value, accept the new value immediately instead of leaving it as an open conflict on the URL Registry page waiting for an admin to click Accept new / Keep previous. Off by default — turn on only for a source you trust to keep improving rather than drift.",
         "capabilities": "Source capabilities",
         "capabilitiesHint": "What this source can do beyond a plain search — for now this is only data for later stages (offer details, availability checks, contacting the provider); it doesn't change search yet.",
         "capability": {

@@ -1452,6 +1452,7 @@ export type Database = {
       search_sources: {
         Row: {
           access_strategy: Database["public"]["Enums"]["search_access_strategy"]
+          auto_resolve_conflicts: boolean
           auto_select_classifications: Database["public"]["Enums"]["search_url_classification"][]
           base_url: string
           can_availability: boolean
@@ -1499,6 +1500,7 @@ export type Database = {
         }
         Insert: {
           access_strategy: Database["public"]["Enums"]["search_access_strategy"]
+          auto_resolve_conflicts?: boolean
           auto_select_classifications?: Database["public"]["Enums"]["search_url_classification"][]
           base_url: string
           can_availability?: boolean
@@ -1546,6 +1548,7 @@ export type Database = {
         }
         Update: {
           access_strategy?: Database["public"]["Enums"]["search_access_strategy"]
+          auto_resolve_conflicts?: boolean
           auto_select_classifications?: Database["public"]["Enums"]["search_url_classification"][]
           base_url?: string
           can_availability?: boolean

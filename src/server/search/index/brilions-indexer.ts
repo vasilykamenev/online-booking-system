@@ -34,7 +34,7 @@ import {
  */
 export async function indexBrilionsSource(
   sourceId: string,
-  { startFrom, concurrency, deadlineAt }: RunOptions,
+  { startFrom, concurrency, deadlineAt, autoResolveConflicts }: RunOptions,
 ): Promise<IndexRunResult> {
   const result = emptyRunResult(sourceId);
 
@@ -116,6 +116,7 @@ export async function indexBrilionsSource(
       sourceUrl: pageUrl,
       retrievedAt,
       image: normalized.images[0]?.url ?? null,
+      autoResolveConflicts,
     });
 
     await createAdminClient()
