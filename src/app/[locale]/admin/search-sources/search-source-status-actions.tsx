@@ -1,6 +1,7 @@
 "use client";
 
 import { useTransition } from "react";
+import { Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { useLocale, useTranslations } from "next-intl";
 import type { Locale } from "@/i18n/routing";
@@ -8,6 +9,7 @@ import { useRouter } from "@/i18n/navigation";
 import { approveSearchSource, rejectSearchSource } from "@/server/actions/admin";
 import type { Database } from "@/lib/supabase/database.types";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 type SearchSourceStatus = Database["public"]["Enums"]["search_source_status"];
 
@@ -50,28 +52,39 @@ export function SearchSourceStatusActions({
   }
 
   return (
-    <div className="flex items-center justify-end gap-1">
+    <div className="flex items-center gap-1">
       {status !== "active" && (
-        <Button
-          variant="outline"
-          size="sm"
-          className="rounded-full"
-          disabled={isPending}
-          onClick={handleApprove}
-        >
-          {t("actions.approve")}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              aria-label={t("actions.approve")}
+              disabled={isPending}
+              onClick={handleApprove}
+            >
+              <Check className="size-4" strokeWidth={1.5} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{t("actions.approve")}</TooltipContent>
+        </Tooltip>
       )}
       {status !== "rejected" && (
-        <Button
-          variant="ghost"
-          size="sm"
-          className="rounded-full text-destructive hover:text-destructive"
-          disabled={isPending}
-          onClick={handleReject}
-        >
-          {t("actions.reject")}
-        </Button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-destructive hover:text-destructive"
+              aria-label={t("actions.reject")}
+              disabled={isPending}
+              onClick={handleReject}
+            >
+              <X className="size-4" strokeWidth={1.5} />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{t("actions.reject")}</TooltipContent>
+        </Tooltip>
       )}
     </div>
   );

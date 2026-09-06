@@ -8,6 +8,7 @@ import type { Locale } from "@/i18n/routing";
 import { useRouter } from "@/i18n/navigation";
 import { deleteSearchSource } from "@/server/actions/admin";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 
 export function SearchSourceDeleteButton({ sourceId }: { sourceId: string }) {
   const t = useTranslations("admin.searchSources");
@@ -30,14 +31,19 @@ export function SearchSourceDeleteButton({ sourceId }: { sourceId: string }) {
   }
 
   return (
-    <Button
-      variant="ghost"
-      size="icon"
-      aria-label={t("delete")}
-      disabled={isPending}
-      onClick={handleClick}
-    >
-      <Trash2 className="size-4" strokeWidth={1.5} />
-    </Button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          aria-label={t("delete")}
+          disabled={isPending}
+          onClick={handleClick}
+        >
+          <Trash2 className="size-4" strokeWidth={1.5} />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{t("delete")}</TooltipContent>
+    </Tooltip>
   );
 }
