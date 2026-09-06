@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { collectEntries, withDistinctiveWordAliases } from "./vocabulary";
+import { collectCityCountries, collectEntries, withDistinctiveWordAliases } from "./vocabulary";
 
 const LOCALES = ["en", "ru"] as const;
 
@@ -124,5 +124,55 @@ describe("withDistinctiveWordAliases", () => {
     const [motor, sailing] = withDistinctiveWordAliases(yachtFamily);
     expect(motor.aliases).not.toContain("яхта");
     expect(sailing.aliases).not.toContain("яхта");
+  });
+});
+
+describe("collectCityCountries", () => {
+  it("maps a city to the country from the same row", () => {
+    const map = collectCityCountries(
+      [{ country: { en: "Croatia", ru: "Хорватия" }, city: { en: "Split", ru: "Сплит" } }],
+      ["en", "ru"],
+    );
+    expect(map).toEqual({ Split: "Croatia" });
+  });
+
+  it("merges several rows into one map, keyed by canonical city", () => {
+    const map = collectCityCountries(
+      [
+        { country: { en: "Croatia" }, city: { en: "Split" } },
+        { country: { en: "Greece" }, city: { en: "Athens" } },
+        { country: { en: "Croatia" }, city: { en: "Split" } },
+      ],
+      ["en", "ru"],
+    );
+    expect(map).toEqual({ Split: "Croatia", Athens: "Greece" });
+  });
+
+  it("skips rows missing a country or a city", () => {
+    const map = collectCityCountries(
+      [
+        { country: null, city: { en: "Athens" } },
+        { country: { en: "Greece" }, city: null },
+        { country: undefined, city: undefined },
+      ],
+      ["en", "ru"],
+    );
+    expect(map).toEqual({});
+  });
+
+  it("keeps the first country a city was seeded under when rows disagree", () => {
+    const map = collectCityCountries(
+      [
+        { country: { en: "Country A" }, city: { en: "Ambiguous City" } },
+        { country: { en: "Country B" }, city: { en: "Ambiguous City" } },
+      ],
+      ["en", "ru"],
+    );
+    expect(map).toEqual({ "Ambiguous City": "Country A" });
+  });
+
+  it("falls back to another locale's label when the preferred one is missing, on both sides", () => {
+    const map = collectCityCountries([{ country: { ru: "Норвегия" }, city: { ru: "Тромсё" } }], ["en", "ru"]);
+    expect(map).toEqual({ "Тромсё": "Норвегия" });
   });
 });

@@ -173,10 +173,11 @@ const THIS_MONTH_PHRASES = ["this month", "текущий месяц", "этот
  * failure this module exists to avoid elsewhere (spec §4: never guess, but also never just drop
  * something the query actually stated).
  *
- * Deliberately narrow: no other relative phrase ("next week", "this weekend") is resolved here —
- * `SearchCriteria.date` has no week-level granularity to put one in without inventing a wrong month
- * near a month boundary, and a literal month name (`findMonth`, called first) always wins when one
- * is present — this only runs when nothing literal was found.
+ * "next week" gets its own resolver below (`resolveRelativeWeek`) rather than living here: it
+ * answers into `date.from`/`date.to` as an exact range, not this function's `month`/`year` pair —
+ * putting a week into a *month* field would invent a wrong month whenever the week straddles a
+ * month boundary. A literal month name (`findMonth`, called first) always wins over this function
+ * when one is present — this only runs when nothing literal was found.
  */
 function resolveRelativeMonth(query: string, today: Date): { month: number; year: number } | null {
   if (NEXT_MONTH_PHRASES.some((phrase) => containsTerm(query, phrase))) {
@@ -187,6 +188,124 @@ function resolveRelativeMonth(query: string, today: Date): { month: number; year
     return { month: today.getUTCMonth() + 1, year: today.getUTCFullYear() };
   }
   return null;
+}
+
+const NEXT_WEEK_PHRASES = ["next week", "следующая неделя", "будущая неделя"];
+const NEXT_YEAR_PHRASES = ["next year", "следующий год", "будущий год"];
+
+function toISODate(date: Date): string {
+  return date.toISOString().slice(0, 10);
+}
+
+/**
+ * "next week"/"следующую неделю" resolved to a concrete Monday-Sunday range against `today`. Unlike
+ * `resolveRelativeMonth`'s deliberate refusal to handle week-level phrases (see its doc comment),
+ * this one has somewhere to put the answer: a week resolves to an *exact* `date.from`/`date.to`
+ * pair, the same shape a literal `DD.MM.YYYY` date fills, rather than the monthly `date.month`
+ * field that had no week-sized granularity to offer.
+ */
+function resolveRelativeWeek(query: string, today: Date): { from: string; to: string } | null {
+  if (!NEXT_WEEK_PHRASES.some((phrase) => containsTerm(query, phrase))) return null;
+
+  const daysSinceMonday = (today.getUTCDay() + 6) % 7;
+  const thisMonday = new Date(
+    Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() - daysSinceMonday),
+  );
+  const nextMonday = new Date(
+    Date.UTC(thisMonday.getUTCFullYear(), thisMonday.getUTCMonth(), thisMonday.getUTCDate() + 7),
+  );
+  const nextSunday = new Date(
+    Date.UTC(nextMonday.getUTCFullYear(), nextMonday.getUTCMonth(), nextMonday.getUTCDate() + 6),
+  );
+  return { from: toISODate(nextMonday), to: toISODate(nextSunday) };
+}
+
+/** "next year"/"следующий год" resolved to a bare year against `today` — no month, same as a
+ *  literal year mention elsewhere in the query. */
+function resolveRelativeYear(query: string, today: Date): number | null {
+  return NEXT_YEAR_PHRASES.some((phrase) => containsTerm(query, phrase)) ? today.getUTCFullYear() + 1 : null;
+}
+
+/**
+ * Meteorological seasons (Northern hemisphere — the charter markets this platform serves are all
+ * north of the equator), matched by nominative name; `containsTerm`'s stemming handles Russian
+ * case endings ("летом", "зимой") the same way it already does for every other marker list here.
+ */
+const SEASON_DEFS: { markers: string[]; startMonth: number; endMonth: number }[] = [
+  { markers: ["spring", "весна"], startMonth: 3, endMonth: 5 },
+  { markers: ["summer", "лето"], startMonth: 6, endMonth: 8 },
+  { markers: ["autumn", "fall", "осень"], startMonth: 9, endMonth: 11 },
+  { markers: ["winter", "зима"], startMonth: 12, endMonth: 2 },
+];
+
+/**
+ * The nearest occurrence of a `startMonth..endMonth` span that hasn't fully passed yet, as an
+ * exact date range. "winter" wraps the year boundary (December of `year` into February of
+ * `year + 1`), which is why the end year is computed separately from the start year rather than
+ * assumed equal.
+ */
+function seasonRangeFor(startMonth: number, endMonth: number, today: Date): { from: string; to: string } {
+  const wraps = endMonth < startMonth;
+  const todayUTC = Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate());
+
+  let startYear = today.getUTCFullYear();
+  let endYear = wraps ? startYear + 1 : startYear;
+  // `Date.UTC(year, month, 0)` is the last day of the 1-based `month` — day zero rolls back into
+  // the previous (0-based) month, which is exactly the 1-based month number itself.
+  if (Date.UTC(endYear, endMonth, 0) < todayUTC) {
+    startYear += 1;
+    endYear += 1;
+  }
+
+  return {
+    from: toISODate(new Date(Date.UTC(startYear, startMonth - 1, 1))),
+    to: toISODate(new Date(Date.UTC(endYear, endMonth, 0))),
+  };
+}
+
+/** "весной"/"spring" etc. resolved to that season's next not-yet-past occurrence. Only the first
+ *  matching season is used — a query can't mean two seasons at once. */
+function resolveSeason(query: string, today: Date): { from: string; to: string } | null {
+  const season = SEASON_DEFS.find(({ markers }) => markers.some((marker) => containsTerm(query, marker)));
+  return season ? seasonRangeFor(season.startMonth, season.endMonth, today) : null;
+}
+
+/**
+ * `DD.MM.YYYY` alongside the ISO `YYYY-MM-DD` this module already recognized — the format a user
+ * actually types ("15.09.2026"), not just the one machines emit. Two dates in the same query (a
+ * stated range, "с 01.06.2026 по 10.06.2026") are returned in the order they appear in the text,
+ * not sorted by value.
+ *
+ * Returns the matched spans alongside the ISO strings so the caller can blank them out, the same
+ * way every other extraction here does — without that, the bare 4-digit year inside "15.09.2026"
+ * would also satisfy the standalone year regex below and leak into `date.year` redundantly.
+ */
+function collectExplicitDates(text: string): { dates: string[]; ranges: Range[] } {
+  const found: { index: number; end: number; iso: string }[] = [];
+
+  for (const match of text.matchAll(/\b(\d{4}-\d{2}-\d{2})\b/g)) {
+    if (match.index !== undefined) {
+      found.push({ index: match.index, end: match.index + match[0].length, iso: match[1] });
+    }
+  }
+
+  for (const match of text.matchAll(/\b(\d{1,2})\.(\d{1,2})\.(\d{4})\b/g)) {
+    if (match.index === undefined) continue;
+    const day = Number(match[1]);
+    const month = Number(match[2]);
+    const year = Number(match[3]);
+    if (month < 1 || month > 12) continue;
+    const daysInMonth = new Date(Date.UTC(year, month, 0)).getUTCDate();
+    if (day < 1 || day > daysInMonth) continue;
+    const iso = `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+    found.push({ index: match.index, end: match.index + match[0].length, iso });
+  }
+
+  found.sort((a, b) => a.index - b.index);
+  return {
+    dates: found.map((entry) => entry.iso),
+    ranges: found.map((entry) => ({ start: entry.index, end: entry.end })),
+  };
 }
 
 function escapeRegExp(value: string): string {
@@ -499,19 +618,45 @@ export function interpretQueryDeterministic({
 
   const remaining = blankRanges(query, consumed);
 
-  // Dates: an explicit ISO pair wins; otherwise a month name gives a fuzzy period. A month with no
-  // stated year stays year-less rather than assuming the current one (spec §4: no invented values).
-  const isoDates = [...remaining.matchAll(/\b(\d{4}-\d{2}-\d{2})\b/g)].map((match) => match[1]);
-  const words = normalizeForMatch(remaining).split(" ").filter(Boolean);
+  // Dates, most specific first: an explicit date (ISO or DD.MM.YYYY) wins outright; failing that, a
+  // relative week phrase gives an exact range of its own; failing that, a literal month name gives
+  // a fuzzy period; failing that, a season or a relative month phrase does the same. A month with
+  // no stated year stays year-less rather than assuming the current one (spec §4: no invented
+  // values) — unless a "next year" phrase stated the year explicitly, which is exactly as stated as
+  // a literal 4-digit year would be.
+  const { dates: explicitDates, ranges: explicitDateRanges } = collectExplicitDates(remaining);
+  // Blanked out immediately, same as every other extraction in this function — otherwise the bare
+  // 4-digit year inside "15.09.2026" would also satisfy `yearMatch` below and leak into
+  // `date.year` alongside the exact `from` it's already part of.
+  const afterDates = blankRanges(remaining, explicitDateRanges);
+  const weekRange = explicitDates.length === 0 ? resolveRelativeWeek(query, today) : null;
+  const words = normalizeForMatch(afterDates).split(" ").filter(Boolean);
   const literalMonth = findMonth(words, buildMonthNames(locales));
-  // Only consulted when no literal month name was found — an explicit month always wins over a
-  // relative phrase.
-  const relativeMonth = literalMonth === null ? resolveRelativeMonth(query, today) : null;
+  const seasonRange =
+    explicitDates.length === 0 && weekRange === null && literalMonth === null
+      ? resolveSeason(query, today)
+      : null;
+  // Only consulted when nothing more specific already resolved a date — an explicit month or an
+  // exact range always wins over a relative phrase.
+  const relativeMonth =
+    literalMonth === null && weekRange === null && seasonRange === null
+      ? resolveRelativeMonth(query, today)
+      : null;
   const month = literalMonth ?? relativeMonth?.month ?? null;
-  const yearMatch = /\b(20\d{2})\b/.exec(remaining);
+  const yearMatch = /\b(20\d{2})\b/.exec(afterDates);
   // A relative phrase resolves both month and year together — an explicit 4-digit year elsewhere
-  // in the query still wins (checked first), same precedence as the literal-month case above.
-  const year = yearMatch ? Number(yearMatch[1]) : (relativeMonth?.year ?? null);
+  // in the query still wins (checked first), same precedence as the literal-month case above. A
+  // "next year" phrase is checked last: it's the least specific year signal, so anything else
+  // stated about the year takes priority over it.
+  const year = yearMatch ? Number(yearMatch[1]) : (relativeMonth?.year ?? resolveRelativeYear(query, today));
+  const from = explicitDates[0] ?? weekRange?.from ?? seasonRange?.from ?? null;
+  const to = explicitDates[1] ?? weekRange?.to ?? seasonRange?.to ?? null;
+  // Flexible marks a fuzzy period (a month name or a season) as opposed to an exact range (an
+  // explicit date or a resolved week) — the UI uses it to phrase the criterion as "around" rather
+  // than a hard window.
+  const flexible = explicitDates.length === 0 && weekRange === null && (month !== null || seasonRange !== null)
+    ? true
+    : null;
 
   const bareboat = BAREBOAT_MARKERS.some((marker) => containsTerm(query, marker));
   // A bareboat marker ("без экипажа") contains the word "экипаж" itself, which `CREW_MARKERS`
@@ -544,8 +689,12 @@ export function interpretQueryDeterministic({
   // interpreter rather than guessing at free text with no controlled list to check it against.
   const activities: string[] = [];
 
-  const country = bestVocabularyMatch(query, vocabulary.countries);
+  const explicitCountry = bestVocabularyMatch(query, vocabulary.countries);
   const city = bestVocabularyMatch(query, vocabulary.cities);
+  // A stated country always wins; failing that, the city (if any) names its own country via the
+  // reference data's own country/city pairing — the user shouldn't have to state both when the
+  // city alone is unambiguous (e.g. "яхта в Сплите" resolves Croatia without saying so).
+  const country = explicitCountry ?? (city ? (vocabulary.cityCountries[city] ?? null) : null);
   const marina = bestVocabularyMatch(query, vocabulary.marinas);
 
   // Leftover long words. Noise ("желательно") is tolerated: an unmatched keyword contributes
@@ -555,21 +704,15 @@ export function interpretQueryDeterministic({
       normalizeForMatch(value).split(" "),
     ),
   );
-  const keywords = [...new Set(normalizeForMatch(remaining).split(" "))]
+  const keywords = [...new Set(normalizeForMatch(afterDates).split(" "))]
     .filter((word) => word.length >= 5 && !/^\d+$/.test(word) && !matchedTerms.has(word))
     .slice(0, 8);
 
   return searchCriteriaSchema.parse({
     location: country || city || marina ? { country, city, marina, region: null } : null,
     date:
-      isoDates.length > 0 || month !== null || year !== null
-        ? {
-            from: isoDates[0] ?? null,
-            to: isoDates[1] ?? null,
-            month,
-            year,
-            flexible: isoDates.length === 0 && month !== null ? true : null,
-          }
+      from !== null || to !== null || month !== null || year !== null
+        ? { from, to, month, year, flexible }
         : null,
     capacity: guests !== null || cabins !== null ? { persons: guests, cabins } : null,
     price,

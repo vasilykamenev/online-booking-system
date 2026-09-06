@@ -6,6 +6,7 @@ import { throwIfSupabaseError } from "@/lib/supabase/errors";
 import { routing } from "@/i18n/routing";
 import { vesselTypeValues } from "@/lib/validation/search";
 import {
+  collectCityCountries,
   collectEntries,
   withDistinctiveWordAliases,
   type SearchVocabulary,
@@ -62,6 +63,13 @@ export const buildSearchVocabulary = cache(async (): Promise<SearchVocabulary> =
     locations.map((row) => row.marina as LocalizedRecord | null),
     routing.locales,
   );
+  const cityCountries = collectCityCountries(
+    locations.map((row) => ({
+      country: row.country as LocalizedRecord | null,
+      city: row.city as LocalizedRecord | null,
+    })),
+    routing.locales,
+  );
 
   // Vessel types and amenities are keyed by slug in the DB/enum and translated in `messages/`, so
   // the canonical value stays the slug and every locale's label becomes an alias.
@@ -91,6 +99,7 @@ export const buildSearchVocabulary = cache(async (): Promise<SearchVocabulary> =
     countries,
     cities,
     marinas,
+    cityCountries,
     // 2, not the default 1: real vessel-type labels pair a qualifier with a shared head noun
     // ("Моторная яхта"/"Парусная яхта" both say "яхта") — see `withDistinctiveWordAliases`'s own
     // doc comment for why a word shared by a couple of siblings should reach both of them rather
