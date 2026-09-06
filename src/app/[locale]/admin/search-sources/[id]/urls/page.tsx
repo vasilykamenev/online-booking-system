@@ -166,7 +166,9 @@ export default async function SearchSourceUrlsPage({
                       {conflict.url}
                     </TableCell>
                     <TableCell className="text-sm">{tConflicts(`field.${conflict.field}`)}</TableCell>
-                    <TableCell className="text-sm text-muted-foreground">{String(conflict.previousValue)}</TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      <ExpandableValue value={String(conflict.previousValue)} />
+                    </TableCell>
                     <TableCell className="text-sm font-medium">
                       <ExpandableValue value={String(conflict.newValue)} />
                     </TableCell>
