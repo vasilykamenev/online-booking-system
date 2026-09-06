@@ -108,7 +108,7 @@ export default async function AdminSearchSourcesPage({
                 <TableHead>{t("columns.structure")}</TableHead>
                 <TableHead>{t("columns.cronError")}</TableHead>
                 <TableHead>{t("columns.status")}</TableHead>
-                <TableHead className="text-right">{t("columns.actions")}</TableHead>
+                <TableHead>{t("columns.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -202,8 +202,8 @@ export default async function AdminSearchSourcesPage({
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex items-center justify-end gap-1">
+                  <TableCell>
+                    <div className="flex flex-wrap items-center gap-1">
                       <Button asChild variant="outline" size="sm" className="rounded-full">
                         <Link href={`/admin/search-sources/${source.id}/edit`}>{t("edit")}</Link>
                       </Button>
