@@ -51,6 +51,7 @@ export interface SearchSourceFormDefaultValues {
   imageDomains: string;
   autoSelectClassifications: (typeof urlClassificationValues)[number][];
   detailedLogging: boolean;
+  autoResolveConflicts: boolean;
   canDetails: boolean;
   canAvailability: boolean;
   canPricing: boolean;
@@ -638,6 +639,17 @@ export function SearchSourceForm({
           {t("detailedLogging")}
         </label>
         <p className="text-xs font-light text-muted-foreground">{t("detailedLoggingHint")}</p>
+      </div>
+      <div className="flex flex-col gap-2 sm:col-span-2">
+        <label className="group flex items-center gap-2 text-sm font-light">
+          <Checkbox
+            id="autoResolveConflicts"
+            name="autoResolveConflicts"
+            defaultChecked={defaultValues?.autoResolveConflicts ?? false}
+          />
+          {t("autoResolveConflicts")}
+        </label>
+        <p className="text-xs font-light text-muted-foreground">{t("autoResolveConflictsHint")}</p>
       </div>
 
       <div className="flex flex-col gap-2 sm:col-span-2">

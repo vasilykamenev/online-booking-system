@@ -119,6 +119,53 @@ describe("mergeExtractedListing", () => {
     expect(result.newConflicts).toEqual([]);
   });
 
+  it("accepts a fresh disagreement immediately when autoResolveConflicts is on, without logging a conflict", () => {
+    const existing: StoredListing = {
+      fields: { name: "Aurora Explorer" },
+      fieldProvenance: {
+        name: { source: "JSON_LD", confidence: 0.9, retrievedAt: "2026-08-01T00:00:00.000Z", sourceUrl: "https://old.example.com" },
+      },
+    };
+
+    const result = mergeExtractedListing(
+      existing,
+      {},
+      incoming({ source: "AI", confidence: 0.7, fields: { name: "Ocean Explorer" } }),
+      { autoResolveConflicts: true },
+    );
+
+    expect(result.fields.name).toBe("Ocean Explorer");
+    expect(result.fieldProvenance.name).toEqual({
+      source: "AI",
+      confidence: 0.7,
+      retrievedAt: RETRIEVED_AT,
+      sourceUrl: "https://example.com/yachts/aurora",
+    });
+    expect(result.newConflicts).toEqual([]);
+    expect(result.resolvedConflicts).toEqual([]);
+  });
+
+  it("closes out a pre-existing open conflict too when autoResolveConflicts is on and a third value disagrees with both", () => {
+    const existing: StoredListing = {
+      fields: { name: "Aurora Explorer" },
+      fieldProvenance: {
+        name: { source: "JSON_LD", confidence: 0.6, retrievedAt: "2026-08-01T00:00:00.000Z", sourceUrl: "https://old.example.com" },
+      },
+    };
+    const openConflicts = { name: { id: "conflict-1", newValue: "Ocean Explorer" } };
+
+    const result = mergeExtractedListing(
+      existing,
+      openConflicts,
+      incoming({ source: "AI", confidence: 0.7, fields: { name: "Sea Explorer" } }),
+      { autoResolveConflicts: true },
+    );
+
+    expect(result.fields.name).toBe("Sea Explorer");
+    expect(result.newConflicts).toEqual([]);
+    expect(result.resolvedConflicts).toEqual([{ field: "name", conflictId: "conflict-1" }]);
+  });
+
   it("does not flag a small price fluctuation within tolerance as a conflict", () => {
     const existing: StoredListing = {
       fields: { price_minor: 950000 }, // 9500.00

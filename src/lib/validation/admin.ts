@@ -126,6 +126,10 @@ export const searchSourceSchema = z.object({
   // step-by-step diagnostic logging for this source (see `source-registry.ts`'s `detailedLogging`
   // doc comment) — off by default.
   detailedLogging: z.preprocess((value) => value === "on" || value === true, z.boolean()),
+  // Single checkbox, same convention as `detailedLogging` above. Gates `listing-merge.ts`'s
+  // `mergeExtractedListing` — when on, a fresh field disagreement for this source is accepted
+  // immediately instead of waiting on an admin's manual conflict resolution. Off by default.
+  autoResolveConflicts: z.preprocess((value) => value === "on" || value === true, z.boolean()),
   // Capabilities (Э3, Арх §8) — what this source can be asked to do beyond a plain search.
   // `canSearch`/`supportsLocation` aren't here: every registered source can search by location,
   // that's the whole point of registering one, so there's nothing for a checkbox to toggle.

@@ -231,6 +231,7 @@ export interface AdminSearchSource {
   notes: string | null;
   createdAt: string;
   detailedLogging: boolean;
+  autoResolveConflicts: boolean;
   canDetails: boolean;
   canAvailability: boolean;
   canPricing: boolean;
@@ -254,7 +255,7 @@ export interface AdminSearchSource {
 }
 
 const SEARCH_SOURCE_COLUMNS =
-  "id, name, domain, base_url, enabled, status, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, selector_config, image_domains, needs_reanalysis, reanalysis_sample_size, reanalysis_success_count, structure_checked_at, last_cron_error, last_cron_error_at, auto_select_classifications, notes, created_at, detailed_logging, can_details, can_availability, can_pricing, can_contact, supports_dates, supports_price, supports_guests, contact_capability, search_source_coverage(worldwide, country, region, destination, latitude, longitude, radius_km), search_source_policies(access_policy, cache_policy, attribution_policy, rate_limit_policy, retention_policy)";
+  "id, name, domain, base_url, enabled, status, source_type, processing_type, priority, reliability_score, robots_allows, last_checked_at, selector_config, image_domains, needs_reanalysis, reanalysis_sample_size, reanalysis_success_count, structure_checked_at, last_cron_error, last_cron_error_at, auto_select_classifications, notes, created_at, detailed_logging, auto_resolve_conflicts, can_details, can_availability, can_pricing, can_contact, supports_dates, supports_price, supports_guests, contact_capability, search_source_coverage(worldwide, country, region, destination, latitude, longitude, radius_km), search_source_policies(access_policy, cache_policy, attribution_policy, rate_limit_policy, retention_policy)";
 
 /** Same defensively-null-on-failure convention as `parseAdminSelectorConfig` below. */
 function parseAdminSourcePolicies(raw: {
@@ -319,6 +320,7 @@ export async function getAllSearchSourcesAdmin(): Promise<AdminSearchSource[]> {
     notes: row.notes,
     createdAt: row.created_at,
     detailedLogging: row.detailed_logging,
+    autoResolveConflicts: row.auto_resolve_conflicts,
     canDetails: row.can_details,
     canAvailability: row.can_availability,
     canPricing: row.can_pricing,
@@ -457,6 +459,7 @@ export async function getSearchSourceById(id: string): Promise<AdminSearchSource
     notes: data.notes,
     createdAt: data.created_at,
     detailedLogging: data.detailed_logging,
+    autoResolveConflicts: data.auto_resolve_conflicts,
     canDetails: data.can_details,
     canAvailability: data.can_availability,
     canPricing: data.can_pricing,

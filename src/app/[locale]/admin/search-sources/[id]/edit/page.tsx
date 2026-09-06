@@ -54,6 +54,7 @@ export default async function EditSearchSourcePage({
             imageDomains: source.imageDomains.join(", "),
             autoSelectClassifications: source.autoSelectClassifications,
             detailedLogging: source.detailedLogging,
+            autoResolveConflicts: source.autoResolveConflicts,
             canDetails: source.canDetails,
             canAvailability: source.canAvailability,
             canPricing: source.canPricing,

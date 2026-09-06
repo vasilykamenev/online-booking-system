@@ -46,6 +46,7 @@ const BASE_DEFAULTS: SearchSourceFormDefaultValues = {
   imageDomains: "",
   autoSelectClassifications: ["HIGH"],
   detailedLogging: false,
+  autoResolveConflicts: false,
   canDetails: false,
   canAvailability: false,
   canPricing: false,

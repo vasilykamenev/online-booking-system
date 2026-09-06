@@ -34,6 +34,7 @@ function source(
     selectorConfig,
     imageDomains: [],
     detailedLogging: false,
+    autoResolveConflicts: false,
     accessStrategy: "WEB_PARSER",
     fallbackStrategies: [],
     capabilities: {

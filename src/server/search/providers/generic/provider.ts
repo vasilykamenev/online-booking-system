@@ -607,6 +607,7 @@ async function fetchCandidates(
               sourceUrl: url,
               retrievedAt: result.source.retrievedAt,
               image: result.images[0]?.url ?? null,
+              autoResolveConflicts: source.autoResolveConflicts,
             }).catch(() => {});
           }
         }
