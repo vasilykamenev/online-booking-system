@@ -25,7 +25,10 @@ export default async function AdminLayout({
     <div className="pt-24 lg:pt-28">
       <div className="container-page grid grid-cols-1 gap-8 pb-24 lg:grid-cols-[260px_1fr] lg:gap-10">
         <AdminNav fullName={profile.fullName} email={profile.email} />
-        <div>{children}</div>
+        {/* min-w-0: without it, a grid item defaults to min-width:auto, so a wide table below
+            (e.g. urls/page.tsx's field-conflicts table) grows the whole grid track — and the
+            page itself — instead of scrolling inside its own overflow-x-auto container. */}
+        <div className="min-w-0">{children}</div>
       </div>
     </div>
   );
