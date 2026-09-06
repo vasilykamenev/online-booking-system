@@ -37,6 +37,12 @@ export interface SearchVocabulary {
   vesselTypes: VesselTypeEntry[];
   /** Amenity slugs (`amenities.key`) with their translated labels as aliases. */
   features: VocabularyEntry[];
+  /**
+   * Canonical city value → canonical country value, so a query naming only a city ("яхта в
+   * Сплите") can still filter by country without the user stating both. Keyed and valued by the
+   * same canonical strings as `cities[].value` / `countries[].value`.
+   */
+  cityCountries: Record<string, string>;
 }
 
 export const emptyVocabulary: SearchVocabulary = {
@@ -45,6 +51,7 @@ export const emptyVocabulary: SearchVocabulary = {
   marinas: [],
   vesselTypes: [],
   features: [],
+  cityCountries: {},
 };
 
 /**
@@ -90,6 +97,50 @@ export function collectEntries(
     aliases: [...aliases],
     labels: labelsByValue.get(value) ?? {},
   }));
+}
+
+/** The same canonical-label precedence `collectEntries` uses: first non-empty label from
+ *  `preferredLocaleOrder`, else any other locale's label. */
+function canonicalLabel(
+  localized: Partial<Record<string, string>> | null | undefined,
+  preferredLocaleOrder: readonly string[],
+): string | null {
+  if (!localized) return null;
+  for (const locale of preferredLocaleOrder) {
+    const label = localized[locale]?.trim();
+    if (label) return label;
+  }
+  const extra = Object.values(localized)
+    .map((label) => label?.trim())
+    .find((label): label is string => Boolean(label));
+  return extra ?? null;
+}
+
+/**
+ * Maps each city's canonical value to the canonical value of the country it was seeded under.
+ * Built straight from `locations` rows — each row already pairs one city with one country — not
+ * from `collectEntries`'s output, which merges rows by value and loses that per-row pairing.
+ *
+ * A city named under more than one country (unlikely in real data, but not impossible for a
+ * common name) keeps whichever country its first row named; that is still a better guess surface
+ * than matching no country at all, and the interpreter only ever uses this as a fallback for when
+ * the query didn't state a country itself.
+ */
+export function collectCityCountries(
+  rows: readonly {
+    country: Partial<Record<string, string>> | null | undefined;
+    city: Partial<Record<string, string>> | null | undefined;
+  }[],
+  preferredLocaleOrder: readonly string[],
+): Record<string, string> {
+  const result: Record<string, string> = {};
+  for (const row of rows) {
+    const city = canonicalLabel(row.city, preferredLocaleOrder);
+    const country = canonicalLabel(row.country, preferredLocaleOrder);
+    if (!city || !country || city in result) continue;
+    result[city] = country;
+  }
+  return result;
 }
 
 /**
