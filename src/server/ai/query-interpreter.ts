@@ -271,9 +271,12 @@ export async function interpretQuery({
     }
 
     return { criteria: parsed.data, mode: "AI" };
-  } catch {
+  } catch (error) {
     // Network failure, timeout, rate limit, billing — all the same from here: fall back rather
-    // than fail, and let `search_runs` record that the search ran degraded.
+    // than fail, and let `search_runs` record that the search ran degraded. Logged (not swallowed
+    // silently) because "degraded" alone doesn't distinguish a transient blip from a standing
+    // account issue (e.g. billing) that will silently degrade every search until someone notices.
+    console.error("interpretQuery: AI call failed, falling back to deterministic", error);
     return { criteria: deterministic(), mode: "DETERMINISTIC", degradedReason: "ai-error" };
   }
 }
