@@ -960,6 +960,7 @@
       "locations": "Локации",
       "amenities": "Удобства",
       "searchSources": "Источники поиска",
+      "aiUsage": "Расход ИИ",
       "commissions": "Комиссия",
       "payments": "Платежи",
       "auditLog": "Журнал аудита"
@@ -1565,6 +1566,27 @@
             "generic": "Не удалось создать правила из robots.txt"
           }
         }
+      }
+    },
+    "aiUsage": {
+      "title": "Расход на ИИ",
+      "subtitle": "Расход на Anthropic API за интерпретацию запросов, извлечение данных и ранжирование — из Admin Cost API организации.",
+      "last7d": "За 7 дней",
+      "last30d": "За 30 дней",
+      "dailySpend": "Расход по дням",
+      "byModel": "Расход по моделям (последние 30 дней)",
+      "noData": "Расходов пока нет.",
+      "columns": {
+        "model": "Модель",
+        "spend": "Расход"
+      },
+      "notConfigured": {
+        "heading": "Не подключено",
+        "body": "Задайте ANTHROPIC_ADMIN_API_KEY (Admin API-ключ, sk-ant-admin..., создаётся в Claude Console — это не тот же ключ, что ANTHROPIC_API_KEY), чтобы увидеть расход здесь."
+      },
+      "error": {
+        "heading": "Не удалось загрузить данные о расходе",
+        "body": "Запрос к Anthropic Admin API не удался — проверьте, что ключ действителен и не отозван. Подробности — в серверных логах."
       }
     },
     "commissions": {

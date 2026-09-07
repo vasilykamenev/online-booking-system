@@ -960,6 +960,7 @@
       "locations": "Locations",
       "amenities": "Amenities",
       "searchSources": "Search sources",
+      "aiUsage": "AI usage",
       "commissions": "Commission",
       "payments": "Payments",
       "auditLog": "Audit log"
@@ -1565,6 +1566,27 @@
             "generic": "Couldn't create rules from robots.txt"
           }
         }
+      }
+    },
+    "aiUsage": {
+      "title": "AI usage & spend",
+      "subtitle": "Anthropic API spend for search interpretation, extraction and ranking — from the organization's Admin Cost API.",
+      "last7d": "Last 7 days",
+      "last30d": "Last 30 days",
+      "dailySpend": "Daily spend",
+      "byModel": "Spend by model (last 30 days)",
+      "noData": "No spend recorded yet.",
+      "columns": {
+        "model": "Model",
+        "spend": "Spend"
+      },
+      "notConfigured": {
+        "heading": "Not connected",
+        "body": "Set ANTHROPIC_ADMIN_API_KEY (an Admin API key, sk-ant-admin..., created in Claude Console — distinct from the regular ANTHROPIC_API_KEY) to see spend here."
+      },
+      "error": {
+        "heading": "Couldn't load usage data",
+        "body": "The Anthropic Admin API request failed — check that the key is a valid, unrevoked Admin API key. See server logs for details."
       }
     },
     "commissions": {

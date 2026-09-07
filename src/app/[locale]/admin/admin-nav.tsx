@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  Activity,
   CreditCard,
   Globe,
   LayoutDashboard,
@@ -22,6 +23,7 @@ const items = [
   { href: "/admin/locations", key: "locations", icon: MapPin },
   { href: "/admin/amenities", key: "amenities", icon: Sparkles },
   { href: "/admin/search-sources", key: "searchSources", icon: Globe },
+  { href: "/admin/ai-usage", key: "aiUsage", icon: Activity },
   { href: "/admin/commissions", key: "commissions", icon: Wallet },
   { href: "/admin/payments", key: "payments", icon: CreditCard },
   { href: "/admin/audit-log", key: "auditLog", icon: ScrollText },
