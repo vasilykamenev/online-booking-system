@@ -68,11 +68,13 @@ export async function indexBrilionsSource(
     // search, since neither does any translation of its own. `extractDeterministic`'s field labels
     // (`FIELD_LABELS`, the `Порт|Port` regex) already parse either language's markup identically, so
     // this needed no change on that side — only which sitemap URL got fetched.
-    let { result: normalized, usedAi, contentHash } = await fetchAndNormalize(entry, {
+    const fetched = await fetchAndNormalize(entry, {
       locale: "en",
       searchQueries: [],
       timeoutMs: 30_000,
     });
+    let normalized = fetched.result;
+    const { usedAi, contentHash } = fetched;
     if (usedAi) result.aiCalls += 1;
 
     if (!normalized) {

@@ -1,7 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { emptyResult, type ResultSource, type VesselSearchResult } from "@/lib/search/offer";
 import { emptyCriteria, type SearchCriteria } from "@/lib/search/request";
-import type { AdapterContext, AvailabilityResult, VesselSourceAdapter } from "@/server/search/adapters/adapter";
+import type { AvailabilityResult, VesselSourceAdapter } from "@/server/search/adapters/adapter";
 
 /**
  * Э8's own explicit ask (docs/AI_Federated_Search_Migration_Plan_v1.md §6): "ошибка одного сайта не
@@ -14,6 +14,19 @@ import type { AdapterContext, AvailabilityResult, VesselSourceAdapter } from "@/
  * here the same way `adapters/adapter-registry.test.ts` mocks `source-registry.ts`'s
  * `listEnabledSources`, so this file tests `runVerificationPhase`'s own logic, not Supabase.
  */
+
+// `deriveAvailability`'s freshness fallback (availability.ts's `LIKELY_AVAILABLE_FRESHNESS_MS`, 48h)
+// compares `SOURCE`'s fixed `retrievedAt`/`indexedAt` against the real wall clock via `Date.now()`
+// (verification-phase.ts) — pin time near that fixture so this file's assertions don't rot as the
+// real date drifts more than 48h past it.
+beforeAll(() => {
+  vi.useFakeTimers();
+  vi.setSystemTime(new Date("2026-08-29T01:00:00.000Z"));
+});
+
+afterAll(() => {
+  vi.useRealTimers();
+});
 
 const { isSourceCallAllowed, recordSourceFailure, recordSourceSuccess } = vi.hoisted(() => ({
   isSourceCallAllowed: vi.fn(async () => true),
